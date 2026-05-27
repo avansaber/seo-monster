@@ -1,14 +1,14 @@
 [project]
-# PyPI name: "seo-mcp" was already taken, so the distribution publishes as
-# "avansaber-seo-mcp". The import package stays "seo_mcp".
-name = "avansaber-seo-mcp"
+# SEOMonster. Published on PyPI as "seo-monster-mcp"; the import package stays
+# "seo_mcp".
+name = "seo-monster-mcp"
 version = "0.1.0"
-description = "MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
+description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "AvanSaber Inc.", email = "support@avansaber.com" }]
 requires-python = ">=3.11"
-keywords = ["seo", "mcp", "search-console", "ga4", "pagespeed", "cloudflare", "ai", "claude"]
+keywords = ["seo", "seomonster", "mcp", "search-console", "ga4", "pagespeed", "cloudflare", "ai", "claude"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -34,15 +34,16 @@ dev = [
 ]
 
 [project.scripts]
-# Primary command matches the PyPI name so `uvx avansaber-seo-mcp` just works.
+# Primary command matches the PyPI name so `uvx seo-monster-mcp` just works.
 # `seo-mcp` is kept as a convenience alias for local/dev use.
-avansaber-seo-mcp = "seo_mcp.server:main"
+seo-monster-mcp = "seo_mcp.server:main"
 seo-mcp = "seo_mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/avansaber/seo-mcp"
-Repository = "https://github.com/avansaber/seo-mcp"
-Issues = "https://github.com/avansaber/seo-mcp/issues"
+Homepage = "https://seomonster.avansaber.com"
+Documentation = "https://seomonster.avansaber.com"
+Repository = "https://github.com/avansaber/seo-monster-mcp"
+Issues = "https://github.com/avansaber/seo-monster-mcp/issues"
 
 [build-system]
 requires = ["hatchling"]

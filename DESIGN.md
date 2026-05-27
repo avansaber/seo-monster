@@ -1,4 +1,9 @@
-# seo-mcp Design
+# SEOMonster Design
+
+(Project: SEOMonster. PyPI distribution: `seo-monster-mcp`. Import package:
+`seo_mcp`. This document predates the SEOMonster name; the design below is
+unchanged, and the older `seo-mcp` / `avansaber-seo-mcp` names that appear in
+some snippets were superseded by `seo-monster-mcp`.)
 
 An MCP server that exposes strictly SEO-focused tools over four data sources:
 Google Search Console (GSC), Google Analytics 4 (GA4), PageSpeed Insights
@@ -507,12 +512,11 @@ same resolver in `config.py`.
 
 ## Install and distribution
 
-Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). The name `seo-mcp`
-was already taken on PyPI, so the package publishes as **`avansaber-seo-mcp`**;
-the primary console script matches that name (with `seo-mcp` kept as a dev
-alias), and the import package stays `seo_mcp`. The snippets below were written
-before the fallback was confirmed and use `seo-mcp`; the README uses the
-published `avansaber-seo-mcp`.
+Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). The project is
+**SEOMonster** and publishes as **`seo-monster-mcp`**; the primary console script
+matches that name (with `seo-mcp` kept as a dev alias), and the import package
+stays `seo_mcp`. The snippets below predate the rename and use `seo-mcp`; the
+README uses the published `seo-monster-mcp`.
 
 `uvx` runs the published package in an ephemeral environment, so there is
 nothing to `pip install` and no virtualenv to manage. GUI hosts do not read the
@@ -655,7 +659,8 @@ Recorded here so the design's rationale stays auditable.
    cache purge. DNS writes and Workers stay excluded.
 5. **Cloudflare RUM: read-only.** A single `cf_web_analytics` read tool is in.
    RUM create/update/delete are excluded.
-6. **PyPI name: `seo-mcp`, fallback `avansaber-seo-mcp`.**
+6. **PyPI name:** originally `seo-mcp` (taken) then `avansaber-seo-mcp`; finalized
+   as **`seo-monster-mcp`** when the project was named SEOMonster.
 7. **Cloudflare in v1.** Built now, not deferred.
 8. **Convenience tools: all kept.** The wrappers (`gsc_top_queries`,
    `gsc_top_pages`, `gsc_compare_periods`, `ga4_top_landing_pages`,

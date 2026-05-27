@@ -1,9 +1,9 @@
-# seo-mcp
+# SEOMonster
 
-An MCP server for SEO workflows. It exposes strictly SEO-focused tools over
-**Google Search Console**, **Google Analytics 4**, **PageSpeed Insights**, and
-**Cloudflare**, so an AI host (Claude Desktop, Cline, Cursor, Codex) can query
-your own data with your own credentials.
+SEOMonster is an MCP server for SEO workflows. It exposes strictly SEO-focused
+tools over **Google Search Console**, **Google Analytics 4**, **PageSpeed
+Insights**, and **Cloudflare**, so an AI host (Claude Desktop, Cline, Cursor,
+Codex) can query your own data with your own credentials.
 
 - **User-credential-driven.** No auth is baked into the package. Every credential
   is resolved at runtime from your environment or a config file. The published
@@ -14,8 +14,9 @@ your own data with your own credentials.
 - **Lean.** Standard library plus the `mcp` SDK and the Google client libraries.
   PageSpeed Insights and Cloudflare ride on `urllib`, no extra HTTP dependency.
 
-> Published on PyPI as **`avansaber-seo-mcp`** (the name `seo-mcp` was taken).
-> The import package and the dev command are still `seo_mcp` / `seo-mcp`.
+> Published on PyPI as **`seo-monster-mcp`**, so the `uvx` command is
+> `seo-monster-mcp`. The import package is `seo_mcp`, and `seo-mcp` stays as a
+> dev/local console alias.
 
 ## Requirements
 
@@ -84,7 +85,7 @@ alternative, replace the two `SEO_MCP_GOOGLE_OAUTH_CLIENT` /
   "mcpServers": {
     "seo": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["avansaber-seo-mcp"],
+      "args": ["seo-monster-mcp"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json",
@@ -109,7 +110,7 @@ Same object shape under `mcpServers`; Cursor reads the identical schema.
   "mcpServers": {
     "seo": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["avansaber-seo-mcp"],
+      "args": ["seo-monster-mcp"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json"
@@ -128,7 +129,7 @@ cache-purge tools off so they always prompt.
 ```toml
 [mcp_servers.seo]
 command = "/Users/me/.local/bin/uvx"
-args = ["avansaber-seo-mcp"]
+args = ["seo-monster-mcp"]
 
 [mcp_servers.seo.env]
 SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-mcp/client_secret.json"
@@ -302,7 +303,7 @@ On failure:
     "service": "gsc",
     "message": "No Google credentials found for Search Console.",
     "remediation": "Configure OAuth ... or a service-account key. See README > Auth.",
-    "docs_url": "https://github.com/avansaber/seo-mcp#auth",
+    "docs_url": "https://seomonster.avansaber.com#auth",
     "details": null
   }
 }
@@ -326,11 +327,11 @@ Error codes:
 ## Development
 
 ```sh
-git clone https://github.com/avansaber/seo-mcp
-cd seo-mcp
+git clone https://github.com/avansaber/seo-monster-mcp
+cd seo-monster-mcp
 uv venv && uv pip install -e ".[dev]"
 uv run pytest            # offline test suite
-uv run seo-mcp           # run the server over stdio
+uv run seo-monster-mcp   # run the server over stdio
 ```
 
 Tests are fully offline: they mock at the client layer, so no network and no

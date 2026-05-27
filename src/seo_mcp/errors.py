@@ -15,8 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 
-# Base for the ``docs_url`` field. Anchors map to README sections.
-DOCS_BASE = "https://github.com/avansaber/seo-mcp#"
+# Base for the ``docs_url`` field. Anchors map to documentation sections.
+DOCS_BASE = "https://seomonster.avansaber.com#"
 
 
 class ErrorCode(StrEnum):
