@@ -23,12 +23,13 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from . import __version__
+from .clients.cloudflare import build_cf_client
 from .clients.ga4 import build_ga4_client
 from .clients.gsc import build_gsc_client
 from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
-from .tools import ga4_tools, gsc_tools, psi_tools, system_status
+from .tools import cf_tools, ga4_tools, gsc_tools, psi_tools, system_status
 
 
 server = Server("seo-mcp")
@@ -38,12 +39,14 @@ server = Server("seo-mcp")
 # (import-light, testable without mcp); the server wraps them into mcp Tools.
 # Tools are registered progressively per phase, so the catalog never advertises
 # an undispatchable tool. Phase 2 added the 10 GSC tools and the PSI tool;
-# Phase 3 adds the 4 GA4 tools.
+# Phase 3 added the 4 GA4 tools; Phase 4 adds the 6 Cloudflare tools. Full v1
+# surface: 22 tools.
 _TOOL_DEFS: list[dict[str, Any]] = [
     system_status.TOOL,
     *gsc_tools.TOOLS,
     *ga4_tools.TOOLS,
     *psi_tools.TOOLS,
+    *cf_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -52,6 +55,7 @@ _HANDLERS: dict[str, Any] = {
     **gsc_tools.HANDLERS,
     **ga4_tools.HANDLERS,
     **psi_tools.HANDLERS,
+    **cf_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.
@@ -59,6 +63,7 @@ _CLIENT_BUILDERS: dict[str, Any] = {
     "gsc": build_gsc_client,
     "ga4": build_ga4_client,
     "psi": build_psi_client,
+    "cf": build_cf_client,
 }
 
 

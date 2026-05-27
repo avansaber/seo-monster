@@ -307,6 +307,112 @@ def make_ga4_client():
     return _make
 
 
+# --- Cloudflare fakes -----------------------------------------------------
+
+
+class FakeCfTransport:
+    """Stands in for CfClient._raw_request. Returns a canned CF envelope chosen
+    by a label derived from the request path, and records every call. A response
+    that is an Exception is raised. Used to drive the real CfClient end to end.
+
+    Labels: purge, rum_list, rum_get, dns, resolve, account, zones.
+    """
+
+    def __init__(self, responses: dict[str, Any]) -> None:
+        self.responses = responses
+        self.calls: list[tuple[str, str, Any]] = []
+
+    def __call__(self, method: str, path: str, body: Any = None) -> Any:
+        self.calls.append((method, path, body))
+        label = self._label(path)
+        if label not in self.responses:
+            raise AssertionError(f"no canned CF response for label {label!r} (path {path})")
+        spec = self.responses[label]
+        if isinstance(spec, Exception):
+            raise spec
+        return spec
+
+    @staticmethod
+    def _label(path: str) -> str:
+        if "purge_cache" in path:
+            return "purge"
+        if "rum/site_info/list" in path:
+            return "rum_list"
+        if "rum/site_info/" in path:
+            return "rum_get"
+        if "dns_records" in path:
+            return "dns"
+        if "name=" in path:
+            return "resolve"
+        if "per_page=1" in path:
+            return "account"
+        return "zones"
+
+
+def _ok(result: Any) -> dict[str, Any]:
+    """Wrap a result in a successful CF envelope."""
+    return {"success": True, "errors": [], "result": result}
+
+
+@pytest.fixture
+def cf_envelope():
+    """Helper to wrap a result value in a successful CF envelope."""
+    return _ok
+
+
+@pytest.fixture
+def cf_payloads() -> dict[str, Any]:
+    """Canned CF envelopes keyed by FakeCfTransport label."""
+    zone = {
+        "id": "zone123",
+        "name": "example.com",
+        "status": "active",
+        "plan": {"name": "Pro"},
+        "paused": False,
+        "name_servers": ["ns1.cloudflare.com", "ns2.cloudflare.com"],
+        "created_on": "2024-01-01T00:00:00Z",
+        "modified_on": "2026-05-01T00:00:00Z",
+        "account": {"id": "acct123"},
+    }
+    return {
+        "zones": _ok([zone, {"id": "z2", "name": "other.com", "status": "active", "plan": {"name": "Free"}}]),
+        "resolve": _ok([zone]),
+        "account": _ok([{"account": {"id": "acct123"}}]),
+        "dns": _ok(
+            [
+                {"type": "A", "name": "example.com", "content": "192.0.2.1", "ttl": 1, "proxied": True, "id": "r1"},
+                {"type": "TXT", "name": "example.com", "content": "google-site-verification=abc", "ttl": 1, "proxied": False, "id": "r2"},
+            ]
+        ),
+        "rum_list": _ok(
+            [
+                {"host": "example.com", "site_tag": "tag-abc", "auto_install": True, "enabled": True, "created": "2025-01-01", "ruleset_id": "rs1"}
+            ]
+        ),
+        "rum_get": _ok(
+            {"host": "example.com", "site_tag": "tag-abc", "auto_install": True, "enabled": True, "created": "2025-01-01", "ruleset_id": "rs1"}
+        ),
+        "purge": _ok({"id": "zone123"}),
+    }
+
+
+@pytest.fixture
+def make_cf_client():
+    """Build a real CfClient whose network seam (_raw_request) is a
+    FakeCfTransport. The transport is exposed at ``client._transport`` for call
+    assertions (e.g. asserting a blocked purge made zero calls)."""
+    from seo_mcp.clients.cloudflare import CfClient
+
+    def _make(responses: dict[str, Any]) -> Any:
+        client = CfClient(token="testtoken")
+        transport = FakeCfTransport(responses)
+        client._raw_request = transport
+        client._transport = transport  # expose for assertions
+        return client
+
+    return _make
+
+
 @pytest.fixture
 def make_dispatcher() -> Callable[..., Callable[..., dict[str, Any]]]:
     """Return a dispatcher bound to a fixed clients mapping.

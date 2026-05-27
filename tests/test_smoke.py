@@ -87,7 +87,7 @@ def test_every_registered_tool_is_routed():
             )
 
 
-def test_phase_3_tools_registered():
+def test_full_v1_surface_registered():
     pytest.importorskip("mcp")
     from seo_mcp import server
 
@@ -112,8 +112,14 @@ def test_phase_3_tools_registered():
         "ga4_top_landing_pages",
         "ga4_traffic_by_channel",
         "ga4_organic_search_overview",
+        # Cloudflare (Phase 4)
+        "cf_list_zones",
+        "cf_zone_info",
+        "cf_list_dns",
+        "cf_web_analytics",
+        "cf_purge_cache",
+        "cf_purge_cache_all",
     }
-    assert expected <= names
-    # Phase 3 has not added Cloudflare tools yet.
-    assert not any(n.startswith("cf_") for n in names)
-    assert len(names) == 16
+    assert names == expected
+    # Full v1 surface from DESIGN.md: 22 tools.
+    assert len(names) == 22
