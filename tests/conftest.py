@@ -61,6 +61,173 @@ def fake_client() -> type[FakeProbeClient]:
     return FakeProbeClient
 
 
+# --- Google API fakes -----------------------------------------------------
+
+
+class FakeHttpError(Exception):
+    """Mimics googleapiclient HttpError enough for the error mapper: it exposes
+    ``resp.status`` and a message string. For scope/service-disabled cases the
+    message carries the markers the mapper looks for."""
+
+    def __init__(self, status: int, message: str = "") -> None:
+        super().__init__(message or f"HTTP {status}")
+        self.resp = type("Resp", (), {"status": status})()
+
+
+class _Resp:
+    """A canned response or a raised exception for one chained .execute()."""
+
+    def __init__(self, spec: Any) -> None:
+        self._spec = spec
+
+    def execute(self) -> Any:
+        if isinstance(self._spec, Exception):
+            raise self._spec
+        return self._spec
+
+
+class FakeGscService:
+    """Fake searchconsole/indexing discovery service.
+
+    Built from a dict of canned responses keyed by operation:
+    ``sites_list``, ``search``, ``inspect``, ``sitemaps_list``, ``submit``,
+    ``publish``. A value may be a single response or a list (a queue) used for
+    successive calls (e.g. the two queries in gsc_compare_periods); a single
+    value is reused for repeated calls. A value that is an Exception is raised
+    from ``.execute()``. All calls are recorded in ``.calls``.
+    """
+
+    def __init__(self, responses: dict[str, Any]) -> None:
+        self._responses = {k: (v if isinstance(v, list) else [v]) for k, v in responses.items()}
+        self._idx: dict[str, int] = {}
+        self.calls: list[tuple[str, dict]] = []
+        self._ctx: str | None = None
+
+    # resource selectors
+    def sites(self):
+        self._ctx = "sites"
+        return self
+
+    def sitemaps(self):
+        self._ctx = "sitemaps"
+        return self
+
+    def searchanalytics(self):
+        self._ctx = "search"
+        return self
+
+    def urlInspection(self):
+        self._ctx = "inspect"
+        return self
+
+    def index(self):
+        return self
+
+    def urlNotifications(self):
+        self._ctx = "indexing"
+        return self
+
+    # leaf calls
+    def list(self, **kw):
+        op = "sites_list" if self._ctx == "sites" else "sitemaps_list"
+        return self._mk(op, kw)
+
+    def query(self, **kw):
+        return self._mk("search", kw)
+
+    def inspect(self, **kw):
+        return self._mk("inspect", kw)
+
+    def submit(self, **kw):
+        return self._mk("submit", kw)
+
+    def publish(self, **kw):
+        return self._mk("publish", kw)
+
+    def _mk(self, op: str, kw: dict) -> _Resp:
+        self.calls.append((op, kw))
+        items = self._responses.get(op)
+        if items is None:
+            return _Resp(KeyError(f"no canned response for {op}"))
+        i = self._idx.get(op, 0)
+        self._idx[op] = i + 1
+        return _Resp(items[min(i, len(items) - 1)])
+
+
+@pytest.fixture
+def fake_http_error() -> type[FakeHttpError]:
+    """The FakeHttpError class for simulating Google API failures."""
+    return FakeHttpError
+
+
+@pytest.fixture
+def gsc_payloads() -> dict[str, Any]:
+    """Canned Search Console / Indexing API response bodies."""
+    return {
+        "sites_list": {
+            "siteEntry": [
+                {"siteUrl": "sc-domain:example.com", "permissionLevel": "siteOwner"},
+                {"siteUrl": "https://www.example.com/", "permissionLevel": "siteFullUser"},
+            ]
+        },
+        "search": {
+            "rows": [
+                {"keys": ["seo tools"], "clicks": 120, "impressions": 3400, "ctr": 0.035, "position": 4.2},
+                {"keys": ["mcp server"], "clicks": 45, "impressions": 900, "ctr": 0.05, "position": 7.1},
+            ]
+        },
+        "inspect": {
+            "inspectionResult": {
+                "indexStatusResult": {
+                    "verdict": "PASS",
+                    "coverageState": "Submitted and indexed",
+                    "crawledAs": "MOBILE",
+                    "lastCrawlTime": "2026-05-20T10:00:00Z",
+                    "indexingState": "INDEXING_ALLOWED",
+                    "pageFetchState": "SUCCESSFUL",
+                    "googleCanonical": "https://www.example.com/page",
+                    "userCanonical": "https://www.example.com/page",
+                },
+                "mobileUsabilityResult": {"verdict": "PASS"},
+            }
+        },
+        "sitemaps_list": {
+            "sitemap": [
+                {
+                    "path": "https://www.example.com/sitemap.xml",
+                    "lastSubmitted": "2026-05-01T00:00:00Z",
+                    "lastDownloaded": "2026-05-19T00:00:00Z",
+                    "isPending": False,
+                    "isSitemapsIndex": True,
+                    "contents": [{"type": "web", "submitted": "120", "indexed": "118"}],
+                }
+            ]
+        },
+        "submit": {},
+        "publish": {
+            "urlNotificationMetadata": {
+                "latestUpdate": {"type": "URL_UPDATED", "notifyTime": "2026-05-27T12:00:00Z"}
+            }
+        },
+    }
+
+
+@pytest.fixture
+def make_gsc_client():
+    """Build a real GscClient backed by a FakeGscService (one service used for
+    both search and indexing). Pass a responses dict; defaults to gsc_payloads
+    when called with no override."""
+    from seo_mcp.clients.gsc import GscClient
+
+    def _make(responses: dict[str, Any]) -> Any:
+        service = FakeGscService(responses)
+        client = GscClient(service, service)
+        client._service = service  # expose for call assertions
+        return client
+
+    return _make
+
+
 @pytest.fixture
 def make_dispatcher() -> Callable[..., Callable[..., dict[str, Any]]]:
     """Return a dispatcher bound to a fixed clients mapping.

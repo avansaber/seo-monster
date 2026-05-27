@@ -23,9 +23,11 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from . import __version__
+from .clients.gsc import build_gsc_client
+from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
-from .tools import system_status
+from .tools import gsc_tools, psi_tools, system_status
 
 
 server = Server("seo-mcp")
@@ -33,10 +35,26 @@ server = Server("seo-mcp")
 
 # Tool schema dicts, one per registered tool. Tool modules expose plain dicts
 # (import-light, testable without mcp); the server wraps them into mcp Tools.
-# Later phases append their service tools here.
+# Tools are registered progressively per phase, so the catalog never advertises
+# an undispatchable tool. Phase 2 adds the 10 GSC tools and the PSI tool.
 _TOOL_DEFS: list[dict[str, Any]] = [
     system_status.TOOL,
+    *gsc_tools.TOOLS,
+    *psi_tools.TOOLS,
 ]
+
+# name -> handler with signature (arguments, config, clients) -> envelope.
+# system_status is handled separately (it also needs the tool registry).
+_HANDLERS: dict[str, Any] = {
+    **gsc_tools.HANDLERS,
+    **psi_tools.HANDLERS,
+}
+
+# service key -> builder(config) -> client. Used by the lazy ClientProvider.
+_CLIENT_BUILDERS: dict[str, Any] = {
+    "gsc": build_gsc_client,
+    "psi": build_psi_client,
+}
 
 
 def registered_tool_names() -> list[str]:
@@ -44,15 +62,34 @@ def registered_tool_names() -> list[str]:
     return [d["name"] for d in _TOOL_DEFS]
 
 
-def build_clients(config: Config) -> dict[str, Any]:
-    """Construct the per-service network clients for this config.
+class ClientProvider:
+    """Lazily builds and caches per-service clients.
 
-    Phase 1 wires no data clients yet (no GSC/GA4/PSI/CF client modules until
-    later phases), so this returns an empty mapping. ``system_status`` with
-    ``probe`` simply reports ``reachable: null`` for services that have no
-    client wired. Later phases populate this mapping.
+    A client is built only when first requested, so calling a PSI tool never
+    triggers Google's OAuth flow, and ``system_status`` without ``probe`` builds
+    nothing. ``get`` returns None for a service with no builder registered (so
+    ``system_status`` reports ``reachable: null`` for those). Builders may raise
+    (e.g. MissingGoogleAuth); callers convert that into AUTH_MISSING.
     """
-    return {}
+
+    def __init__(self, config: Config) -> None:
+        self._config = config
+        self._cache: dict[str, Any] = {}
+
+    def get(self, key: str) -> Any:
+        if key in self._cache:
+            return self._cache[key]
+        builder = _CLIENT_BUILDERS.get(key)
+        if builder is None:
+            return None
+        client = builder(self._config)
+        self._cache[key] = client
+        return client
+
+
+def build_clients(config: Config) -> ClientProvider:
+    """Return the lazy client provider for this config."""
+    return ClientProvider(config)
 
 
 def dispatch(
@@ -71,12 +108,15 @@ def dispatch(
             arguments, config, clients, registered_tool_names()
         )
 
-    return err(
-        ErrorCode.INVALID_INPUT,
-        "general",
-        f"Unknown tool: {name!r}.",
-        remediation="Call system_status to see the available tools.",
-    )
+    handler = _HANDLERS.get(name)
+    if handler is None:
+        return err(
+            ErrorCode.INVALID_INPUT,
+            "general",
+            f"Unknown tool: {name!r}.",
+            remediation="Call system_status to see the available tools.",
+        )
+    return handler(arguments, config, clients)
 
 
 @server.list_tools()

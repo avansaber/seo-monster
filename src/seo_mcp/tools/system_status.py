@@ -75,7 +75,12 @@ def _probe(clients: Mapping[str, Any], key: str, probe: bool) -> bool | None:
     """
     if not probe:
         return None
-    client = clients.get(key)
+    try:
+        client = clients.get(key)
+    except Exception:
+        # Building the client failed (e.g. missing/!invalid Google auth): the
+        # service is configured but not reachable with these credentials.
+        return False
     if client is None:
         return None
     try:
