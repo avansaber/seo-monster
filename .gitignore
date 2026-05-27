@@ -1,0 +1,31 @@
+# Credentials and tokens (never commit; this package ships zero secrets)
+*.json
+!package.json
+sa.json
+client_secret*.json
+token*.json
+psi_api_key.txt
+token.txt
+config.toml
+.config/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
