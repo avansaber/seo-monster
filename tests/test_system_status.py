@@ -134,6 +134,30 @@ def test_probe_true_with_no_client_wired_stays_null(make_config):
     assert result["data"]["services"]["gsc"]["reachable"] is None
 
 
+def test_ga4_probe_runs_only_with_property(make_config, fake_client):
+    # GA4 needs a property to probe against. With google configured but no
+    # property, reachable stays null even when probe is on and a client wired.
+    no_prop = make_config(
+        SEO_MCP_GOOGLE_OAUTH_CLIENT="/c/client.json",
+        SEO_MCP_GOOGLE_TOKEN="/c/token.json",
+    )
+    ga4_client = fake_client(ok=True)
+    result = handle({"probe": True}, no_prop, {"ga4": ga4_client}, ["system_status"])
+    assert result["data"]["services"]["ga4"]["reachable"] is None
+    assert ga4_client.calls == 0
+
+    # With a property configured, the GA4 probe runs.
+    with_prop = make_config(
+        SEO_MCP_GOOGLE_OAUTH_CLIENT="/c/client.json",
+        SEO_MCP_GOOGLE_TOKEN="/c/token.json",
+        SEO_MCP_GA4_PROPERTY_ID="properties/123",
+    )
+    ga4_client2 = fake_client(ok=True)
+    result2 = handle({"probe": True}, with_prop, {"ga4": ga4_client2}, ["system_status"])
+    assert result2["data"]["services"]["ga4"]["reachable"] is True
+    assert ga4_client2.calls == 1
+
+
 def test_probe_skips_unconfigured_service(make_config, fake_client):
     # CF not configured: even with a client wired and probe on, reachable stays
     # null and the client is not called.

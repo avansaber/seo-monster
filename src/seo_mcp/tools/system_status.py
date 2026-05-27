@@ -112,7 +112,13 @@ def handle(
         "ga4": {
             "configured": google_ready,
             "auth_method": method,
-            "reachable": _probe(clients, "ga4", probe) if google_ready else None,
+            # A GA4 probe needs a property to report against (no cheap account
+            # ping without the Admin API), so only probe when one is configured.
+            "reachable": (
+                _probe(clients, "ga4", probe)
+                if (google_ready and config.ga4_property_id)
+                else None
+            ),
             "default_property": config.ga4_property_id,
         },
         "psi": {

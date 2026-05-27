@@ -8,6 +8,7 @@ set of injected clients so a test can drive any tool offline.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, Callable, Mapping
 
 import pytest
@@ -224,6 +225,84 @@ def make_gsc_client():
         client = GscClient(service, service)
         client._service = service  # expose for call assertions
         return client
+
+    return _make
+
+
+# --- GA4 fakes ------------------------------------------------------------
+
+
+class FakeGoogleApiError(Exception):
+    """Mimics a google.api_core exception: carries an HTTP-style ``code`` int
+    (the path Ga4Client's mapper uses in production) and a message."""
+
+    def __init__(self, code: int, message: str = "") -> None:
+        super().__init__(message or f"status {code}")
+        self.code = code
+
+
+def make_ga4_response(
+    dimension_headers: list[str],
+    metric_headers: list[str],
+    rows: list[tuple[list, list]],
+    row_count: int | None = None,
+) -> SimpleNamespace:
+    """Build a RunReportResponse-shaped duck for the Ga4Client normalizer. Each
+    row is (dimension_values, metric_values); values are stringified like GA4."""
+    return SimpleNamespace(
+        dimension_headers=[SimpleNamespace(name=n) for n in dimension_headers],
+        metric_headers=[SimpleNamespace(name=n, type_=SimpleNamespace(name="TYPE_INTEGER")) for n in metric_headers],
+        rows=[
+            SimpleNamespace(
+                dimension_values=[SimpleNamespace(value=str(d)) for d in dims],
+                metric_values=[SimpleNamespace(value=str(m)) for m in mets],
+            )
+            for dims, mets in rows
+        ],
+        row_count=row_count if row_count is not None else len(rows),
+    )
+
+
+class FakeGa4Analytics:
+    """Stands in for BetaAnalyticsDataClient. Returns canned responses (a single
+    response reused, or a list consumed in order) and records each request. An
+    Exception response is raised from run_report."""
+
+    def __init__(self, responses: Any) -> None:
+        self._responses = responses if isinstance(responses, list) else [responses]
+        self._idx = 0
+        self.requests: list[Any] = []
+
+    def run_report(self, request: Any) -> Any:
+        self.requests.append(request)
+        spec = self._responses[min(self._idx, len(self._responses) - 1)]
+        self._idx += 1
+        if isinstance(spec, Exception):
+            raise spec
+        return spec
+
+
+@pytest.fixture
+def fake_ga4_error() -> type[FakeGoogleApiError]:
+    return FakeGoogleApiError
+
+
+@pytest.fixture
+def ga4_response():
+    """Factory for RunReportResponse-shaped fakes."""
+    return make_ga4_response
+
+
+@pytest.fixture
+def make_ga4_client():
+    """Build a real Ga4Client backed by a FakeGa4Analytics. Pass the canned
+    response(s); the fake analytics client is exposed at ``client._analytics``
+    for request assertions."""
+    from seo_mcp.clients.ga4 import Ga4Client
+
+    def _make(responses: Any, default_property: str | None = None) -> Any:
+        analytics = FakeGa4Analytics(responses)
+        return Ga4Client(analytics, default_property=default_property)
 
     return _make
 

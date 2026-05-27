@@ -87,13 +87,14 @@ def test_every_registered_tool_is_routed():
             )
 
 
-def test_phase_2_tools_registered():
+def test_phase_3_tools_registered():
     pytest.importorskip("mcp")
     from seo_mcp import server
 
     names = set(server.registered_tool_names())
     expected = {
         "system_status",
+        # GSC (Phase 2)
         "gsc_list_properties",
         "gsc_search_analytics",
         "gsc_top_queries",
@@ -104,8 +105,15 @@ def test_phase_2_tools_registered():
         "gsc_list_sitemaps",
         "gsc_submit_sitemap",
         "gsc_request_indexing",
+        # PSI (Phase 2)
         "psi_analyze",
+        # GA4 (Phase 3)
+        "ga4_run_report",
+        "ga4_top_landing_pages",
+        "ga4_traffic_by_channel",
+        "ga4_organic_search_overview",
     }
     assert expected <= names
-    # Phase 2 has not added GA4 or Cloudflare tools yet.
-    assert not any(n.startswith("ga4_") or n.startswith("cf_") for n in names)
+    # Phase 3 has not added Cloudflare tools yet.
+    assert not any(n.startswith("cf_") for n in names)
+    assert len(names) == 16

@@ -117,6 +117,13 @@ def map_google_exception(exc: Exception) -> ApiError:
             ),
             details={"status": status, "raw": text[:500]},
         )
+    if status == 400:
+        return ApiError(
+            ErrorCode.INVALID_INPUT,
+            "Google rejected the request as invalid (HTTP 400).",
+            remediation="Check dimension/metric names, date formats, and filters.",
+            details={"status": 400, "raw": text[:500]},
+        )
     if status == 404:
         return ApiError(
             ErrorCode.NOT_FOUND,
