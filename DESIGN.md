@@ -2,13 +2,14 @@
 
 An MCP server that exposes strictly SEO-focused tools over four data sources:
 Google Search Console (GSC), Google Analytics 4 (GA4), PageSpeed Insights
-(PSI), and (optionally) Cloudflare (CF). End users install it into Claude
-Desktop, Cline, Cursor, or Codex, supply their own credentials, and call the
-tools from the host AI.
+(PSI), and Cloudflare (CF). End users install it into Claude Desktop, Cline,
+Cursor, or Codex, supply their own credentials, and call the tools from the
+host AI. All four sources, Cloudflare included, are in scope for v1.
 
-This is a discovery and architecture document. No server code exists yet. The
-"Open Questions" section at the end lists the decisions that need sign-off
-before any implementation begins.
+This is the architecture document. The original open questions have been
+resolved by the maintainer; their answers are folded into the sections below
+and recorded verbatim in "Resolved decisions" at the end. `PLAN.md` carries the
+phased build plan that follows from this design.
 
 ## Design principles
 
@@ -16,9 +17,11 @@ before any implementation begins.
    credential is resolved at runtime from the user's environment or config
    file. The package on PyPI contains zero secrets and zero default account
    references.
-2. **Read-first, write-gated.** The default install can only read. Any tool
-   that changes external state (cache purge, sitemap submit, indexing request)
-   is inert unless the user opts in with `SEO_MCP_ALLOW_DESTRUCTIVE=true`.
+2. **Read-first, with one narrow gate.** Reads are always available. The two
+   routine SEO writes (sitemap submit, indexing request) are available by
+   default because they are daily tasks with low blast radius. Only the
+   Cloudflare cache-purge tools, which affect every visitor, sit behind the
+   `SEO_MCP_ALLOW_DESTRUCTIVE=true` opt-in.
 3. **Structured errors over exceptions.** A tool never crashes the server on a
    missing key or an API 403. It returns a typed error object the host AI can
    read and act on (see "Error shape").
@@ -89,11 +92,11 @@ all services. Each tool returns the standard envelope (see "Output envelope").
 Tools are grouped into three trust tiers:
 
 - **read** - safe, always available.
-- **write-low** - mutates external state with low blast radius (sitemap submit,
-  indexing request). Gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`.
-- **write-high** - mutates state visible to all site visitors (cache purge).
-  Gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, and `cf_purge_cache_all` carries an
-  extra confirm token (see CF section).
+- **write** - mutates external state with low blast radius (sitemap submit,
+  indexing request). Available by default, no gate. These are routine SEO tasks.
+- **write-gated** - mutates state visible to all site visitors (Cloudflare cache
+  purge). Inert unless `SEO_MCP_ALLOW_DESTRUCTIVE=true`, and `cf_purge_cache_all`
+  carries an extra confirm token (see CF section).
 
 ### Cross-service
 
@@ -125,8 +128,8 @@ opt-in via the `probe` flag to keep the default call free.
     "version": "0.1.0",
     "destructive_enabled": false,
     "services": {
-      "gsc":  {"configured": true,  "auth_method": "service_account", "scopes": ["webmasters.readonly"], "reachable": true,  "default_site": "sc-domain:example.com"},
-      "ga4":  {"configured": true,  "auth_method": "service_account", "reachable": null, "default_property": "properties/123456789"},
+      "gsc":  {"configured": true,  "auth_method": "oauth", "scopes": ["webmasters","indexing"], "reachable": true,  "default_site": "sc-domain:example.com"},
+      "ga4":  {"configured": true,  "auth_method": "oauth", "reachable": null, "default_property": "properties/123456789"},
       "psi":  {"configured": true,  "auth_method": "api_key", "reachable": null},
       "cf":   {"configured": false, "auth_method": null, "reachable": null}
     },
@@ -209,14 +212,14 @@ Maps to `sitemaps().list()`. Returns path, lastSubmitted, lastDownloaded,
 isPending, isSitemapsIndex, and per-content submitted/indexed counts. Mirrors
 `cmd_sitemaps`.
 
-#### `gsc_submit_sitemap`  (tier: write-low, gated)
-Maps to `sitemaps().submit()`. Requires `webmasters` (writable) scope and
-`SEO_MCP_ALLOW_DESTRUCTIVE=true`. Inputs: `feedpath` (full sitemap URL),
-`site_url`.
+#### `gsc_submit_sitemap`  (tier: write, un-gated)
+Maps to `sitemaps().submit()`. Requires the `webmasters` (writable) scope.
+Available by default (no destructive flag needed). Inputs: `feedpath` (full
+sitemap URL), `site_url`.
 
-#### `gsc_request_indexing`  (tier: write-low, gated)
+#### `gsc_request_indexing`  (tier: write, un-gated)
 Maps to `indexing v3` `urlNotifications().publish()` with `type=URL_UPDATED`.
-Requires the `indexing` scope and destructive mode. Carries the reference
+Requires the `indexing` scope. Available by default. Carries the reference
 `gsc.py` hint logic: if the API returns `ACCESS_TOKEN_SCOPE_INSUFFICIENT` or
 `SERVICE_DISABLED`, the error object includes the remediation text and (when
 present) the activation URL. Inputs: `urls` (array, capped), `site_url`.
@@ -306,11 +309,11 @@ tight anonymous rate limits).
 ### Cloudflare (optional)
 
 Wraps the CF v4 REST API via stdlib `urllib`, following the reference `cf.py`.
-Scoped to SEO-relevant operations only: zone discovery, zone status, DNS
-read (for verifying canonical host and verification records), and cache purge
-(the SEO action after fixing on-page content or meta tags). DNS writes and
-Workers management are out of SEO scope and excluded. Web Analytics (RUM) is
-parked pending Open Question 5.
+Scoped to SEO-relevant operations only: zone discovery, zone status, DNS read
+(for verifying canonical host and verification records during migrations),
+read-only Web Analytics (edge traffic, comparable against GA4), and cache purge
+(the SEO action after fixing on-page content or meta tags). DNS writes, Workers
+management, and Web Analytics create/delete are out of SEO scope and excluded.
 
 #### `cf_list_zones`  (tier: read)
 Maps to `GET /zones`. Returns name, status, plan, id.
@@ -325,13 +328,22 @@ Maps to `GET /zones/{id}/dns_records`. Read-only. Useful for confirming the
 canonical host, CNAME flattening, and TXT verification records during SEO
 migrations. Input: `zone`, optional `type` filter.
 
-#### `cf_purge_cache`  (tier: write-high, gated)
+#### `cf_web_analytics`  (tier: read)
+Read-only Cloudflare Web Analytics (RUM). Lists the account's Web Analytics
+sites and their edge traffic so the AI can compare edge-measured visits against
+GA4 sessions (bot/edge traffic that GA4's JS tag never sees). Resolves the
+account ID from a visible zone (reference `cf.py` `get_account_id`). Maps to the
+account RUM `site_info/list` and `site_info/{tag}` reads. Create/update/delete
+RUM endpoints are deliberately excluded. Input: `host_or_tag` (optional; when
+given, returns that one site's detail, else lists all).
+
+#### `cf_purge_cache`  (tier: write-gated)
 Maps to `POST /zones/{id}/purge_cache` with `{"files": [...]}`. Requires
 `SEO_MCP_ALLOW_DESTRUCTIVE=true`. Input: `zone`, `urls` (array, required,
-non-empty). This is the primary destructive SEO action: purge specific URLs
-after publishing corrected content so search crawlers refetch.
+non-empty). This is the primary gated SEO action: purge specific URLs after
+publishing corrected content so search crawlers refetch.
 
-#### `cf_purge_cache_all`  (tier: write-high, gated, extra confirm)
+#### `cf_purge_cache_all`  (tier: write-gated, extra confirm)
 Maps to `POST /zones/{id}/purge_cache` with `{"purge_everything": true}`.
 Requires destructive mode AND an explicit `confirm` field equal to the zone
 hostname, so the AI cannot trigger a full-zone purge without an unambiguous
@@ -349,34 +361,41 @@ Environment always wins over the file, matching both reference tools.
 
 ### Google (GSC + GA4 + PSI-key share one Google account context)
 
-Two supported methods, selected automatically by what is present:
+Two supported methods, selected automatically by what is present. OAuth is the
+primary, recommended path; the service account is the advanced headless option.
 
-- **Service account (recommended for MCP).** The user creates a Google Cloud
-  service account, downloads the JSON key, and points
-  `SEO_MCP_GOOGLE_CREDENTIALS` (or standard `GOOGLE_APPLICATION_CREDENTIALS`) at
-  it. They add the service account email as a user on each GSC property and as a
-  Viewer on each GA4 property. No browser, no token refresh dance, which is the
-  right fit for a headless stdio server launched by a GUI host. This is the
-  primary documented path.
-- **OAuth installed-app (alternative).** The user supplies
-  `SEO_MCP_GOOGLE_OAUTH_CLIENT` (client secrets JSON) and a writable
+- **OAuth installed-app (recommended, documented first).** The user supplies
+  `SEO_MCP_GOOGLE_OAUTH_CLIENT` (client-secrets JSON) and a writable
   `SEO_MCP_GOOGLE_TOKEN` path. First use triggers the browser consent flow
-  (reference `gsc.py` pattern) and caches the token; later runs refresh
-  silently. This path is interactive on first run, which is awkward under some
-  hosts, so it is documented as secondary.
+  (reference `gsc.py` pattern) and caches the token; later runs refresh the
+  token silently with no further prompts. The `uvx` browser flow is smooth in
+  current hosts (mcp-gsc parity), and the setup bar is low: no Cloud Console
+  service-account creation, no per-property email grants. This is what the
+  README leads with.
+- **Service account (advanced, headless).** The user creates a Google Cloud
+  service account, downloads the JSON key, points `SEO_MCP_GOOGLE_CREDENTIALS`
+  (or standard `GOOGLE_APPLICATION_CREDENTIALS`) at it, and adds the service
+  account email as a user on each GSC property and as a Viewer on each GA4
+  property. No browser and no token refresh, which suits fully headless or
+  server deployments. Higher setup friction, so it is documented as the
+  secondary path. Fully supported, not second-class in code: the credential
+  resolver treats both as first-class and picks whichever is configured.
 
 Scopes are requested by feature, smallest set that covers the enabled tools:
 
 | Capability                         | Scope                                            |
 |------------------------------------|--------------------------------------------------|
 | GSC read (analytics, inspect, list)| `webmasters.readonly`                            |
-| GSC sitemap submit (write-low)     | `webmasters`                                     |
-| GSC indexing request (write-low)   | `indexing`                                       |
+| GSC sitemap submit (write)         | `webmasters`                                     |
+| GSC indexing request (write)       | `indexing`                                       |
 | GA4 reporting                      | `analytics.readonly`                             |
 
-If destructive mode is off, the server only needs the two readonly scopes. The
-README documents the minimal vs full scope set so users grant the least
-privilege they need.
+Because sitemap submit and indexing request are available by default, the
+standard consent requests `webmasters` (which covers read), `indexing`, and
+`analytics.readonly`. The README documents how to drop to a read-only consent
+(`webmasters.readonly` + `analytics.readonly`) for users who want least
+privilege and do not need the two write tools; calling a write tool without its
+scope returns `SCOPE_INSUFFICIENT` with remediation, never a crash.
 
 ### PageSpeed Insights
 
@@ -389,8 +408,9 @@ but the error path explains the rate-limit tradeoff and links to key creation
 
 Bearer API token, no OAuth ever (reference `cf.py`). `CF_API_TOKEN` env var or
 config file. Optional `CF_ZONE` default. The README documents the minimal token
-permissions: `Zone:Read`, `DNS:Read`, and `Cache Purge:Purge` (only if the user
-wants the gated purge tools).
+permissions: `Zone:Read` and `DNS:Read` for the read tools, `Account Analytics:
+Read` for `cf_web_analytics`, and `Cache Purge:Purge` only if the user wants the
+gated purge tools.
 
 ### Error shape
 
@@ -405,7 +425,7 @@ is populated; `data` is `null`.
     "code": "AUTH_MISSING",
     "service": "gsc",
     "message": "No Google credentials found for Search Console.",
-    "remediation": "Set SEO_MCP_GOOGLE_CREDENTIALS to a service-account JSON key and add its email as a user on the property, or configure OAuth. See README > Auth.",
+    "remediation": "Configure OAuth: set SEO_MCP_GOOGLE_OAUTH_CLIENT to your client-secrets JSON and SEO_MCP_GOOGLE_TOKEN to a writable token path, then re-run to consent in the browser. Or use a service-account key via SEO_MCP_GOOGLE_CREDENTIALS. See README > Auth.",
     "docs_url": "https://github.com/avansaber/seo-mcp#auth",
     "details": null
   }
@@ -419,7 +439,7 @@ Error codes (closed set):
 | `AUTH_MISSING`          | No credential configured for the service.                      |
 | `AUTH_INVALID`          | Credential present but rejected (401/403, bad key, expired).   |
 | `SCOPE_INSUFFICIENT`    | Token lacks the scope this tool needs (e.g. indexing).         |
-| `DESTRUCTIVE_DISABLED`  | Write tool called while `SEO_MCP_ALLOW_DESTRUCTIVE` is off.    |
+| `DESTRUCTIVE_DISABLED`  | CF cache-purge tool called while `SEO_MCP_ALLOW_DESTRUCTIVE` is off. |
 | `CONFIRM_REQUIRED`      | `cf_purge_cache_all` called without matching `confirm`.        |
 | `NOT_FOUND`             | Site/property/zone/record not found or not visible to creds.   |
 | `INVALID_INPUT`         | Argument failed validation beyond JSON-schema (e.g. bad date). |
@@ -488,8 +508,10 @@ same resolver in `config.py`.
 ## Install and distribution
 
 Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). Console script
-`seo-mcp` maps to `seo_mcp.server:main`. The exact PyPI name is Open Question 6;
-snippets below use `seo-mcp` as a placeholder.
+`seo-mcp` maps to `seo_mcp.server:main`. The PyPI name targets `seo-mcp`; if that
+is taken at publish time, the fallback is `avansaber-seo-mcp` (the `uvx` argument
+and the console-script name change accordingly, the import package stays
+`seo_mcp`). Snippets below use `seo-mcp`.
 
 `uvx` runs the published package in an ephemeral environment, so there is
 nothing to `pip install` and no virtualenv to manage. GUI hosts do not read the
@@ -505,7 +527,8 @@ documents this same gotcha). Find it with `which uvx`.
       "command": "/Users/me/.local/bin/uvx",
       "args": ["seo-mcp"],
       "env": {
-        "SEO_MCP_GOOGLE_CREDENTIALS": "/Users/me/.config/seo-mcp/sa.json",
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json",
         "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:example.com",
         "SEO_MCP_GA4_PROPERTY_ID": "properties/123456789",
         "PSI_API_KEY": "AIza...",
@@ -515,6 +538,12 @@ documents this same gotcha). Find it with `which uvx`.
   }
 }
 ```
+
+The snippet above uses the recommended OAuth path. For the service-account
+alternative, replace the two `SEO_MCP_GOOGLE_OAUTH_CLIENT`/`SEO_MCP_GOOGLE_TOKEN`
+entries with a single `SEO_MCP_GOOGLE_CREDENTIALS` pointing at the key JSON. On
+first launch with OAuth, the server opens a browser for one-time consent and
+writes the token to `SEO_MCP_GOOGLE_TOKEN`; later launches are silent.
 
 ### Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`)
 
@@ -528,7 +557,10 @@ Same object shape under `mcpServers`. Cursor reads the identical schema.
     "seo": {
       "command": "/Users/me/.local/bin/uvx",
       "args": ["seo-mcp"],
-      "env": { "SEO_MCP_GOOGLE_CREDENTIALS": "/Users/me/.config/seo-mcp/sa.json" },
+      "env": {
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json"
+      },
       "alwaysAllow": ["system_status", "gsc_search_analytics", "ga4_run_report", "psi_analyze"]
     }
   }
@@ -546,7 +578,8 @@ command = "/Users/me/.local/bin/uvx"
 args = ["seo-mcp"]
 
 [mcp_servers.seo.env]
-SEO_MCP_GOOGLE_CREDENTIALS = "/Users/me/.config/seo-mcp/sa.json"
+SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-mcp/client_secret.json"
+SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-mcp/token.json"
 SEO_MCP_GSC_DEFAULT_SITE = "sc-domain:example.com"
 ```
 
@@ -578,8 +611,10 @@ network primitives, so we test our wrappers and tool logic without HTTP.
    client injected through the dispatcher's seam. Tests assert:
    - happy path returns `ok: true` with the documented `data` shape,
    - missing creds returns `AUTH_MISSING`,
-   - a write tool with destructive off returns `DESTRUCTIVE_DISABLED` and makes
-     zero client calls,
+   - a CF cache-purge tool with destructive off returns `DESTRUCTIVE_DISABLED`
+     and makes zero client calls,
+   - the un-gated GSC writes (`gsc_submit_sitemap`, `gsc_request_indexing`) run
+     without the destructive flag,
    - `cf_purge_cache_all` without matching `confirm` returns `CONFIRM_REQUIRED`,
    - upstream 403 maps to `AUTH_INVALID`, 429 to `RATE_LIMITED`, indexing
      scope error to `SCOPE_INSUFFICIENT`.
@@ -599,46 +634,47 @@ Fixtures live in `conftest.py`: canned GSC/GA4/PSI/CF payloads as Python dicts,
 a `fake_env` factory, and a `make_dispatcher(clients=...)` helper that builds the
 server's tool dispatch with injected fakes.
 
-## Open questions
+## Resolved decisions
 
-These need your input before I write `PLAN.md` or any code.
+The eight open questions from the first draft were settled by the maintainer.
+Recorded here so the design's rationale stays auditable.
 
-1. **Primary auth method.** I propose service account as the documented primary
-   (headless, no browser, right fit for stdio under a GUI host) with OAuth
-   installed-app as a supported secondary. Do you agree, or do you want OAuth
-   first because asking users to create a service account and grant it on each
-   property is a higher setup bar?
+1. **Primary auth: OAuth.** OAuth installed-app is the recommended, documented-
+   first path (the `uvx` browser flow is smooth in current hosts, and it avoids
+   the service-account setup friction). Service account stays fully supported as
+   the advanced headless option, first-class in code.
+2. **Destructive gating: cache purge only.** `gsc_submit_sitemap` and
+   `gsc_request_indexing` are un-gated and available by default (routine SEO
+   tasks, low blast radius). Only the Cloudflare cache-purge tools sit behind
+   `SEO_MCP_ALLOW_DESTRUCTIVE`, and `cf_purge_cache_all` additionally needs a
+   matching `confirm` token.
+3. **GA4 property listing: deferred.** v1 requires a user-supplied property ID.
+   No `ga4_list_properties`, no GA4 Admin API scope.
+4. **Cloudflare scope: read-only DNS kept.** Zones, zone info, DNS read, and
+   cache purge. DNS writes and Workers stay excluded.
+5. **Cloudflare RUM: read-only.** A single `cf_web_analytics` read tool is in.
+   RUM create/update/delete are excluded.
+6. **PyPI name: `seo-mcp`, fallback `avansaber-seo-mcp`.**
+7. **Cloudflare in v1.** Built now, not deferred.
+8. **Convenience tools: all kept.** The wrappers (`gsc_top_queries`,
+   `gsc_top_pages`, `gsc_compare_periods`, `ga4_top_landing_pages`,
+   `ga4_traffic_by_channel`, `ga4_organic_search_overview`) ship alongside the
+   generic `gsc_search_analytics` / `ga4_run_report` workhorses, because they
+   reduce the AI's chance of mis-constructing GA4/GSC payloads and save context.
 
-2. **Destructive gating scope.** You named cache purging specifically. I propose
-   `SEO_MCP_ALLOW_DESTRUCTIVE` also gate `gsc_submit_sitemap` and
-   `gsc_request_indexing` (they mutate Google-side state), with
-   `cf_purge_cache_all` additionally requiring a `confirm` token. Acceptable, or
-   do you want sitemap/indexing writes available by default and only cache purge
-   gated?
+## Final tool count (v1)
 
-3. **GA4 property listing.** Listing GA4 properties needs the Admin API and a
-   second scope (`analytics.readonly` does not cover it). I propose v1 requires a
-   user-supplied property ID and omits a `ga4_list_properties` tool. Add the
-   Admin API listing tool now, or defer?
+22 tools: 1 cross-service (`system_status`), 10 GSC, 4 GA4, 1 PSI, 6 CF.
 
-4. **Cloudflare scope.** I scoped CF to zones, zone info, DNS read, and cache
-   purge, excluding DNS writes and Workers as out-of-SEO-scope. Agree? Is
-   read-only DNS worth keeping, or drop CF DNS entirely and keep CF to purge +
-   zone status only?
-
-5. **Cloudflare Web Analytics (RUM).** The reference `cf.py` has RUM create/list/
-   delete. RUM is a privacy-friendly analytics source that overlaps GA4. Include
-   a read-only `cf_rum_list` in v1, include full RUM management, or leave RUM out
-   entirely?
-
-6. **PyPI package + command name.** I need a name for both the PyPI package and
-   the `uvx` invocation. `seo-mcp` may be taken. Candidates: `avansaber-seo-mcp`,
-   `seo-insights-mcp`, `gsc-ga4-seo-mcp`. Which do you want me to target (I will
-   verify availability before finalizing)?
-
-7. **Cloudflare optionality in v1.** Is Cloudflare in scope for the first
-   shippable version, or do you want v1 to be GSC + GA4 + PSI only with CF as a
-   fast-follow? This changes how much surface PLAN.md front-loads.
+- **GSC (10):** `gsc_list_properties`, `gsc_search_analytics`, `gsc_top_queries`,
+  `gsc_top_pages`, `gsc_compare_periods`, `gsc_inspect_url`,
+  `gsc_batch_inspect_urls`, `gsc_list_sitemaps`, `gsc_submit_sitemap`,
+  `gsc_request_indexing`.
+- **GA4 (4):** `ga4_run_report`, `ga4_top_landing_pages`,
+  `ga4_traffic_by_channel`, `ga4_organic_search_overview`.
+- **PSI (1):** `psi_analyze`.
+- **CF (6):** `cf_list_zones`, `cf_zone_info`, `cf_list_dns`, `cf_web_analytics`,
+  `cf_purge_cache`, `cf_purge_cache_all`.
 
 8. **Convenience tools vs one workhorse per service.** I proposed several
    convenience wrappers (`gsc_top_queries`, `ga4_top_landing_pages`, etc.) on top
