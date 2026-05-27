@@ -507,11 +507,12 @@ same resolver in `config.py`.
 
 ## Install and distribution
 
-Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). Console script
-`seo-mcp` maps to `seo_mcp.server:main`. The PyPI name targets `seo-mcp`; if that
-is taken at publish time, the fallback is `avansaber-seo-mcp` (the `uvx` argument
-and the console-script name change accordingly, the import package stays
-`seo_mcp`). Snippets below use `seo-mcp`.
+Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). The name `seo-mcp`
+was already taken on PyPI, so the package publishes as **`avansaber-seo-mcp`**;
+the primary console script matches that name (with `seo-mcp` kept as a dev
+alias), and the import package stays `seo_mcp`. The snippets below were written
+before the fallback was confirmed and use `seo-mcp`; the README uses the
+published `avansaber-seo-mcp`.
 
 `uvx` runs the published package in an ephemeral environment, so there is
 nothing to `pip install` and no virtualenv to manage. GUI hosts do not read the

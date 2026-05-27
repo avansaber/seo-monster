@@ -1,5 +1,7 @@
 [project]
-name = "seo-mcp"
+# PyPI name: "seo-mcp" was already taken, so the distribution publishes as
+# "avansaber-seo-mcp". The import package stays "seo_mcp".
+name = "avansaber-seo-mcp"
 version = "0.1.0"
 description = "MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
@@ -32,6 +34,9 @@ dev = [
 ]
 
 [project.scripts]
+# Primary command matches the PyPI name so `uvx avansaber-seo-mcp` just works.
+# `seo-mcp` is kept as a convenience alias for local/dev use.
+avansaber-seo-mcp = "seo_mcp.server:main"
 seo-mcp = "seo_mcp.server:main"
 
 [project.urls]
