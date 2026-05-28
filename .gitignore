@@ -22,6 +22,15 @@ venv/
 .env
 .env.*
 
+# Internal strategy + planning docs (never push these). Keep them under
+# ~/.local/share/seo-monster-private/ or in a .private/ subdirectory of a
+# local clone; both stay off the public repo.
+RESEARCH-AND-PROPOSAL.md
+LISTINGS-PLAN.md
+PLAN.md
+marketing/
+.private/
+
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/

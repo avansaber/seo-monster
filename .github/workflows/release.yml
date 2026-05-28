@@ -35,6 +35,19 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Reject internal planning docs in tag tree
+        run: |
+          set -euo pipefail
+          bad=$(git ls-tree -r --name-only HEAD | grep -E '^(RESEARCH-AND-PROPOSAL|LISTINGS-PLAN|PLAN)\.md$|^marketing/|^\.private/' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Internal planning docs found tracked at this tag:"
+            echo "$bad"
+            echo
+            echo "Move them under ~/.local/share/seo-monster-private/ or a local .private/ directory and retag."
+            exit 1
+          fi
+          echo "tag tree free of internal planning docs"
+
       - name: Verify version stamps match the tag
         run: |
           set -euo pipefail

@@ -3,7 +3,7 @@
 # "seo_mcp". The earlier "seo-monster-mcp 0.1.0" release was renamed to drop
 # the redundant -mcp suffix in favor of the cleaner brand name.
 name = "seo-monster"
-version = "0.2.0"
+version = "0.2.1"
 description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
 license = { text = "MIT" }
@@ -52,6 +52,21 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seo_mcp"]
+
+# Defense in depth: even if an internal planning doc accidentally lands in
+# the working tree, hatchling's sdist target excludes it. The CI workflow
+# (.github/workflows/release.yml) additionally fails any tag push that has
+# these filenames tracked. The .gitignore is the first line of defense.
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "RESEARCH-AND-PROPOSAL.md",
+  "LISTINGS-PLAN.md",
+  "PLAN.md",
+  "marketing/",
+  ".private/",
+  ".env",
+  ".env.*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

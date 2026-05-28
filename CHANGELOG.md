@@ -13,6 +13,44 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.2.1] - 2026-05-28
+
+Housekeeping release. No new tools, no behaviour changes. The previously
+public planning + strategy + marketing files have been scrubbed from git
+history, removed from the published sdist, and guarded against
+reintroduction. **`0.2.0` was yanked on PyPI as part of this cleanup** so
+the default resolver picks `0.2.1`.
+
+### Changed
+
+- `pyproject.toml` declares `[tool.hatch.build.targets.sdist] exclude`
+  covering the internal planning patterns (`RESEARCH-AND-PROPOSAL.md`,
+  `LISTINGS-PLAN.md`, `PLAN.md`, `marketing/`, `.private/`, `.env*`). Any
+  future accidental tracking of these names will not reach a published
+  sdist.
+- `.github/workflows/release.yml` now runs a "reject internal planning
+  docs" pre-build check on every tag push. Any tag with one of those
+  patterns tracked fails the release before anything is built or uploaded.
+- New `CONTRIBUTING.md` documenting the convention so the next maintainer
+  knows where internal docs go.
+
+### Security
+
+- `.gitignore` adds explicit entries for the planning-doc filenames and
+  `.private/`. `git add` of any of these is silently dropped.
+- Git history rewritten with `git filter-repo --invert-paths` to remove the
+  planning docs from every commit they ever appeared in. Force-pushed
+  `main` and all tags (`v0.1.0` through `v0.2.0`). Anyone with a clone
+  from before this release needs to re-clone or rebase.
+- **(validate)** `curl -s -o /dev/null -w "%{http_code}\n"
+  https://raw.githubusercontent.com/avansaber/seo-monster/main/PLAN.md`
+  should return `404`. Same for `LISTINGS-PLAN.md`,
+  `RESEARCH-AND-PROPOSAL.md`, and any path under `marketing/`.
+
+### Tests
+
+- 211 passing (no change from `0.2.0`; no code changed).
+
 ## [0.2.0] - 2026-05-28
 
 The intelligence sprint. Surface grows to 28 tools and 4 named workflow
@@ -150,7 +188,7 @@ users; broad DX improvements.
   runs read the cached token. **(validate)** Run `uvx seo-monster auth`
   in a terminal, complete consent, then confirm GSC tools work from Claude
   Desktop.
-- **Schema aliases** for AI-host robustness:
+- **Schema aliases** so AI hosts get the parameter names right on the first try:
   - `gsc_search_analytics` accepts `days` and `limit`.
   - `gsc_compare_periods` accepts `days` and `limit`.
   - `gsc_submit_sitemap` accepts `sitemap_url` (the friendly form).
