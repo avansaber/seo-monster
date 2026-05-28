@@ -187,6 +187,103 @@ def test_top_pages_uses_page_dimension(make_config, make_gsc_client, gsc_payload
 # --- compare_periods ------------------------------------------------------
 
 
+def _compare_payload(rows):
+    return {"rows": [
+        {"keys": [r[0]], "clicks": r[1], "impressions": r[2], "ctr": r[3], "position": r[4]}
+        for r in rows
+    ]}
+
+
+def test_compare_periods_min_delta_clicks_filters(make_config, make_gsc_client):
+    current = _compare_payload([("big-mover", 100, 1000, 0.10, 3.0),
+                                ("small-mover", 11, 100, 0.11, 5.0)])
+    prior = _compare_payload([("big-mover", 50, 800, 0.06, 4.0),
+                              ("small-mover", 10, 90, 0.11, 5.0)])
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods({"min_delta_clicks": 5}, _cfg(make_config), {"gsc": client})
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert keys == ["big-mover"]
+    assert result["data"]["total_matched"] == 2
+    assert result["data"]["matched_count"] == 1
+
+
+def test_compare_periods_sort_dir_asc_for_losers(make_config, make_gsc_client):
+    # Two rows: one gained clicks, one lost clicks. sort_dir=asc surfaces the
+    # loser at the top of the list.
+    current = _compare_payload([("gainer", 90, 900, 0.1, 4.0),
+                                ("loser",  10, 200, 0.05, 8.0)])
+    prior = _compare_payload([("gainer", 30, 600, 0.05, 6.0),
+                              ("loser",  80, 400, 0.20, 5.0)])
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods({"sort_dir": "asc"}, _cfg(make_config), {"gsc": client})
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert keys == ["loser", "gainer"]
+
+
+def test_compare_periods_sort_by_delta_position_asc_finds_rank_gains(make_config, make_gsc_client):
+    # delta_position < 0 means a better SERP position. asc sort surfaces the
+    # biggest rank gains first.
+    current = _compare_payload([("climber", 50, 500, 0.10, 3.0),
+                                ("slipper", 50, 500, 0.10, 12.0)])
+    prior = _compare_payload([("climber", 50, 500, 0.10, 9.0),
+                              ("slipper", 50, 500, 0.10, 6.0)])
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods({"sort_by": "delta_position", "sort_dir": "asc"},
+                                           _cfg(make_config), {"gsc": client})
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert keys == ["climber", "slipper"]
+
+
+def test_compare_periods_anomalies_only_keeps_outliers(make_config, make_gsc_client):
+    # 9 small moves + 1 huge mover. With sigma_threshold=2 the huge mover
+    # should be retained; the others filtered out.
+    current = _compare_payload(
+        [(f"q-{i}", 11, 100, 0.11, 5.0) for i in range(9)] +
+        [("huge", 500, 1000, 0.5, 3.0)]
+    )
+    prior = _compare_payload(
+        [(f"q-{i}", 10, 100, 0.10, 5.0) for i in range(9)] +
+        [("huge", 50, 100, 0.5, 6.0)]
+    )
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods(
+        {"anomalies_only": True, "sigma_threshold": 2.0},
+        _cfg(make_config), {"gsc": client},
+    )
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert "huge" in keys
+    assert all(k != "q-0" for k in keys)  # the small-move rows are gone
+    assert result["data"]["filters_applied"]["anomalies_only"] is True
+    assert result["data"]["filters_applied"]["sigma_used"] is not None
+
+
+def test_compare_periods_top_caps_returned_rows(make_config, make_gsc_client):
+    current = _compare_payload([(f"q-{i}", 100 - i, 1000, 0.1, 3.0) for i in range(20)])
+    prior = _compare_payload([(f"q-{i}", 10, 900, 0.1, 5.0) for i in range(20)])
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods({"top": 3}, _cfg(make_config), {"gsc": client})
+    assert result["data"]["matched_count"] == 3
+    assert result["data"]["total_matched"] == 20
+
+
+def test_compare_periods_defaults_are_no_op(make_config, make_gsc_client):
+    # Round-trip the original v0.1.x test as a regression guard: with no new
+    # flags set, results should still be identical to the original behaviour.
+    current = {"rows": [
+        {"keys": ["a"], "clicks": 100, "impressions": 1000, "ctr": 0.10, "position": 3.0},
+        {"keys": ["b"], "clicks": 10, "impressions": 200, "ctr": 0.05, "position": 9.0},
+    ]}
+    prior = {"rows": [
+        {"keys": ["a"], "clicks": 60, "impressions": 800, "ctr": 0.075, "position": 4.0},
+        {"keys": ["c"], "clicks": 5, "impressions": 100, "ctr": 0.05, "position": 12.0},
+    ]}
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_compare_periods({}, _cfg(make_config), {"gsc": client})
+    assert result["data"]["matched_count"] == 1
+    assert result["data"]["unmatched"]["only_current"] == [["b"]]
+    assert result["data"]["unmatched"]["only_prior"] == [["c"]]
+
+
 def test_compare_periods_deltas(make_config, make_gsc_client):
     current = {"rows": [
         {"keys": ["a"], "clicks": 100, "impressions": 1000, "ctr": 0.10, "position": 3.0},

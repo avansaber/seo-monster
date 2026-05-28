@@ -327,12 +327,23 @@ gsc_top_pages = _top_handler("page")
 
 # --- gsc_compare_periods --------------------------------------------------
 
+_COMPARE_SORT_KEYS = (
+    "delta_clicks",
+    "delta_impressions",
+    "delta_ctr",
+    "delta_position",
+)
+
+
 TOOL_COMPARE_PERIODS = {
     "name": "gsc_compare_periods",
     "description": (
         "Compare two equal-length time windows (current vs prior) and return "
         "per-key deltas in clicks, impressions, CTR, and position, plus keys "
-        "present in only one window. Useful for spotting movers."
+        "present in only one window. v0.2.0: optional sort_by / sort_dir / "
+        "min_delta_* filters and an anomalies_only z-score gate so the same "
+        "tool covers 'biggest gainers', 'biggest losers', 'meaningful movers', "
+        "and 'statistical outliers' without needing separate tools."
     ),
     "inputSchema": {
         "type": "object",
@@ -348,6 +359,22 @@ TOOL_COMPARE_PERIODS = {
             "gap_days": {"type": "integer", "minimum": 0, "maximum": 240, "description": "Days between the two windows. Defaults to 0."},
             "row_limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Rows per window query. Defaults to 1000."},
             "limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Alias for row_limit. row_limit wins when both are set."},
+            "sort_by": {
+                "type": "string",
+                "enum": list(_COMPARE_SORT_KEYS),
+                "description": "Metric to sort matched rows by. Defaults to delta_clicks.",
+            },
+            "sort_dir": {
+                "type": "string",
+                "enum": ["asc", "desc"],
+                "description": "Sort direction. 'desc' for biggest gainers (default). 'asc' for biggest losers. Note: delta_position is reversed (negative = improvement), so use 'asc' to find rank gains.",
+            },
+            "min_delta_clicks": {"type": "integer", "minimum": 0, "description": "Filter to rows with abs(delta_clicks) >= this. Defaults to 0 (no filter)."},
+            "min_delta_impressions": {"type": "integer", "minimum": 0, "description": "Filter to rows with abs(delta_impressions) >= this. Defaults to 0."},
+            "min_delta_position": {"type": "number", "minimum": 0, "description": "Filter to rows with abs(delta_position) >= this. Defaults to 0."},
+            "anomalies_only": {"type": "boolean", "description": "If true, keep only rows where the sort_by metric exceeds sigma_threshold standard deviations from the matched-rows mean (statistical outliers). Default false."},
+            "sigma_threshold": {"type": "number", "minimum": 0.5, "description": "Threshold for anomalies_only. Defaults to 2.0 (~95th percentile under normality)."},
+            "top": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Cap the returned rows. No cap by default."},
         },
         "additionalProperties": False,
     },
@@ -410,7 +437,44 @@ def gsc_compare_periods(arguments, config, clients) -> dict[str, Any]:
                 "delta_position": round(c["position"] - p["position"], 4),
             }
         )
-    compared.sort(key=lambda r: r["delta_clicks"], reverse=True)
+
+    total_matched = len(compared)
+
+    # --- v0.2.0 filter / sort / anomaly options ---
+    sort_by = arguments.get("sort_by", "delta_clicks")
+    if sort_by not in _COMPARE_SORT_KEYS:
+        sort_by = "delta_clicks"
+    sort_dir = arguments.get("sort_dir", "desc")
+    reverse = (sort_dir != "asc")
+    min_delta_clicks = int(arguments.get("min_delta_clicks", 0))
+    min_delta_impressions = int(arguments.get("min_delta_impressions", 0))
+    min_delta_position = float(arguments.get("min_delta_position", 0))
+    anomalies_only = bool(arguments.get("anomalies_only", False))
+    sigma_threshold = float(arguments.get("sigma_threshold", 2.0))
+    top = arguments.get("top")
+
+    if min_delta_clicks or min_delta_impressions or min_delta_position:
+        compared = [
+            r for r in compared
+            if abs(r["delta_clicks"]) >= min_delta_clicks
+            and abs(r["delta_impressions"]) >= min_delta_impressions
+            and abs(r["delta_position"]) >= min_delta_position
+        ]
+
+    sigma_used: float | None = None
+    if anomalies_only and len(compared) >= 2:
+        values = [abs(r[sort_by]) for r in compared]
+        mean = sum(values) / len(values)
+        # Population stddev (matches numpy.std() default; appropriate when we
+        # treat the matched set as the whole population, not a sample).
+        sigma_used = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5
+        if sigma_used > 0:
+            threshold = sigma_threshold * sigma_used
+            compared = [r for r in compared if abs(r[sort_by]) > threshold]
+
+    compared.sort(key=lambda r: r[sort_by], reverse=reverse)
+    if top is not None:
+        compared = compared[: int(top)]
 
     only_current = [list(k) for k in current.keys() - prior.keys()]
     only_prior = [list(k) for k in prior.keys() - current.keys()]
@@ -422,6 +486,18 @@ def gsc_compare_periods(arguments, config, clients) -> dict[str, Any]:
             "current_window": {"start_date": current_start.isoformat(), "end_date": current_end.isoformat()},
             "prior_window": {"start_date": prior_start.isoformat(), "end_date": prior_end.isoformat()},
             "matched_count": len(compared),
+            "total_matched": total_matched,
+            "filters_applied": {
+                "sort_by": sort_by,
+                "sort_dir": sort_dir,
+                "min_delta_clicks": min_delta_clicks,
+                "min_delta_impressions": min_delta_impressions,
+                "min_delta_position": min_delta_position,
+                "anomalies_only": anomalies_only,
+                "sigma_threshold": sigma_threshold if anomalies_only else None,
+                "sigma_used": round(sigma_used, 4) if sigma_used is not None else None,
+                "top": int(top) if top is not None else None,
+            },
             "rows": compared,
             "unmatched": {"only_current": only_current, "only_prior": only_prior},
         }
