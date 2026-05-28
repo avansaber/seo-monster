@@ -1,7 +1,8 @@
 [project]
-# SEOMonster. Published on PyPI as "seo-monster-mcp"; the import package stays
-# "seo_mcp".
-name = "seo-monster-mcp"
+# SEOMonster. Published on PyPI as "seo-monster"; the import package stays
+# "seo_mcp". The earlier "seo-monster-mcp 0.1.0" release was renamed to drop
+# the redundant -mcp suffix in favor of the cleaner brand name.
+name = "seo-monster"
 version = "0.1.0"
 description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
@@ -34,16 +35,16 @@ dev = [
 ]
 
 [project.scripts]
-# Primary command matches the PyPI name so `uvx seo-monster-mcp` just works.
+# Primary command matches the PyPI name so `uvx seo-monster` just works.
 # `seo-mcp` is kept as a convenience alias for local/dev use.
-seo-monster-mcp = "seo_mcp.server:main"
+seo-monster = "seo_mcp.server:main"
 seo-mcp = "seo_mcp.server:main"
 
 [project.urls]
 Homepage = "https://seomonster.avansaber.com"
 Documentation = "https://seomonster.avansaber.com"
-Repository = "https://github.com/avansaber/seo-monster-mcp"
-Issues = "https://github.com/avansaber/seo-monster-mcp/issues"
+Repository = "https://github.com/avansaber/seo-monster"
+Issues = "https://github.com/avansaber/seo-monster/issues"
 
 [build-system]
 requires = ["hatchling"]

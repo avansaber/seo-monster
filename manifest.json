@@ -1,6 +1,6 @@
 {
   "manifest_version": "0.4",
-  "name": "seo-monster-mcp",
+  "name": "seo-monster",
   "display_name": "SEOMonster",
   "version": "0.1.0",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare.",
@@ -13,11 +13,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/avansaber/seo-monster-mcp"
+    "url": "https://github.com/avansaber/seo-monster"
   },
   "homepage": "https://seomonster.avansaber.com",
   "documentation": "https://seomonster.avansaber.com",
-  "support": "https://github.com/avansaber/seo-monster-mcp/issues",
+  "support": "https://github.com/avansaber/seo-monster/issues",
   "keywords": [
     "seo",
     "seomonster",
@@ -41,7 +41,7 @@
         "run",
         "--project",
         "${__dirname}",
-        "seo-monster-mcp"
+        "seo-monster"
       ],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "${user_config.google_oauth_client}",

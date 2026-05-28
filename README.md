@@ -14,8 +14,8 @@ Codex) can query your own data with your own credentials.
 - **Lean.** Standard library plus the `mcp` SDK and the Google client libraries.
   PageSpeed Insights and Cloudflare ride on `urllib`, no extra HTTP dependency.
 
-> Published on PyPI as **`seo-monster-mcp`**, so the `uvx` command is
-> `seo-monster-mcp`. The import package is `seo_mcp`, and `seo-mcp` stays as a
+> Published on PyPI as **`seo-monster`**, so the `uvx` command is
+> `seo-monster`. The import package is `seo_mcp`, and `seo-mcp` stays as a
 > dev/local console alias.
 
 ## Requirements
@@ -87,7 +87,7 @@ collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
 
-Download `seo-monster-mcp-0.1.0.mcpb` from the [Claude Directory](https://claude.ai/directory)
+Download `seo-monster-0.1.0.mcpb` from the [Claude Directory](https://claude.ai/directory)
 (or from the project's GitHub releases) and double-click it. Claude Desktop
 verifies the bundle, runs `uv` to materialize a Python environment from the
 bundled `pyproject.toml`, and shows a configuration form derived from the
@@ -109,7 +109,7 @@ The Cloudflare cache-purge tools stay inert unless you enable destructive mode
 
 ### `uvx` for Cursor, Cline, Codex (and Claude Desktop power users)
 
-`uvx` runs the published PyPI package `seo-monster-mcp` in an ephemeral
+`uvx` runs the published PyPI package `seo-monster` in an ephemeral
 environment. Add the snippet for your host below, using the **absolute path**
 to `uvx` (find it with `which uvx`; GUI hosts do not read your shell profile).
 
@@ -120,7 +120,7 @@ to `uvx` (find it with `which uvx`; GUI hosts do not read your shell profile).
   "mcpServers": {
     "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-monster-mcp"],
+      "args": ["seo-monster"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json",
@@ -140,7 +140,7 @@ to `uvx` (find it with `which uvx`; GUI hosts do not read your shell profile).
   "mcpServers": {
     "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-monster-mcp"],
+      "args": ["seo-monster"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json"
@@ -159,7 +159,7 @@ cache-purge tools off so they always prompt.
 ```toml
 [mcp_servers.seomonster]
 command = "/Users/me/.local/bin/uvx"
-args = ["seo-monster-mcp"]
+args = ["seo-monster"]
 
 [mcp_servers.seomonster.env]
 SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-monster/client_secret.json"
@@ -362,11 +362,11 @@ Error codes:
 ## Development
 
 ```sh
-git clone https://github.com/avansaber/seo-monster-mcp
-cd seo-monster-mcp
+git clone https://github.com/avansaber/seo-monster
+cd seo-monster
 uv venv && uv pip install -e ".[dev]"
 uv run pytest            # offline test suite
-uv run seo-monster-mcp   # run the server over stdio
+uv run seo-monster   # run the server over stdio
 ```
 
 Tests are fully offline: they mock at the client layer, so no network and no

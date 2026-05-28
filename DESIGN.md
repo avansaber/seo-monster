@@ -1,9 +1,10 @@
 # SEOMonster Design
 
-(Project: SEOMonster. PyPI distribution: `seo-monster-mcp`. Import package:
-`seo_mcp`. This document predates the SEOMonster name; the design below is
-unchanged, and the older `seo-mcp` / `avansaber-seo-mcp` names that appear in
-some snippets were superseded by `seo-monster-mcp`.)
+(Project: SEOMonster. PyPI distribution: `seo-monster`. Import package:
+`seo_mcp`. This document predates both the SEOMonster name and the final
+package rename; the design below is unchanged. Earlier draft names that
+appear in some snippets (`seo-mcp`, `avansaber-seo-mcp`, `seo-monster-mcp`)
+were all superseded by `seo-monster`.)
 
 An MCP server that exposes strictly SEO-focused tools over four data sources:
 Google Search Console (GSC), Google Analytics 4 (GA4), PageSpeed Insights
@@ -525,7 +526,7 @@ are two officially supported install paths:
    `SEO_MCP_*` environment variables the server already reads.
 2. **`uvx` execution** for CLI/IDE hosts that do not consume `.mcpb` bundles
    (Cursor, Cline, Codex). The published PyPI distribution is
-   **`seo-monster-mcp`** and the console script of the same name maps to
+   **`seo-monster`** and the console script of the same name maps to
    `seo_mcp.server:main`. `seo-mcp` is kept as a dev alias. The import package
    stays `seo_mcp`.
 
@@ -535,7 +536,7 @@ and how it collects credentials.
 
 ### Claude Desktop (primary: `.mcpb` bundle)
 
-The user downloads the signed `seo-monster-mcp-0.1.0.mcpb` archive and
+The user downloads the signed `seo-monster-0.1.0.mcpb` archive and
 double-clicks it. Claude Desktop:
 
 1. Verifies the bundle, runs `uv` to materialize the Python environment from
@@ -563,7 +564,7 @@ unaware of the bundle wrapper. This keeps the `uvx` path identical in behavior.
   "mcpServers": {
     "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-monster-mcp"],
+      "args": ["seo-monster"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json",
@@ -583,7 +584,7 @@ unaware of the bundle wrapper. This keeps the `uvx` path identical in behavior.
   "mcpServers": {
     "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-monster-mcp"],
+      "args": ["seo-monster"],
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
         "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json"
@@ -602,7 +603,7 @@ Cloudflare cache-purge tools are deliberately left off so they always prompt.
 ```toml
 [mcp_servers.seomonster]
 command = "/Users/me/.local/bin/uvx"
-args = ["seo-monster-mcp"]
+args = ["seo-monster"]
 
 [mcp_servers.seomonster.env]
 SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-monster/client_secret.json"
@@ -610,7 +611,7 @@ SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-monster/token.json"
 SEO_MCP_GA4_PROPERTY_ID = "properties/123456789"
 ```
 
-A local-development path (`uv run seo-monster-mcp` from a clone, or `pip install
+A local-development path (`uv run seo-monster` from a clone, or `pip install
 -e .`) is documented in the README for contributors. GUI hosts do not read the
 shell profile, so the `command` field must use the **absolute path** to `uvx`
 (find it with `which uvx`).
@@ -683,8 +684,8 @@ Recorded here so the design's rationale stays auditable.
    cache purge. DNS writes and Workers stay excluded.
 5. **Cloudflare RUM: read-only.** A single `cf_web_analytics` read tool is in.
    RUM create/update/delete are excluded.
-6. **PyPI name:** originally `seo-mcp` (taken) then `avansaber-seo-mcp`; finalized
-   as **`seo-monster-mcp`** when the project was named SEOMonster.
+6. **PyPI name:** originally `seo-mcp` (taken) then `seo-monster`; finalized
+   as **`seo-monster`** when the project was named SEOMonster.
 7. **Cloudflare in v1.** Built now, not deferred.
 8. **Convenience tools: all kept.** The wrappers (`gsc_top_queries`,
    `gsc_top_pages`, `gsc_compare_periods`, `ga4_top_landing_pages`,
