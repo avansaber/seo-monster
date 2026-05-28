@@ -88,8 +88,11 @@ jobs:
           unzip -q "dist/seo_monster-${v}-py3-none-any.whl" -d "$tmp/wheel"
           tar xzf "dist/seo_monster-${v}.tar.gz" -C "$tmp/"
           unzip -q "dist/seo-monster-${v}.mcpb" -d "$tmp/mcpb"
+          # Note: the PEM-header pattern uses [A-Z ]+ rather than .* so the
+          # regex does not match a literal occurrence of itself inside this
+          # workflow YAML when the sdist is included in the scan.
           if grep -rIE \
-            'AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]{20,}|1//0[0-9A-Za-z_-]{20,}|-----BEGIN.*PRIVATE KEY-----|Bearer [A-Za-z0-9_-]{30,}|pypi-AgE[A-Za-z0-9_-]{50,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}' \
+            'AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]{20,}|1//0[0-9A-Za-z_-]{20,}|-----BEGIN [A-Z ]+PRIVATE KEY-----|Bearer [A-Za-z0-9_-]{30,}|pypi-AgE[A-Za-z0-9_-]{50,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}' \
             "$tmp" 2>/dev/null; then
             echo "LEAK: real credential pattern found in an artifact"
             exit 1

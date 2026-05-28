@@ -6,6 +6,7 @@
 tests/
 dist/
 .git/
+.github/
 .cursor/
 .claude/
 __pycache__/
