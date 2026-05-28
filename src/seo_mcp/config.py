@@ -68,6 +68,19 @@ def _clean(value: Any) -> str | None:
     return text or None
 
 
+def _expand_path(value: str | None) -> str | None:
+    """Expand ``~`` and shell-style ``$VAR`` / ``${VAR}`` references in a path.
+
+    Defensive: some hosts pass file-path defaults from the MCPB manifest without
+    resolving the manifest's ``${HOME}`` substitution before injecting them as
+    env vars. We re-expand here so a literal ``${HOME}/path`` or ``~/path``
+    always resolves to a real filesystem location.
+    """
+    if value is None:
+        return None
+    return os.path.expanduser(os.path.expandvars(value))
+
+
 def _load_file(config_path: str | None, env: Mapping[str, str]) -> tuple[dict[str, Any], str | None]:
     """Read and parse the TOML config file if present.
 
@@ -120,16 +133,17 @@ def load_config(
         return _clean(file_value)
 
     # Service-account key: SEO_MCP_GOOGLE_CREDENTIALS, then the standard
-    # GOOGLE_APPLICATION_CREDENTIALS, then the file.
-    sa_credentials = (
+    # GOOGLE_APPLICATION_CREDENTIALS, then the file. Path-like fields are
+    # expanded so a literal "${HOME}/..." or "~/..." resolves correctly.
+    sa_credentials = _expand_path(
         _clean(env.get("SEO_MCP_GOOGLE_CREDENTIALS"))
         or _clean(env.get("GOOGLE_APPLICATION_CREDENTIALS"))
         or _clean(google_file.get("credentials"))
     )
 
     google = GoogleAuthConfig(
-        oauth_client=pick("SEO_MCP_GOOGLE_OAUTH_CLIENT", google_file.get("oauth_client")),
-        token=pick("SEO_MCP_GOOGLE_TOKEN", google_file.get("token")),
+        oauth_client=_expand_path(pick("SEO_MCP_GOOGLE_OAUTH_CLIENT", google_file.get("oauth_client"))),
+        token=_expand_path(pick("SEO_MCP_GOOGLE_TOKEN", google_file.get("token"))),
         credentials=sa_credentials,
     )
 

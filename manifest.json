@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare.",
   "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights, and Cloudflare. All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
   "author": {
@@ -46,6 +46,7 @@
       "env": {
         "SEO_MCP_GOOGLE_OAUTH_CLIENT": "${user_config.google_oauth_client}",
         "SEO_MCP_GOOGLE_TOKEN": "${user_config.google_token}",
+        "SEO_MCP_GSC_DEFAULT_SITE": "${user_config.gsc_default_site}",
         "SEO_MCP_GA4_PROPERTY_ID": "${user_config.ga4_property_id}",
         "PSI_API_KEY": "${user_config.psi_api_key}",
         "CF_API_TOKEN": "${user_config.cf_api_token}",
@@ -67,6 +68,12 @@
       "description": "Writable path where the cached OAuth token is stored. On first use, a browser opens for one-time consent and the token is written here. Default places it in your home config directory.",
       "required": true,
       "default": "${HOME}/.config/seo-monster/token.json"
+    },
+    "gsc_default_site": {
+      "type": "string",
+      "title": "GSC Default Property (optional)",
+      "description": "Default Search Console property for the GSC tools, e.g. 'sc-domain:example.com' or 'https://www.example.com/'. You can also pass site_url per call.",
+      "required": false
     },
     "ga4_property_id": {
       "type": "string",

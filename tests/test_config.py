@@ -152,6 +152,33 @@ def test_env_blank_value_does_not_override_file(tmp_path):
     assert cfg.gsc_default_site == "sc-domain:fromfile.com"
 
 
+def test_path_fields_expand_tilde_and_env_vars(monkeypatch):
+    # Defense in depth: even if a host passes a literal "${HOME}/..." or "~/..."
+    # to SEO_MCP_GOOGLE_*, the server resolves it to an absolute path.
+    monkeypatch.setenv("HOME", "/home/test-user")
+    env = {
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "~/.config/seo-monster/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "${HOME}/.config/seo-monster/token.json",
+        "SEO_MCP_GOOGLE_CREDENTIALS": "${HOME}/sa.json",
+    }
+    cfg = load_config(env=env, config_path="/nonexistent.toml")
+    assert cfg.google.oauth_client == "/home/test-user/.config/seo-monster/client_secret.json"
+    assert cfg.google.token == "/home/test-user/.config/seo-monster/token.json"
+    assert cfg.google.credentials == "/home/test-user/sa.json"
+
+
+def test_path_fields_pass_through_when_already_absolute():
+    cfg = load_config(
+        env={
+            "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/abs/client.json",
+            "SEO_MCP_GOOGLE_TOKEN": "/abs/token.json",
+        },
+        config_path="/nonexistent.toml",
+    )
+    assert cfg.google.oauth_client == "/abs/client.json"
+    assert cfg.google.token == "/abs/token.json"
+
+
 def test_malformed_toml_falls_back_to_env(tmp_path):
     path = tmp_path / "bad.toml"
     path.write_text("this is = = not valid toml [[[")
