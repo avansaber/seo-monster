@@ -188,9 +188,13 @@ additive.
     per-query top pages, cannibalization recommendation.
   - `migration_check(urls, site_url?)` chains batch URL inspection,
     sitemap list, canonical agreement table.
-  **(validate)** Confirm `prompts/list` returns four entries with their
-  arguments. Invoke `prompts/get` for `weekly_review` with `days=14`,
-  confirm the returned message body templates `"days": 14` into the
+  **(validate)** Confirm `prompts/list` returns the four prompts named
+  above (`post_deploy_verify`, `weekly_review`, `content_audit`,
+  `migration_check`) with their arguments. Note: v0.3.0 ships a fifth
+  prompt (`technical_seo_audit`), so the actual `prompts/list` length
+  will be 5 on current builds, but these four must all be present.
+  Invoke `prompts/get` for `weekly_review` with `days=14`, confirm the
+  returned message body templates `"days": 14` into the
   `gsc_compare_periods` call shape.
 - **`gsc_compare_periods` enhancements** (absorbs the originally proposed
   `gsc_rank_drops` and `traffic_anomaly_detector`; defaults preserve

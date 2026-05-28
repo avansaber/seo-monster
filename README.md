@@ -2,8 +2,12 @@
 
 SEOMonster is an MCP server for SEO workflows. It exposes strictly SEO-focused
 tools over **Google Search Console**, **Google Analytics 4**, **PageSpeed
-Insights**, and **Cloudflare**, so an AI host (Claude Desktop, Cline, Cursor,
-Codex) can query your own data with your own credentials.
+Insights**, **Cloudflare**, **IndexNow**, the **Chrome UX Report History API**,
+and a built-in HTTP client for technical-SEO checks (`inspect_meta`,
+`check_canonical`, `redirect_chain_audit`, `mixed_content_check`,
+`robots_txt_validate`, `sitemap_validate`, `sitemap_health`), so an AI host
+(Claude Desktop, Cline, Cursor, Codex) can query your own data with your own
+credentials.
 
 - **User-credential-driven.** No auth is baked into the package. Every credential
   is resolved at runtime from your environment or a config file. The published
