@@ -389,6 +389,25 @@ def test_property_scope_403_maps_to_not_found(make_config, make_gsc_client, gsc_
     assert "site_url" in result["error"]["remediation"]
 
 
+def test_property_scope_403_handles_google_actual_text(make_config, make_gsc_client, gsc_payloads, fake_http_error):
+    # Round-3 feedback 8b: the verbatim text Google returns from URL Inspection
+    # when the inspected URL is outside the property's scope. The v0.1.1
+    # markers were hypothetical and missed this exact phrasing, sending the
+    # error through to AUTH_INVALID. Pin the real text here so the regression
+    # cannot recur.
+    responses = dict(gsc_payloads)
+    responses["inspect"] = fake_http_error(
+        403,
+        "You do not own this site, or the inspected URL is not part of this property.",
+    )
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_inspect_url(
+        {"url": "https://www.avansaber.com/about.php"}, _cfg(make_config), {"gsc": client}
+    )
+    assert result["error"]["code"] == "NOT_FOUND"
+    assert "site_url" in result["error"]["remediation"]
+
+
 def test_generic_403_still_maps_to_auth_invalid(make_config, make_gsc_client, gsc_payloads, fake_http_error):
     # The new branch is property-scope-specific; an unrelated 403 still goes
     # to AUTH_INVALID. Guards against over-broad remap.

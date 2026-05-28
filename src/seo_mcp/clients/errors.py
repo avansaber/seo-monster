@@ -117,11 +117,19 @@ def map_google_exception(exc: Exception) -> ApiError:
     if status == 403 and any(
         m in lowered
         for m in (
+            # Hypothetical markers added in v0.1.1; kept in case Google's text
+            # varies across surfaces or versions.
             "not under the verified",
             "not under the property",
             "url is not under",
             "outside the property",
             "forbidden for this site",
+            # Verbatim text Google returns from URL Inspection for an out-of-
+            # scope URL (captured by external validation, round 3 §8b):
+            # "You do not own this site, or the inspected URL is not part of
+            # this property."
+            "not part of this property",
+            "you do not own this site",
         )
     ):
         return ApiError(
