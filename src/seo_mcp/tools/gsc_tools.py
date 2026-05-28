@@ -18,7 +18,7 @@ from typing import Any, Mapping
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ..clients.errors import ApiError
-from ._helpers import missing_site_error, require_client, resolve_site
+from ._helpers import annotations, missing_site_error, require_client, resolve_site
 
 
 _SERVICE = "gsc"
@@ -119,6 +119,7 @@ TOOL_LIST_PROPERTIES = {
         "site_url values."
     ),
     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    "annotations": annotations(read=True),
 }
 
 
@@ -191,6 +192,7 @@ TOOL_SEARCH_ANALYTICS = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -271,6 +273,7 @@ def _top_tool(name: str, dimension: str, noun: str) -> dict[str, Any]:
             },
             "additionalProperties": False,
         },
+        "annotations": annotations(read=True),
     }
 
 
@@ -348,6 +351,7 @@ TOOL_COMPARE_PERIODS = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -465,6 +469,7 @@ TOOL_INSPECT_URL = {
         "required": ["url"],
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -507,6 +512,7 @@ TOOL_BATCH_INSPECT = {
         "required": ["urls"],
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -551,6 +557,7 @@ TOOL_LIST_SITEMAPS = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -598,6 +605,7 @@ TOOL_SUBMIT_SITEMAP = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=False, destructive=False),
 }
 
 
@@ -651,6 +659,7 @@ TOOL_REQUEST_INDEXING = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=False, destructive=False),
 }
 
 # Errors that affect every URL: stop the batch and surface them directly.

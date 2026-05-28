@@ -87,6 +87,27 @@ def test_every_registered_tool_is_routed():
             )
 
 
+def test_every_tool_carries_mcp_annotations():
+    """MCP 2025-03-26 introduced tool annotations. Anthropic's Connectors
+    Directory rejects ~30% of submissions for missing them. This test guards
+    against any future tool sliding in without the four hint fields, so we
+    cannot regress on the Directory submission criteria."""
+    pytest.importorskip("mcp")
+    from seo_mcp import server
+
+    required = {"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"}
+    for tool_def in server._TOOL_DEFS:
+        name = tool_def["name"]
+        assert "annotations" in tool_def, f"{name}: missing annotations block"
+        keys = set(tool_def["annotations"].keys())
+        missing = required - keys
+        assert not missing, f"{name}: annotations missing fields {missing}"
+        # Spec-correctness: a destructive tool cannot also be readOnly.
+        a = tool_def["annotations"]
+        if a.get("destructiveHint"):
+            assert not a.get("readOnlyHint"), f"{name}: destructive + readOnly is contradictory"
+
+
 def test_full_v1_surface_registered():
     pytest.importorskip("mcp")
     from seo_mcp import server

@@ -13,7 +13,7 @@ from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import require_client
+from ._helpers import annotations, require_client
 
 
 _SERVICE = "psi"
@@ -61,6 +61,7 @@ TOOL_ANALYZE = {
         "required": ["url"],
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 

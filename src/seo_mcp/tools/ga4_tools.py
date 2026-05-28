@@ -17,7 +17,7 @@ from ..clients.errors import ApiError
 from ..clients.ga4 import normalize_property_id
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import require_client
+from ._helpers import annotations, require_client
 
 
 _SERVICE = "ga4"
@@ -87,6 +87,7 @@ TOOL_RUN_REPORT = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -177,6 +178,7 @@ TOOL_TOP_LANDING_PAGES = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -225,6 +227,7 @@ TOOL_TRAFFIC_BY_CHANNEL = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -270,6 +273,7 @@ TOOL_ORGANIC_OVERVIEW = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 _OVERVIEW_METRICS = ["sessions", "engagedSessions", "engagementRate", "averageSessionDuration", "conversions"]

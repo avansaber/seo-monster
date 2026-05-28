@@ -19,6 +19,7 @@ from .. import __version__
 from ..auth import google_auth_method, google_configured, required_scopes
 from ..config import Config
 from ..errors import ok
+from ._helpers import annotations
 
 
 TOOL: dict[str, Any] = {
@@ -43,6 +44,7 @@ TOOL: dict[str, Any] = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True, open_world=True),
 }
 
 

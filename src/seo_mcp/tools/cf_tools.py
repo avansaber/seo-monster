@@ -14,7 +14,7 @@ from typing import Any, Mapping
 from ..clients.errors import ApiError
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import require_client
+from ._helpers import annotations, require_client
 
 
 _SERVICE = "cf"
@@ -58,6 +58,7 @@ TOOL_LIST_ZONES = {
     "name": "cf_list_zones",
     "description": "List the Cloudflare zones the API token can see, with status, plan, and id.",
     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    "annotations": annotations(read=True),
 }
 
 
@@ -88,6 +89,7 @@ TOOL_ZONE_INFO = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -133,6 +135,7 @@ TOOL_LIST_DNS = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -182,6 +185,7 @@ TOOL_WEB_ANALYTICS = {
         },
         "additionalProperties": False,
     },
+    "annotations": annotations(read=True),
 }
 
 
@@ -252,6 +256,7 @@ TOOL_PURGE_CACHE = {
         "required": ["urls"],
         "additionalProperties": False,
     },
+    "annotations": annotations(read=False, destructive=True),
 }
 
 
@@ -294,6 +299,7 @@ TOOL_PURGE_CACHE_ALL = {
         "required": ["confirm"],
         "additionalProperties": False,
     },
+    "annotations": annotations(read=False, destructive=True),
 }
 
 

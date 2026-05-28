@@ -132,8 +132,12 @@ def dispatch(
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
-    """Advertise the currently-registered tools."""
-    return [Tool(**d) for d in _TOOL_DEFS]
+    """Advertise the currently-registered tools.
+
+    Uses ``Tool.model_validate`` so the nested ``annotations`` sub-dict is
+    parsed into a ``ToolAnnotations`` instance per the MCP 2025-03-26 spec.
+    """
+    return [Tool.model_validate(d) for d in _TOOL_DEFS]
 
 
 @server.call_tool()
