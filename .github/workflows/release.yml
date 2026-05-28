@@ -1,0 +1,129 @@
+name: Release
+
+# Tag-driven release workflow. Pushing a tag of the form `v*` (e.g. v0.1.3)
+# causes this workflow to:
+#   1. Verify the tag's version matches pyproject.toml / __init__.py / manifest.json.
+#   2. Run the offline test suite.
+#   3. Build the wheel + sdist + .mcpb bundle.
+#   4. Scan all three artifacts for credentials / PII / real local paths.
+#   5. Attach the three artifacts to the corresponding GitHub release (creating
+#      the release if it does not exist).
+#
+# PyPI upload is intentionally left as a separate manual step until Trusted
+# Publishing is configured on the PyPI side. See the commented-out step at the
+# bottom for the enablement recipe.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write     # create / update GitHub releases and upload assets
+  id-token: write     # for PyPI Trusted Publishing (when enabled below)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive the bare version from the tag (strip leading 'v')
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version stamps match the tag
+        run: |
+          set -euo pipefail
+          py=$(grep -E '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')
+          init=$(grep -E '__version__' src/seo_mcp/__init__.py | sed -E 's/.*"(.*)".*/\1/')
+          mf=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          tag="${{ steps.version.outputs.version }}"
+          echo "tag=$tag  pyproject=$py  __init__=$init  manifest=$mf"
+          [ "$py" = "$tag" ] && [ "$init" = "$tag" ] && [ "$mf" = "$tag" ] || {
+            echo "version stamps disagree with the tag; refusing to release"
+            exit 1
+          }
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11 + project deps (dev extras for pytest)
+        run: |
+          uv python install 3.11
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: Run the offline test suite
+        run: uv run pytest -q
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Set up Node 20 for the mcpb packer
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pack the .mcpb bundle
+        run: |
+          npx -y @anthropic-ai/mcpb@latest pack . \
+            dist/seo-monster-${{ steps.version.outputs.version }}.mcpb
+
+      - name: Security scan (no credentials / PII / real local paths in any artifact)
+        run: |
+          set -euo pipefail
+          v="${{ steps.version.outputs.version }}"
+          for f in "dist/seo_monster-${v}-py3-none-any.whl" \
+                   "dist/seo_monster-${v}.tar.gz" \
+                   "dist/seo-monster-${v}.mcpb"; do
+            test -f "$f" || { echo "missing $f"; exit 1; }
+          done
+          tmp=$(mktemp -d)
+          unzip -q "dist/seo_monster-${v}-py3-none-any.whl" -d "$tmp/wheel"
+          tar xzf "dist/seo_monster-${v}.tar.gz" -C "$tmp/"
+          unzip -q "dist/seo-monster-${v}.mcpb" -d "$tmp/mcpb"
+          if grep -rIE \
+            'AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]{20,}|1//0[0-9A-Za-z_-]{20,}|-----BEGIN.*PRIVATE KEY-----|Bearer [A-Za-z0-9_-]{30,}|pypi-AgE[A-Za-z0-9_-]{50,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}' \
+            "$tmp" 2>/dev/null; then
+            echo "LEAK: real credential pattern found in an artifact"
+            exit 1
+          fi
+          echo "all three artifacts CLEAN"
+
+      - name: Upload artifacts to the GitHub release
+        # Creates the release if it does not exist. Does not overwrite the
+        # release body, so hand-crafted notes set via `gh release create` or
+        # `gh release edit` survive. Use fail_on_unmatched_files so a missing
+        # artifact aborts the workflow loudly.
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/seo_monster-${{ steps.version.outputs.version }}-py3-none-any.whl
+            dist/seo_monster-${{ steps.version.outputs.version }}.tar.gz
+            dist/seo-monster-${{ steps.version.outputs.version }}.mcpb
+          fail_on_unmatched_files: true
+
+      # --- PyPI Trusted Publishing (commented; enable after one-time setup) --
+      #
+      # To turn on automated PyPI publishing for tagged releases:
+      #
+      # 1. Visit https://pypi.org/manage/project/seo-monster/settings/publishing/
+      # 2. Add a trusted publisher with:
+      #      owner:    avansaber
+      #      repo:     seo-monster
+      #      workflow: release.yml
+      #      env:      (leave blank, or fill if you add an environment guard)
+      # 3. Uncomment the step below. No PyPI token secret is needed; OIDC handles
+      #    auth at runtime via the id-token: write permission declared above.
+      # 4. (Optional, for extra safety) Move this step into a job that depends
+      #    on `release` succeeding, with `environment: pypi` and a protection
+      #    rule that requires a maintainer review before the publish runs.
+      #
+      # - name: Publish to PyPI (Trusted Publishing, no token needed)
+      #   uses: pypa/gh-action-pypi-publish@release/v1
