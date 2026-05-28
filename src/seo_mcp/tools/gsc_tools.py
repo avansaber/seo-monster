@@ -343,7 +343,11 @@ TOOL_COMPARE_PERIODS = {
         "present in only one window. v0.2.0: optional sort_by / sort_dir / "
         "min_delta_* filters and an anomalies_only z-score gate so the same "
         "tool covers 'biggest gainers', 'biggest losers', 'meaningful movers', "
-        "and 'statistical outliers' without needing separate tools."
+        "and 'statistical outliers' without needing separate tools. When "
+        "anomalies_only=true, the response's filters_applied.sigma_used field "
+        "reports the population-stdev (sigma) actually computed from the "
+        "matched rows' sort_by metric distribution; the effective z-score "
+        "cutoff applied is `sigma_threshold * sigma_used`."
     ),
     "inputSchema": {
         "type": "object",

@@ -42,15 +42,19 @@ from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
 from .tools import (
+    budget_tools,
     cf_tools,
     crux_tools,
     ga4_tools,
     gsc_tools,
+    hreflang_tools,
     indexnow_tools,
+    linkgraph_tools,
     onpage_tools,
     psi_tools,
     redirect_tools,
     robots_tools,
+    schema_tools,
     sitemap_tools,
     system_status,
 )
@@ -64,8 +68,9 @@ server = Server("seo-mcp")
 # Tools are registered progressively per phase, so the catalog never advertises
 # an undispatchable tool. Phase 2 added the 10 GSC tools and the PSI tool;
 # Phase 3 added the 4 GA4 tools; Phase 4 added the 6 Cloudflare tools; v0.2.0
-# added the 4 GSC intelligence tools + 2 IndexNow tools (28 total); v0.3.0 adds
-# the 7 technical-SEO HTTP tools + crux_history (36 total).
+# added the 4 GSC intelligence tools + 2 IndexNow tools (28 total); v0.3.0
+# added the 7 technical-SEO HTTP tools + crux_history (36 total); v0.4.0 adds
+# the 5 structured-data + cross-site-consistency tools (41 total).
 _TOOL_DEFS: list[dict[str, Any]] = [
     system_status.TOOL,
     *gsc_tools.TOOLS,
@@ -78,6 +83,10 @@ _TOOL_DEFS: list[dict[str, Any]] = [
     *robots_tools.TOOLS,
     *sitemap_tools.TOOLS,
     *crux_tools.TOOLS,
+    *schema_tools.TOOLS,
+    *hreflang_tools.TOOLS,
+    *linkgraph_tools.TOOLS,
+    *budget_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -93,6 +102,10 @@ _HANDLERS: dict[str, Any] = {
     **robots_tools.HANDLERS,
     **sitemap_tools.HANDLERS,
     **crux_tools.HANDLERS,
+    **schema_tools.HANDLERS,
+    **hreflang_tools.HANDLERS,
+    **linkgraph_tools.HANDLERS,
+    **budget_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.

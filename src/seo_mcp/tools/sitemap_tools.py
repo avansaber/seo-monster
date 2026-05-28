@@ -144,7 +144,13 @@ def sitemap_validate(arguments, config, clients) -> dict[str, Any]:
         findings.append("over_50_mib")
     if cross_host:
         findings.append("cross_host_entries")
-    if missing_lastmod and kind == "urlset":
+    # Emit the finding for both urlset and sitemap-index. Per the sitemaps.org
+    # spec, <lastmod> in a sitemap-index tells crawlers when the underlying
+    # sub-sitemap last changed, which is at least as useful as <lastmod> on
+    # individual URLs. Round-5 validation §10a.ii pointed out that reporting
+    # the count without a finding made AI hosts (which triage by `findings`
+    # length) miss the issue.
+    if missing_lastmod:
         findings.append("missing_lastmod")
     return ok({
         "sitemap_url": sitemap_url,

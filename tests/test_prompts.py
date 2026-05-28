@@ -10,9 +10,16 @@ from seo_mcp import prompts
 # --- registry contract ----------------------------------------------------
 
 
-def test_v03_prompts_registered():
+def test_v04_prompts_registered():
     names = prompts.prompt_names()
-    expected = {"post_deploy_verify", "weekly_review", "content_audit", "migration_check", "technical_seo_audit"}
+    expected = {
+        "post_deploy_verify",
+        "weekly_review",
+        "content_audit",
+        "migration_check",
+        "technical_seo_audit",
+        "structured_data_audit",
+    }
     assert set(names) == expected
     assert len(names) == len(expected)
 

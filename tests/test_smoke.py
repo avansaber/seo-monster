@@ -144,6 +144,35 @@ def test_every_tool_carries_mcp_annotations():
             assert not a.get("readOnlyHint"), f"{name}: destructive + readOnly is contradictory"
 
 
+def test_annotation_specific_overrides_match_research_proposal_matrix():
+    """Pinned to RESEARCH-AND-PROPOSAL.md §5.1 mapping. Two tools have
+    non-default annotation values that the §5.1 matrix specifies explicitly;
+    if either drifts back to a default we want a loud failure here. Round-5
+    validation §10a.i caught system_status.openWorldHint=true (should be
+    false because system_status reports server-internal state); the previous
+    regression test only checked presence + the destructive/readOnly
+    contradiction, missing this semantic case."""
+    pytest.importorskip("mcp")
+    from seo_mcp import server
+
+    by_name = {d["name"]: d for d in server._TOOL_DEFS}
+
+    # system_status: openWorldHint=false (server-internal state, not external)
+    assert by_name["system_status"]["annotations"]["openWorldHint"] is False, (
+        "system_status reports server-internal state and must have "
+        "openWorldHint=false per RESEARCH §5.1"
+    )
+
+    # Cloudflare cache-purge tools: destructiveHint=true
+    for purge in ("cf_purge_cache", "cf_purge_cache_all"):
+        assert by_name[purge]["annotations"]["destructiveHint"] is True, (
+            f"{purge} must have destructiveHint=true per RESEARCH §5.1"
+        )
+        assert by_name[purge]["annotations"]["readOnlyHint"] is False, (
+            f"{purge} must have readOnlyHint=false"
+        )
+
+
 def test_full_v02_surface_registered():
     pytest.importorskip("mcp")
     from seo_mcp import server

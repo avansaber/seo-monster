@@ -87,8 +87,12 @@ def test_sitemap_validate_sitemapindex(make_config):
     d = result["data"]
     assert d["kind"] == "sitemapindex"
     assert d["entry_count"] == 2
-    # missing_lastmod does not apply to sitemap-index entries.
-    assert "missing_lastmod" not in d["findings"]
+    # Per Round-5 §10a.ii: missing_lastmod is now emitted on sitemap-index
+    # too (one of the two entries in _INDEX has no lastmod). Sitemaps.org
+    # uses sitemap-index lastmod to tell crawlers when the underlying
+    # sub-sitemap changed; missing it IS a finding worth surfacing.
+    assert "missing_lastmod" in d["findings"]
+    assert d["missing_lastmod_count"] == 1
 
 
 def test_sitemap_validate_handles_gzip(make_config):

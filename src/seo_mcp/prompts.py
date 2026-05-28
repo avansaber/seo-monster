@@ -88,6 +88,19 @@ PROMPTS: list[dict[str, Any]] = [
             {"name": "url", "description": "Absolute URL to audit. Required.", "required": True},
         ],
     },
+    {
+        "name": "structured_data_audit",
+        "description": (
+            "Structured-data + cross-site sweep. For each URL: inspect_schema "
+            "to see what JSON-LD is present, then validate_schema to verdict "
+            "the Rich Results required fields. If 2+ URLs are passed, also "
+            "run hreflang_consistency_check across the set. Produces a per-"
+            "URL findings list plus a global reciprocity-and-target report."
+        ),
+        "arguments": [
+            {"name": "urls", "description": "JSON array of absolute URLs to audit. Required (at least 1).", "required": True},
+        ],
+    },
 ]
 
 
@@ -245,12 +258,47 @@ def _render_technical_seo_audit(args: dict[str, Any]) -> str:
     )
 
 
+def _render_structured_data_audit(args: dict[str, Any]) -> str:
+    urls = args.get("urls") or "(none provided)"
+    return (
+        "# Structured-data + cross-site audit\n\n"
+        "## Arguments\n"
+        f"- urls: {urls}\n\n"
+        "## Workflow\n"
+        "Execute in order. Treat each tool call as a separate invocation so "
+        "the host's audit log captures one envelope per check.\n\n"
+        "  1. For each URL in `urls`, call `inspect_schema` with "
+        "`{ \"url\": <the_url> }` to see which schema.org @types are "
+        "declared and how many blocks per type.\n"
+        "  2. For each URL in `urls`, call `validate_schema` with "
+        "`{ \"url\": <the_url> }` to verdict every JSON-LD block against "
+        "the Google Rich Results required-field set. Record entities with "
+        "verdict=fail and the `missing_required` list.\n"
+        "  3. If `urls` has 2 or more entries, call "
+        "`hreflang_consistency_check` with `{ \"urls\": <urls above> }` to "
+        "verdict the reciprocity matrix and broken-target list.\n\n"
+        "## Output\n"
+        "Produce a two-section report:\n"
+        "- **Per-URL structured data**. One row per URL with: declared "
+        "@types, count of pass entities, count of fail entities, and the "
+        "single most impactful missing_required field across the page "
+        "(the one that blocks the most Rich Results categories).\n"
+        "- **Cross-URL hreflang**. If hreflang ran: counts of reciprocity "
+        "misses, broken targets, missing self-links, missing x-default. "
+        "List the first 5 examples per category.\n\n"
+        "End with a one-paragraph summary the user can paste into a "
+        "ticket: how many pages need structured-data fixes, how many "
+        "hreflang misses, and the single highest-priority fix."
+    )
+
+
 _RENDERERS = {
     "post_deploy_verify": _render_post_deploy_verify,
     "weekly_review": _render_weekly_review,
     "content_audit": _render_content_audit,
     "migration_check": _render_migration_check,
     "technical_seo_audit": _render_technical_seo_audit,
+    "structured_data_audit": _render_structured_data_audit,
 }
 
 

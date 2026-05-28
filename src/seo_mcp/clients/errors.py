@@ -181,8 +181,31 @@ def map_google_exception(exc: Exception) -> ApiError:
 
 
 def map_http_status(status: int, body: str, *, service: str) -> ApiError:
-    """Map a plain HTTP status (PSI / Cloudflare via urllib) to an ApiError."""
+    """Map a plain HTTP status (PSI / Cloudflare / CrUX via urllib) to an ApiError."""
     lowered = body.lower()
+    # Google's "this API is not enabled for the user's project" path. For
+    # googleapiclient-using services (GA4) this surfaces via
+    # map_google_exception's SERVICE_DISABLED branch. For urllib-based clients
+    # (CrUX History, PSI) the same condition arrives as a 403 with
+    # ``API_KEY_SERVICE_BLOCKED`` and a "Requests to this API ... are blocked."
+    # message. Round-5 validation §10a.iv confirmed this misclassified as
+    # AUTH_INVALID, sending users to debug the key rather than enable the API.
+    if status == 403 and (
+        "api_key_service_blocked" in lowered
+        or ("requests to this api" in lowered and "are blocked" in lowered)
+        or "service blocked" in lowered
+    ):
+        match = _ACTIVATION_RE.search(body)
+        return ApiError(
+            ErrorCode.SERVICE_DISABLED,
+            f"{service} is not enabled for the API key's Google Cloud project.",
+            remediation=(
+                "Enable the API in the Cloud Console (see activation_url), wait a "
+                "few minutes for it to propagate, then retry. The key itself is "
+                "fine; the project just hasn't authorized this API yet."
+            ),
+            details={"status": 403, "activation_url": match.group(0) if match else None, "body": body[:500]},
+        )
     if status in (401, 403):
         return ApiError(
             ErrorCode.AUTH_INVALID,

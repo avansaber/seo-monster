@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from seo_mcp.clients.errors import map_http_status
 from seo_mcp.errors import DOCS_BASE, ErrorCode, err, ok
 
 
@@ -60,3 +61,30 @@ def test_error_codes_are_the_expected_closed_set():
         "SERVICE_DISABLED",
         "UPSTREAM_ERROR",
     }
+
+
+# --- map_http_status: API_KEY_SERVICE_BLOCKED detection ----------------
+# Round-5 §10a.iv: CrUX (and other urllib-backed Google APIs) return 403 with
+# this marker when the API isn't enabled for the API key's project. Without
+# special-casing, the generic 401/403 branch sends the user to debug their
+# key instead of enabling the API. The verbatim upstream text captured by the
+# validator is pinned below; the marker list cannot silently drift past it.
+
+
+def test_crux_api_key_service_blocked_remaps_to_service_disabled():
+    body = (
+        '{"error":{"code":403,"message":"Requests to this API '
+        'chromeuxreport.googleapis.com method '
+        'google.chrome.uxreport.v1.ChromeUXReport.QueryHistoryRecord are '
+        'blocked.","status":"PERMISSION_DENIED","details":[{"reason":'
+        '"API_KEY_SERVICE_BLOCKED"}]}}'
+    )
+    api_error = map_http_status(403, body, service="CrUX History")
+    assert api_error.code == ErrorCode.SERVICE_DISABLED
+    assert "enable the api" in (api_error.remediation or "").lower()
+
+
+def test_generic_403_still_maps_to_auth_invalid_when_no_marker():
+    body = '{"error":{"code":403,"message":"Forbidden"}}'
+    api_error = map_http_status(403, body, service="PageSpeed Insights")
+    assert api_error.code == ErrorCode.AUTH_INVALID

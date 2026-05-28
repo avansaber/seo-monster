@@ -44,7 +44,13 @@ TOOL: dict[str, Any] = {
         },
         "additionalProperties": False,
     },
-    "annotations": annotations(read=True, open_world=True),
+    # openWorldHint=false: system_status reports the server's own internal
+    # state (configured services, registered tools, registered prompts) -
+    # not data from an external open world. Hosts that use openWorldHint to
+    # decide caching strategy should be free to cache its response. Pinned
+    # to the RESEARCH-AND-PROPOSAL.md §5.1 mapping (Round-5 validation
+    # §10a.i flagged the previous true value as semantically incorrect).
+    "annotations": annotations(read=True, open_world=False),
 }
 
 
@@ -62,6 +68,15 @@ _TECHNICAL_NAMES = frozenset({
     "robots_txt_validate",
     "sitemap_validate",
     "sitemap_health",
+    # v0.4.0 additions: structured data + cross-site consistency
+    "inspect_schema",
+    "validate_schema",
+    "hreflang_consistency_check",
+    "internal_link_graph",
+    # lighthouse_budget wraps PsiClient internally, but conceptually belongs in
+    # the technical-SEO catalog because that is when SEO triage actually reaches
+    # for it (CI / pre-deploy gate). Grouping is for catalog UX, not routing.
+    "lighthouse_budget",
 })
 
 
