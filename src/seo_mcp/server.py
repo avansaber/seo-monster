@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from typing import Any, Mapping
 
 from mcp.server import Server
@@ -154,7 +155,21 @@ async def _async_main() -> None:
 
 
 def main() -> None:
-    """Console-script entry point for ``seo-mcp``."""
+    """Console-script entry point.
+
+    With no arguments, starts the MCP server over stdio. With a recognized
+    subcommand, dispatches to that. Currently supported subcommand:
+
+        seo-monster auth   - run the one-time Google OAuth consent flow.
+
+    The subcommand dispatch is intentionally simple (positional argv[1]) so
+    we never confuse an MCP host that launches the server with no extra
+    arguments with a user typing a CLI command.
+    """
+    argv = sys.argv[1:]
+    if argv and argv[0] == "auth":
+        from .cli import auth_main
+        sys.exit(auth_main(argv[1:]))
     asyncio.run(_async_main())
 
 
