@@ -33,13 +33,27 @@ from mcp.types import (
 from . import __version__
 from . import prompts as prompts_module
 from .clients.cloudflare import build_cf_client
+from .clients.crux import build_crux_client
 from .clients.ga4 import build_ga4_client
 from .clients.gsc import build_gsc_client
+from .clients.http import build_http_client
 from .clients.indexnow import build_indexnow_client
 from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
-from .tools import cf_tools, ga4_tools, gsc_tools, indexnow_tools, psi_tools, system_status
+from .tools import (
+    cf_tools,
+    crux_tools,
+    ga4_tools,
+    gsc_tools,
+    indexnow_tools,
+    onpage_tools,
+    psi_tools,
+    redirect_tools,
+    robots_tools,
+    sitemap_tools,
+    system_status,
+)
 
 
 server = Server("seo-mcp")
@@ -49,8 +63,9 @@ server = Server("seo-mcp")
 # (import-light, testable without mcp); the server wraps them into mcp Tools.
 # Tools are registered progressively per phase, so the catalog never advertises
 # an undispatchable tool. Phase 2 added the 10 GSC tools and the PSI tool;
-# Phase 3 added the 4 GA4 tools; Phase 4 adds the 6 Cloudflare tools. Full v1
-# surface: 22 tools.
+# Phase 3 added the 4 GA4 tools; Phase 4 added the 6 Cloudflare tools; v0.2.0
+# added the 4 GSC intelligence tools + 2 IndexNow tools (28 total); v0.3.0 adds
+# the 7 technical-SEO HTTP tools + crux_history (36 total).
 _TOOL_DEFS: list[dict[str, Any]] = [
     system_status.TOOL,
     *gsc_tools.TOOLS,
@@ -58,6 +73,11 @@ _TOOL_DEFS: list[dict[str, Any]] = [
     *psi_tools.TOOLS,
     *cf_tools.TOOLS,
     *indexnow_tools.TOOLS,
+    *onpage_tools.TOOLS,
+    *redirect_tools.TOOLS,
+    *robots_tools.TOOLS,
+    *sitemap_tools.TOOLS,
+    *crux_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -68,15 +88,24 @@ _HANDLERS: dict[str, Any] = {
     **psi_tools.HANDLERS,
     **cf_tools.HANDLERS,
     **indexnow_tools.HANDLERS,
+    **onpage_tools.HANDLERS,
+    **redirect_tools.HANDLERS,
+    **robots_tools.HANDLERS,
+    **sitemap_tools.HANDLERS,
+    **crux_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.
+# "http" backs the technical-SEO tools (inspect_meta, check_canonical, ...);
+# build_http_client takes no config so it accepts and ignores the argument.
 _CLIENT_BUILDERS: dict[str, Any] = {
     "gsc": build_gsc_client,
     "ga4": build_ga4_client,
     "psi": build_psi_client,
     "cf": build_cf_client,
     "indexnow": build_indexnow_client,
+    "http": lambda _config: build_http_client(),
+    "crux": build_crux_client,
 }
 
 

@@ -31,9 +31,9 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-28 tools, grouped by service. All return the same result envelope (see
+36 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
-is configured. The server also publishes four named [workflow prompts](#workflow-prompts).
+is configured. The server also publishes five named [workflow prompts](#workflow-prompts).
 
 **Cross-service**
 - `system_status` - which services are configured/reachable, the Google auth
@@ -101,13 +101,37 @@ is configured. The server also publishes four named [workflow prompts](#workflow
   single POST. Mixed-host batches are rejected client-side with
   `INVALID_INPUT` before any network call.
 
+**Technical SEO (7, v0.3.0)** - no credentials needed; built-in HTTP client.
+- `inspect_meta(url)` - on-page surface in one call: title, meta description,
+  meta robots, canonical, Open Graph + Twitter Card tags, hreflang, H1 count.
+- `check_canonical(url)` - canonical-link audit: self-referential / cross-host
+  / protocol-mismatched / trailing-slash drift / canonical target reachable.
+- `mixed_content_check(url)` - parses an HTTPS page and flags any `http://`
+  references (img / script / iframe / form action / srcset). No-op for `http://`.
+- `redirect_chain_audit(url, max_redirects=10)` - walks the chain hop by hop.
+  Flags long chains, protocol downgrades, loops, non-2xx terminus.
+- `robots_txt_validate(site_url, probes?)` - parses robots.txt (per-group
+  rules + sitemaps), optionally verdicts (user_agent, url) probes using RFC
+  9309 longest-match (matches what Google + Bing actually do, not stdlib's
+  first-match).
+- `sitemap_validate(sitemap_url)` - validates a sitemap or sitemap-index XML,
+  counts entries, flags oversize + cross-host + missing lastmod. `.gz`
+  transparent.
+- `sitemap_health(sitemap_url, sample_size=25)` - sample-HEAD audit. Status
+  histogram + first non-2xx examples.
+
+**Chrome UX Report (1, v0.3.0)**
+- `crux_history(url? | origin?, form_factor?, metrics?)` - 25 weeks of p75
+  Core Web Vitals via the CrUX History API. Reuses `PSI_API_KEY`; works
+  anonymously at a tighter rate limit when no key is configured.
+
 Every tool's `tools/list` entry carries the MCP standard annotations
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP
 hosts can decide what to auto-approve and what to confirm.
 
 ## Workflow prompts
 
-The server publishes four named MCP prompts (via `prompts/list` /
+The server publishes five named MCP prompts (via `prompts/list` /
 `prompts/get`) that chain the granular tools into common SEO workflows. Hosts
 that surface prompts (Claude Desktop's slash menu, Cursor's command palette,
 Cline's prompt picker) advertise them automatically.
@@ -118,11 +142,12 @@ Cline's prompt picker) advertise them automatically.
 | `weekly_review` | `days?`, `site_url?` | `gsc_compare_periods` (gainers + losers via sort_dir) -> `gsc_query_opportunities` -> `gsc_query_gaps` -> `ga4_organic_search_overview` |
 | `content_audit` | `site_url?`, `days?`, `top_n_queries?` | `gsc_top_queries` -> per-query `gsc_top_pages_by_query` -> cannibalization recommendation |
 | `migration_check` | `urls`, `site_url?` | `gsc_batch_inspect_urls` -> `gsc_list_sitemaps` -> canonical-agreement table -> remediation list |
+| `technical_seo_audit` | `url` | `inspect_meta` -> `check_canonical` -> `redirect_chain_audit` -> `mixed_content_check` -> `robots_txt_validate` -> `sitemap_health` -> severity-ranked triage list |
 
 Why prompts and not megatools: composability. A failed step inside a megatool
 poisons the megatool's envelope and the host loses the ability to retry just
 the failing leg. Prompts hand the host a recipe; each step's envelope arrives
-intact at the LLM. See `RESEARCH-AND-PROPOSAL.md` for the full rationale.
+intact at the LLM.
 
 ## Install
 
@@ -134,9 +159,9 @@ SEOMonster ships **two install paths**, both fully local:
 - **`uvx`** for Cursor, Cline, Codex, and Claude Desktop power users who prefer
   to hand-edit MCP config files.
 
-Both paths run the same Python package (`seo_mcp`) and expose the same 22-tool
-surface. The difference is only how the host launches the server and how it
-collects credentials.
+Both paths run the same Python package (`seo_mcp`) and expose the same
+36-tool surface. The difference is only how the host launches the server
+and how it collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
 

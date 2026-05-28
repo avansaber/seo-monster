@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.2.1",
-  "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare.",
-  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights, and Cloudflare. All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
+  "version": "0.3.0",
+  "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, CrUX History, and technical-SEO HTTP primitives.",
+  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights, Cloudflare, IndexNow, the Chrome UX Report History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
   "author": {
     "name": "AvanSaber Inc.",
     "email": "support@avansaber.com",
@@ -240,6 +240,38 @@
     {
       "name": "gsc_top_pages_by_query",
       "description": "Which pages rank for a specific query. The cannibalization audit input."
+    },
+    {
+      "name": "inspect_meta",
+      "description": "Fetch a URL and return its on-page SEO surface: title, meta description, robots, canonical, OG/Twitter cards, hreflang, H1 count."
+    },
+    {
+      "name": "check_canonical",
+      "description": "Analyse a page's canonical link tag: self-referential? cross-host? protocol-mismatched? trailing-slash drift? canonical target reachable?"
+    },
+    {
+      "name": "mixed_content_check",
+      "description": "Fetch an HTTPS page and report any http:// sub-resource references (img/script/iframe/form). No-op for http:// pages."
+    },
+    {
+      "name": "redirect_chain_audit",
+      "description": "Walk a URL's redirect chain hop by hop. Flag long chains, protocol downgrades, loops, and non-2xx terminus."
+    },
+    {
+      "name": "robots_txt_validate",
+      "description": "Parse robots.txt: per-group rules + sitemaps. Optionally verdict a list of (user_agent, url) probes using RFC 9309 longest-match semantics."
+    },
+    {
+      "name": "sitemap_validate",
+      "description": "Validate a sitemap or sitemap-index XML, count entries, flag oversize (>50k URLs or >50 MiB), cross-host entries, and missing lastmod. .gz transparent."
+    },
+    {
+      "name": "sitemap_health",
+      "description": "Sample N URLs from a sitemap (or index), HEAD-check each, return a status histogram and the first non-2xx examples."
+    },
+    {
+      "name": "crux_history",
+      "description": "Return the last 25 weekly periods of Core Web Vitals at p75 (LCP, INP, CLS, ...) for a URL or origin via the Chrome UX Report History API."
     }
   ]
 }

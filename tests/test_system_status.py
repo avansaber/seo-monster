@@ -235,8 +235,31 @@ def test_group_tools_buckets_by_prefix():
 
 def test_group_tools_always_has_all_service_keys():
     catalog = group_tools([])
-    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "indexnow", "general"}
+    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "indexnow", "crux", "technical", "general"}
     assert all(v == [] for v in catalog.values())
+
+
+def test_group_tools_routes_v03_technical_tools():
+    catalog = group_tools([
+        "inspect_meta",
+        "check_canonical",
+        "mixed_content_check",
+        "redirect_chain_audit",
+        "robots_txt_validate",
+        "sitemap_validate",
+        "sitemap_health",
+        "crux_history",
+        "system_status",
+        "gsc_top_queries",
+    ])
+    assert set(catalog["technical"]) == {
+        "inspect_meta", "check_canonical", "mixed_content_check",
+        "redirect_chain_audit", "robots_txt_validate",
+        "sitemap_validate", "sitemap_health",
+    }
+    assert catalog["crux"] == ["crux_history"]
+    assert catalog["general"] == ["system_status"]
+    assert catalog["gsc"] == ["gsc_top_queries"]
 
 
 def test_catalog_in_phase_1_lists_only_system_status(make_config):

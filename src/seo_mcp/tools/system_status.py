@@ -48,19 +48,39 @@ TOOL: dict[str, Any] = {
 }
 
 
-_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf", "indexnow")
+_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf", "indexnow", "crux")
+
+# Tools whose names do not encode their service in a prefix. The v0.3.0
+# technical-SEO tools have natural verbs (``inspect_meta``, ``check_canonical``,
+# ...) rather than service-prefixed names; we keep the names clean and route
+# them via this explicit map.
+_TECHNICAL_NAMES = frozenset({
+    "inspect_meta",
+    "check_canonical",
+    "mixed_content_check",
+    "redirect_chain_audit",
+    "robots_txt_validate",
+    "sitemap_validate",
+    "sitemap_health",
+})
 
 
 def group_tools(tool_names: list[str]) -> dict[str, list[str]]:
-    """Group registered tool names by service prefix.
+    """Group registered tool names by service.
 
-    ``gsc_*`` -> "gsc", ``ga4_*`` -> "ga4", ``psi_*`` -> "psi", ``cf_*`` -> "cf";
-    anything else (e.g. ``system_status``) -> "general". Every service key is
-    present even when empty, so the catalog shape is stable across phases.
+    ``gsc_*`` -> "gsc", ``ga4_*`` -> "ga4", ``psi_*`` -> "psi", ``cf_*`` -> "cf",
+    ``indexnow_*`` -> "indexnow", ``crux_*`` -> "crux"; the prefix-free
+    technical-SEO tools listed in ``_TECHNICAL_NAMES`` -> "technical"; anything
+    else (``system_status``) -> "general". Every service key is present even
+    when empty so the catalog shape is stable across phases.
     """
     catalog: dict[str, list[str]] = {p: [] for p in _SERVICE_PREFIXES}
+    catalog["technical"] = []
     catalog["general"] = []
     for name in tool_names:
+        if name in _TECHNICAL_NAMES:
+            catalog["technical"].append(name)
+            continue
         prefix = name.split("_", 1)[0]
         if prefix in _SERVICE_PREFIXES:
             catalog[prefix].append(name)
@@ -152,6 +172,21 @@ def handle(
             "auth_method": "shared_key" if config.indexnow_key else None,
             "reachable": _probe(clients, "indexnow", probe) if config.indexnow_key else None,
             "key_location": config.indexnow_key_location,
+        },
+        # Technical-SEO tools (HTTP fetchers) need no credentials; always
+        # configured and always "reachable" if probing is on (the probe
+        # consists of building the client, which never fails).
+        "technical": {
+            "configured": True,
+            "auth_method": "none",
+            "reachable": True if probe else None,
+        },
+        "crux": {
+            # CrUX History accepts unauthenticated requests at a tighter rate
+            # limit. With PSI_API_KEY set we use it; without, we still work.
+            "configured": True,
+            "auth_method": "api_key" if config.psi_api_key else "anonymous",
+            "reachable": _probe(clients, "crux", probe),
         },
     }
 

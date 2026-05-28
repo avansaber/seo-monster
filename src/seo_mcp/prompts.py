@@ -76,6 +76,18 @@ PROMPTS: list[dict[str, Any]] = [
             {"name": "site_url", "description": "GSC property override.", "required": False},
         ],
     },
+    {
+        "name": "technical_seo_audit",
+        "description": (
+            "Single-URL technical-SEO sweep. Chains inspect_meta, "
+            "check_canonical, redirect_chain_audit, mixed_content_check, and "
+            "robots_txt_validate for the URL, then sitemap_health for its host "
+            "root. Produces a triage list ranked by severity."
+        ),
+        "arguments": [
+            {"name": "url", "description": "Absolute URL to audit. Required.", "required": True},
+        ],
+    },
 ]
 
 
@@ -189,11 +201,56 @@ def _render_migration_check(args: dict[str, Any]) -> str:
     )
 
 
+def _render_technical_seo_audit(args: dict[str, Any]) -> str:
+    url = args.get("url") or "(none provided)"
+    # Derive the host root for the sitemap_health step. We do the slicing
+    # outside the f-string so the body stays Python 3.11-compatible (no
+    # backslashes inside f-string expressions).
+    from urllib.parse import urlparse
+    host_root = "(derive from the URL above)"
+    parsed = urlparse(url) if url and url != "(none provided)" else None
+    if parsed and parsed.scheme and parsed.netloc:
+        host_root = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
+    return (
+        "# Technical-SEO audit\n\n"
+        "## Arguments\n"
+        f"- url: {url}\n\n"
+        "## Workflow\n"
+        "Execute in order. Each tool call should be a separate tool invocation "
+        "so the host's audit log captures one envelope per check.\n\n"
+        f"  1. Call `inspect_meta` with `{{ \"url\": \"{url}\" }}` to capture title, "
+        "meta description, robots, canonical, OG/Twitter tags, and H1 count.\n"
+        f"  2. Call `check_canonical` with `{{ \"url\": \"{url}\" }}` to verify the "
+        "canonical link resolves to a 2xx and matches the fetched URL (or note "
+        "the deliberate cross-URL canonical).\n"
+        f"  3. Call `redirect_chain_audit` with `{{ \"url\": \"{url}\" }}` to count "
+        "hops and surface protocol downgrades or non-2xx terminus.\n"
+        f"  4. Call `mixed_content_check` with `{{ \"url\": \"{url}\" }}` (no-op "
+        "for http:// pages; for https:// pages it flags http:// sub-resources).\n"
+        f"  5. Call `robots_txt_validate` with `{{ \"site_url\": \"{url}\", \"probes\": "
+        f"[{{ \"user_agent\": \"Googlebot\", \"url\": \"{url}\" }}] }}` to confirm "
+        "Googlebot can crawl this URL.\n"
+        f"  6. Call `sitemap_health` with `{{ \"sitemap_url\": \"{host_root}\", "
+        "\"sample_size\": 25 }}` to sanity-check the site's sitemap quality.\n\n"
+        "## Output\n"
+        "Produce a ranked triage list. Severity order (highest first):\n"
+        "- **Critical**: redirect-loop / non-2xx terminus / Disallow on this "
+        "URL / canonical_target_unreachable.\n"
+        "- **High**: protocol_downgrade / cross_host canonical without intent "
+        "/ mixed_content_found on https.\n"
+        "- **Medium**: long_chain (>1 hop) / trailing_slash_drift / multiple H1s.\n"
+        "- **Low**: missing meta_description / missing OG tags / "
+        "missing_lastmod sitemap entries.\n\n"
+        "End with a one-paragraph summary the user can paste into a ticket."
+    )
+
+
 _RENDERERS = {
     "post_deploy_verify": _render_post_deploy_verify,
     "weekly_review": _render_weekly_review,
     "content_audit": _render_content_audit,
     "migration_check": _render_migration_check,
+    "technical_seo_audit": _render_technical_seo_audit,
 }
 
 

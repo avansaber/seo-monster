@@ -13,6 +13,90 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.3.0] - 2026-05-28
+
+The technical-SEO sprint. Surface grows to 36 tools and 5 named workflow
+prompts. No breaking changes for v0.2.x consumers; everything is additive.
+
+### Added
+
+- **Seven technical-SEO HTTP tools** (no new auth surface; the built-in
+  HTTP client needs no configuration):
+  - `inspect_meta(url)` returns the page's on-page SEO surface in one
+    call: title, meta description, meta robots, canonical, Open Graph +
+    Twitter Card tags, hreflang list, and H1 count.
+    **(validate)** Pass a real product page and confirm title, meta
+    description, canonical, and at least one OG tag come back populated.
+  - `check_canonical(url)` follows the page's canonical link and reports
+    whether it is self-referential, cross-host, protocol-mismatched, or
+    has trailing-slash drift; flags missing canonical and unreachable
+    canonical target.
+    **(validate)** Pass a URL whose canonical points to a different
+    hostname; confirm `cross_url` and `cross_host` are listed in
+    `findings`.
+  - `mixed_content_check(url)` parses an HTTPS page and reports any
+    `http://` references (img / script / iframe / form action / srcset).
+    No-op for `http://` pages.
+    **(validate)** Pass an HTTPS URL with at least one known mixed-content
+    issue; confirm `verdict=mixed_content_found` and the violation appears
+    in the right category bucket.
+  - `redirect_chain_audit(url, max_redirects=10)` walks the chain hop by
+    hop without auto-following. Flags `long_chain`, `protocol_downgrade`,
+    `non_2xx_terminus`; surfaces redirect loops as `UPSTREAM_ERROR`.
+    **(validate)** Pass a URL with a known multi-hop redirect; confirm
+    `hop_count > 1` and `long_chain` is in `findings`.
+  - `robots_txt_validate(site_url, probes=[{user_agent, url}])` parses
+    `/robots.txt`, returns the per-group rules + sitemaps, and verdicts
+    optional probes using RFC 9309 longest-match semantics (which is what
+    Google and Bing actually do, not what the stdlib `robotparser` does).
+    **(validate)** Pass a robots.txt containing
+    `Disallow: /admin/` + `Allow: /admin/public` and probe
+    `/admin/public/page`; confirm `allowed=true` and
+    `matched_rule.path == "/admin/public"`.
+  - `sitemap_validate(sitemap_url)` validates a sitemap or sitemap-index
+    XML, counts entries, flags oversize (>50k URLs or >50 MiB),
+    cross-host entries, and missing `<lastmod>`. Handles `.gz`
+    transparently.
+    **(validate)** Pass a real sitemap URL; confirm `entry_count` is
+    non-zero and `findings` is empty for a well-formed one.
+  - `sitemap_health(sitemap_url, sample_size=25)` samples N URLs from a
+    sitemap (descending one level for an index), HEAD-checks each, and
+    returns a status histogram plus the first non-2xx examples.
+    **(validate)** Pass a sitemap with known 404s; confirm the histogram
+    has a `"404"` bucket and `non_2xx_examples` lists them.
+- **`crux_history(url? | origin?, form_factor?, metrics?)`** wraps the
+  Chrome UX Report History API to return the last 25 weekly collection
+  periods of Core Web Vitals at p75 (LCP, INP, CLS, etc.). Reuses
+  `PSI_API_KEY`; works anonymously at a tighter rate limit when no key
+  is configured.
+  **(validate)** Pass a high-traffic origin (e.g. an e-commerce
+  homepage); confirm `periods` returns 25 entries and at least
+  `largest_contentful_paint` has 25 p75 values.
+- **One new MCP prompt: `technical_seo_audit(url)`** chains
+  `inspect_meta` + `check_canonical` + `redirect_chain_audit` +
+  `mixed_content_check` + `robots_txt_validate` for the URL, then
+  `sitemap_health` for its host root, and produces a triage list ranked
+  by severity (Critical / High / Medium / Low).
+  **(validate)** In Claude Desktop, invoke `/technical_seo_audit` with a
+  real URL and confirm all six tool calls fire in order.
+
+### Changed
+
+- `system_status` now surfaces the new `technical` and `crux` service
+  rows alongside the existing five, and groups the new tools under those
+  keys in the catalog so a host can filter by service.
+- `manifest.json` `description` + `long_description` updated to mention
+  the technical-SEO and CrUX additions.
+- Console scripts unchanged: `seo-monster` (primary) and `seo-mcp`
+  (deprecated alias) both run the same `main()`.
+
+### Tests
+
+- 260 passing (up from 211 in v0.2.1). New test modules:
+  `test_http_client.py`, `test_onpage_tools.py`,
+  `test_redirect_robots_tools.py`, `test_sitemap_tools.py`,
+  `test_crux_tools.py`. All offline; mock at the client seam.
+
 ## [0.2.1] - 2026-05-28
 
 Housekeeping release. No new tools, no behaviour changes. The previously

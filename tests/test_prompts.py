@@ -1,4 +1,4 @@
-"""Tests for the MCP prompts/ capability and the four workflow renderers."""
+"""Tests for the MCP prompts/ capability and the workflow renderers."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ from seo_mcp import prompts
 # --- registry contract ----------------------------------------------------
 
 
-def test_four_prompts_registered():
+def test_v03_prompts_registered():
     names = prompts.prompt_names()
-    assert set(names) == {"post_deploy_verify", "weekly_review", "content_audit", "migration_check"}
-    assert len(names) == 4
+    expected = {"post_deploy_verify", "weekly_review", "content_audit", "migration_check", "technical_seo_audit"}
+    assert set(names) == expected
+    assert len(names) == len(expected)
 
 
 def test_every_prompt_has_required_metadata_fields():
@@ -118,14 +119,14 @@ def test_get_prompt_returns_user_role_message():
     assert "gsc_compare_periods" in msg.content.text
 
 
-def test_list_prompts_advertises_four():
+def test_list_prompts_matches_registry():
     pytest.importorskip("mcp")
     import asyncio
     from seo_mcp import server
 
     listed = asyncio.run(server.list_prompts())
-    assert len(listed) == 4
     assert {p.name for p in listed} == set(prompts.prompt_names())
+    assert len(listed) == len(prompts.prompt_names())
 
 
 def test_system_status_surfaces_prompt_names(make_config):
