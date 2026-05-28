@@ -2,12 +2,12 @@
 
 SEOMonster is an MCP server for SEO workflows. It exposes strictly SEO-focused
 tools over **Google Search Console**, **Google Analytics 4**, **PageSpeed
-Insights**, **Cloudflare**, **IndexNow**, the **Chrome UX Report History API**,
-and a built-in HTTP client for technical-SEO checks (`inspect_meta`,
-`check_canonical`, `redirect_chain_audit`, `mixed_content_check`,
-`robots_txt_validate`, `sitemap_validate`, `sitemap_health`), so an AI host
-(Claude Desktop, Cline, Cursor, Codex) can query your own data with your own
-credentials.
+Insights (PSI)**, **Cloudflare**, **IndexNow**, the **Chrome UX Report (CrUX)
+History API**, and a built-in HTTP client for technical-SEO checks
+(`inspect_meta`, `check_canonical`, `redirect_chain_audit`,
+`mixed_content_check`, `robots_txt_validate`, `sitemap_validate`,
+`sitemap_health`), so an AI host (Claude Desktop, Cline, Cursor, Codex) can
+query your own data with your own credentials.
 
 - **User-credential-driven.** No auth is baked into the package. Every credential
   is resolved at runtime from your environment or a config file. The published
@@ -35,15 +35,16 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-36 tools, grouped by service. All return the same result envelope (see
+41 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
-is configured. The server also publishes five named [workflow prompts](#workflow-prompts).
+is configured. The server also publishes six named [workflow prompts](#workflow-prompts).
 
 **Cross-service**
 - `system_status` - which services are configured/reachable, the Google auth
   method and scopes, whether destructive mode is on, the full tool catalog,
   and the list of registered prompts.
 
+<a name="gsc"></a>
 **Google Search Console (14)**
 
 *Workhorses*
@@ -74,6 +75,7 @@ is configured. The server also publishes five named [workflow prompts](#workflow
 - `gsc_top_pages_by_query` - which pages rank for a specific query. The
   cannibalization audit input.
 
+<a name="ga4"></a>
 **Google Analytics 4 (4)**
 - `ga4_run_report` - the workhorse: arbitrary dimensions/metrics/date range,
   optional dimension filter and ordering.
@@ -81,10 +83,12 @@ is configured. The server also publishes five named [workflow prompts](#workflow
 - `ga4_traffic_by_channel` - sessions/engagement/conversions by channel group.
 - `ga4_organic_search_overview` - organic totals plus a day-by-day trend.
 
+<a name="psi"></a>
 **PageSpeed Insights (1)**
 - `psi_analyze` - Lighthouse scores, lab Core Web Vitals, and field (CrUX) Core
   Web Vitals for a URL. Defaults to the mobile strategy.
 
+<a name="cf"></a>
 **Cloudflare (6)**
 - `cf_list_zones` - zones the token can see.
 - `cf_zone_info` - status, plan, name servers for a zone.
@@ -96,6 +100,7 @@ is configured. The server also publishes five named [workflow prompts](#workflow
 - `cf_purge_cache` - purge specific URLs (gated).
 - `cf_purge_cache_all` - purge an entire zone (gated + confirm token).
 
+<a name="indexnow"></a>
 **IndexNow (2, v0.2.0)**
 - `indexnow_submit(url)` - submit a single URL to Bing, Yandex, Naver, Seznam,
   Yep. Complements (does not replace) `gsc_request_indexing`, which only talks
@@ -105,6 +110,7 @@ is configured. The server also publishes five named [workflow prompts](#workflow
   single POST. Mixed-host batches are rejected client-side with
   `INVALID_INPUT` before any network call.
 
+<a name="technical"></a>
 **Technical SEO (7, v0.3.0)** - no credentials needed; built-in HTTP client.
 - `inspect_meta(url)` - on-page surface in one call: title, meta description,
   meta robots, canonical, Open Graph + Twitter Card tags, hreflang, H1 count.
@@ -124,10 +130,33 @@ is configured. The server also publishes five named [workflow prompts](#workflow
 - `sitemap_health(sitemap_url, sample_size=25)` - sample-HEAD audit. Status
   histogram + first non-2xx examples.
 
+<a name="crux"></a>
 **Chrome UX Report (1, v0.3.0)**
 - `crux_history(url? | origin?, form_factor?, metrics?)` - 25 weeks of p75
   Core Web Vitals via the CrUX History API. Reuses `PSI_API_KEY`; works
   anonymously at a tighter rate limit when no key is configured.
+
+**Structured data + cross-site (5, v0.4.0)** - no new credentials.
+- `inspect_schema(url)` - extract every JSON-LD block from a page; report
+  the schema.org @type counts and a sample entity per type.
+- `validate_schema(url, types?)` - verdict each JSON-LD entity against the
+  Google Rich Results required-field set. Covers Article, NewsArticle,
+  BlogPosting, Product, FAQPage, BreadcrumbList, Organization, LocalBusiness,
+  Event, Review, Recipe. Per-entity verdict plus missing_required and
+  missing_recommended lists.
+- `hreflang_consistency_check(urls)` - cross-page hreflang audit on a
+  user-supplied URL set. Flags missing reciprocity, broken hreflang
+  targets, duplicate hreflang on one page, missing self-link, missing
+  x-default when there are 3+ language variants.
+- `internal_link_graph(start_url, max_depth=2, max_pages=50)` - small
+  BFS crawl within the same host. Per-page in-degree + out-degree,
+  orphan pages, broken internal links, depth distribution. Hard caps
+  (max_depth <= 4, max_pages <= 200) so a misuse never melts the host.
+- `lighthouse_budget(url, budget)` - wraps `psi_analyze` and verdicts
+  the results against a budget dict, e.g.
+  `{performance: 80, LCP_ms: 2500, CLS: 0.1}`. Per-metric pass/fail and
+  an overall verdict. Useful as a CI / pre-deploy gate inside an LLM
+  session. Reuses `PSI_API_KEY`.
 
 Every tool's `tools/list` entry carries the MCP standard annotations
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP
@@ -135,7 +164,7 @@ hosts can decide what to auto-approve and what to confirm.
 
 ## Workflow prompts
 
-The server publishes five named MCP prompts (via `prompts/list` /
+The server publishes six named MCP prompts (via `prompts/list` /
 `prompts/get`) that chain the granular tools into common SEO workflows. Hosts
 that surface prompts (Claude Desktop's slash menu, Cursor's command palette,
 Cline's prompt picker) advertise them automatically.
@@ -147,6 +176,7 @@ Cline's prompt picker) advertise them automatically.
 | `content_audit` | `site_url?`, `days?`, `top_n_queries?` | `gsc_top_queries` -> per-query `gsc_top_pages_by_query` -> cannibalization recommendation |
 | `migration_check` | `urls`, `site_url?` | `gsc_batch_inspect_urls` -> `gsc_list_sitemaps` -> canonical-agreement table -> remediation list |
 | `technical_seo_audit` | `url` | `inspect_meta` -> `check_canonical` -> `redirect_chain_audit` -> `mixed_content_check` -> `robots_txt_validate` -> `sitemap_health` -> severity-ranked triage list |
+| `structured_data_audit` | `urls` | per-URL `inspect_schema` -> `validate_schema` -> (if 2+ URLs) `hreflang_consistency_check` -> per-URL + cross-URL report |
 
 Why prompts and not megatools: composability. A failed step inside a megatool
 poisons the megatool's envelope and the host loses the ability to retry just
@@ -164,7 +194,7 @@ SEOMonster ships **two install paths**, both fully local:
   to hand-edit MCP config files.
 
 Both paths run the same Python package (`seo_mcp`) and expose the same
-36-tool surface. The difference is only how the host launches the server
+41-tool surface. The difference is only how the host launches the server
 and how it collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
@@ -287,6 +317,7 @@ SEO_MCP_GA4_PROPERTY_ID = "properties/123456789"
 If you prefer to hand-edit `claude_desktop_config.json` instead of using the
 `.mcpb` bundle, the same snippet shape as Cursor above works.
 
+<a name="auth"></a>
 ## Auth
 
 The four services authenticate independently. Configure only the ones you use;
@@ -398,19 +429,46 @@ IndexNow notifies Bing, Yandex, Naver, Seznam, and Yep when a URL is created
 or updated. Google does not participate, so the IndexNow tools complement
 rather than replace `gsc_request_indexing`.
 
-1. Generate a key. Any 8-128 character hex string works; treat it like an API
-   key (do not commit it). See [indexnow.org/documentation](https://www.indexnow.org/documentation).
-2. Set `SEO_MCP_INDEXNOW_KEY` (or use the `.mcpb` configuration form; the
-   field is marked sensitive and lands in the OS keychain).
-3. Host a verification file at `https://<your-host>/<key>.txt` whose body is
-   the key string. The first time the engines see your key they fetch this
-   file to verify ownership.
-4. Optional: set `SEO_MCP_INDEXNOW_KEY_LOCATION` if the verification file
-   lives at a non-default URL.
+#### One-time setup
 
-A common error is `AUTH_INVALID` from `indexnow_submit`; that almost always
-means the engines could not fetch the verification file. Confirm the file
-returns HTTP 200 with the exact key as the body before retrying.
+1. **Generate a key.** Any 8-128 character string of letters, digits, or
+   hyphens (`a-z`, `A-Z`, `0-9`, `-`) per the IndexNow spec. Common patterns:
+   a 32-char lowercase hex string (e.g. `python -c "import secrets;
+   print(secrets.token_hex(16))"`) or any random alphanumeric of similar
+   length. Treat it like an API key; do not commit it.
+2. **Configure SEOMonster** by setting `SEO_MCP_INDEXNOW_KEY` to that string
+   (or use the `.mcpb` configuration form; the field is marked sensitive and
+   lands in the OS keychain).
+3. **Host the verification file** at `https://<your-host>/<key>.txt`. The
+   file body MUST be **exactly** the key string with no trailing newline, no
+   BOM, no extra whitespace, no HTML wrapper. The Content-Type should be
+   `text/plain`. Confirm with `curl -i https://<your-host>/<key>.txt` before
+   moving on; the response body must be byte-identical to the key.
+4. **(Optional)** Set `SEO_MCP_INDEXNOW_KEY_LOCATION` if the verification
+   file lives at a non-standard URL (some CDNs rewrite `/key.txt` paths).
+   The default location is `https://<host>/<key>.txt` derived from the URLs
+   you submit, so you usually do not need this.
+
+#### Same-host constraint
+
+Every URL submitted in one `indexnow_submit` or `indexnow_bulk_submit` call
+must share the same host as the verification file. Mixed-host batches are
+rejected by IndexNow with HTTP 422; `indexnow_bulk_submit` enforces this
+client-side and returns `INVALID_INPUT` before any network call when it
+detects mixed hosts.
+
+If you have multiple hosts, host a verification file per host and either
+make separate calls per host or override `SEO_MCP_INDEXNOW_KEY_LOCATION`
+per call (the tool does not currently expose per-call override; set
+distinct env values per session).
+
+#### Common errors
+
+| Symptom | Likely cause |
+|---|---|
+| `AUTH_INVALID` from `indexnow_submit` | Engines could not fetch `https://<host>/<key>.txt`. Confirm the file returns HTTP 200 with the exact key as the body |
+| `INVALID_INPUT` from `indexnow_bulk_submit` mentioning mixed hosts | URL list spans multiple hosts; split into per-host batches |
+| `RATE_LIMITED` | Hit IndexNow's per-host rate cap. Wait before retrying |
 
 ### Verify your setup
 
@@ -421,6 +479,7 @@ report against the default property, Cloudflare lists one zone, PSI pings the
 endpoint). With `probe` off (the default) it does a config-only check and makes
 no network calls.
 
+<a name="destructive-mode"></a>
 ## Destructive mode
 
 Cache purges affect every visitor, so they are off by default. Set
@@ -435,6 +494,7 @@ mismatched `confirm` returns `CONFIRM_REQUIRED` and issues no purge.
 The two GSC writes (`gsc_submit_sitemap`, `gsc_request_indexing`) are **not**
 gated; they are routine, low-blast-radius SEO tasks.
 
+<a name="configuration"></a>
 ## Configuration
 
 Resolution is environment-first, with a TOML file fallback. Environment always
@@ -483,6 +543,7 @@ zone      = "example.com"
 allow_destructive = false
 ```
 
+<a name="errors"></a>
 ## Result envelope
 
 Every tool returns the same shape. On success:

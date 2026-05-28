@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.avansaber/seo-monster",
-  "description": "SEO MCP over Search Console, GA4, PageSpeed, Cloudflare, IndexNow, CrUX, technical-SEO.",
+  "description": "SEO MCP over Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, CrUX, technical-SEO.",
   "repository": {
     "url": "https://github.com/avansaber/seo-monster",
     "source": "github"
   },
-  "version": "0.3.1",
+  "version": "0.4.0",
   "websiteUrl": "https://seomonster.avansaber.com",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "seo-monster",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "transport": {
         "type": "stdio"
       },

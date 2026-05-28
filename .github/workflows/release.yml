@@ -125,9 +125,11 @@ jobs:
             dist/seo-monster-${{ steps.version.outputs.version }}.mcpb
           fail_on_unmatched_files: true
 
-      # --- PyPI Trusted Publishing (commented; enable after one-time setup) --
+      # --- PyPI Trusted Publishing (OIDC-based; no token needed) ---------
       #
-      # To turn on automated PyPI publishing for tagged releases:
+      # This step is gated on the repo variable PYPI_PUBLISH_ENABLED so the
+      # release job stays safe to push until the PyPI side is configured.
+      # Activation sequence (one-time per repo):
       #
       # 1. Visit https://pypi.org/manage/project/seo-monster/settings/publishing/
       # 2. Add a trusted publisher with:
@@ -135,11 +137,18 @@ jobs:
       #      repo:     seo-monster
       #      workflow: release.yml
       #      env:      (leave blank, or fill if you add an environment guard)
-      # 3. Uncomment the step below. No PyPI token secret is needed; OIDC handles
-      #    auth at runtime via the id-token: write permission declared above.
-      # 4. (Optional, for extra safety) Move this step into a job that depends
-      #    on `release` succeeding, with `environment: pypi` and a protection
-      #    rule that requires a maintainer review before the publish runs.
+      # 3. Go to the GitHub repo > Settings > Secrets and variables >
+      #    Actions > Variables, and add a new repo variable:
+      #      name:  PYPI_PUBLISH_ENABLED
+      #      value: true
+      # 4. Push the next vN.N.N tag. This step fires; OIDC handles auth.
       #
-      # - name: Publish to PyPI (Trusted Publishing, no token needed)
-      #   uses: pypa/gh-action-pypi-publish@release/v1
+      # While PYPI_PUBLISH_ENABLED is unset, the step is skipped and the
+      # release pipeline behaves exactly as before (manual `uv publish`).
+      # The `id-token: write` permission is already declared in this job's
+      # `permissions:` block, so OIDC works at runtime when activated.
+      - name: Publish to PyPI (Trusted Publishing)
+        if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

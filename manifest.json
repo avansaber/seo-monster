@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.3.1",
-  "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, CrUX History, and technical-SEO HTTP primitives.",
-  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights, Cloudflare, IndexNow, the Chrome UX Report History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
+  "version": "0.4.0",
+  "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), and technical-SEO HTTP primitives.",
+  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
   "author": {
     "name": "AvanSaber Inc.",
     "email": "support@avansaber.com",
@@ -272,6 +272,26 @@
     {
       "name": "crux_history",
       "description": "Return the last 25 weekly periods of Core Web Vitals at p75 (LCP, INP, CLS, ...) for a URL or origin via the Chrome UX Report History API."
+    },
+    {
+      "name": "inspect_schema",
+      "description": "Extract every JSON-LD block from a page and report schema.org @type counts plus a sample entity per type."
+    },
+    {
+      "name": "validate_schema",
+      "description": "Validate JSON-LD blocks against the Google Rich Results required-field set. Covers Article, Product, FAQPage, BreadcrumbList, Organization, LocalBusiness, Event, Review, Recipe."
+    },
+    {
+      "name": "hreflang_consistency_check",
+      "description": "Cross-page hreflang audit. Flags missing reciprocity, broken targets, duplicate hreflang, missing self-link, missing x-default."
+    },
+    {
+      "name": "internal_link_graph",
+      "description": "Small BFS crawl from a starting URL within the same host. Returns per-page in/out-degree, orphans, broken internal links, depth distribution."
+    },
+    {
+      "name": "lighthouse_budget",
+      "description": "Run PSI and verdict the results against a performance budget (Lighthouse scores + lab Core Web Vitals). Per-metric pass/fail plus overall verdict."
     }
   ]
 }

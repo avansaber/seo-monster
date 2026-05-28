@@ -13,6 +13,162 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.4.0] - 2026-05-28
+
+The structured-data + cross-site-consistency sprint. Surface grows to 41
+tools and 6 named workflow prompts. No new auth surface; all five new
+tools reuse either the existing `HttpClient` (4 of 5) or `PsiClient`
+(1 of 5). No breaking changes for v0.3.x consumers; everything is
+additive.
+
+### Added
+
+- **`inspect_schema(url)`** extracts every JSON-LD block from a page
+  (script type=application/ld+json), flattens `@graph` wrappers and
+  arrays, and reports the schema.org `@type` counts plus a sample
+  entity per type. Discovery tool: tells you what structured data
+  exists before you validate it.
+  **(validate)** Pass a real product page and confirm at least
+  `Product` (or `BreadcrumbList`) appears in `type_counts` with the
+  expected sample entity.
+- **`validate_schema(url, types?)`** verdicts every JSON-LD entity
+  against the Google Rich Results required-field set for Article,
+  NewsArticle, BlogPosting, Product, FAQPage, BreadcrumbList,
+  Organization, LocalBusiness, Event, Review, Recipe. Per-entity
+  verdict (`pass` / `fail` / `unknown_type` / `parse_error`) plus
+  `missing_required` and `missing_recommended` lists. Optional
+  `types` filter limits the check to a subset of `@types`.
+  **(validate)** Pass a Product page missing the `offers` field;
+  confirm verdict is still `pass` (offers is recommended only) but
+  `missing_recommended` contains `offers`.
+- **`hreflang_consistency_check(urls)`** runs cross-page hreflang
+  validation on a user-supplied URL set (max 50). Builds the full
+  reciprocity matrix, flags missing reciprocal links, broken
+  hreflang targets (non-2xx), duplicate hreflang values on one page,
+  missing self-link, and missing `x-default` when there are three or
+  more language variants.
+  **(validate)** Pass three URLs representing en / fr / de of the
+  same page where the de version has no `x-default`; confirm
+  `missing_x_default` appears in that page's `flags`.
+- **`internal_link_graph(start_url, max_depth=2, max_pages=50)`**
+  does a small BFS crawl within the same host. Returns per-page
+  in-degree + out-degree, orphan pages (zero in-degree among
+  fetched pages), broken internal links (4xx/5xx), and a depth
+  histogram. Hard ceilings: `max_depth` <= 4 and `max_pages` <= 200.
+  Skips `mailto:`, `tel:`, `javascript:`, and pure-fragment links.
+  **(validate)** Pass a documentation site root with
+  `max_depth=2, max_pages=30`; confirm `pages_fetched` >= 5,
+  `depth_distribution` shows at least one entry at depth 1 and one
+  at depth 2.
+- **`lighthouse_budget(url, budget)`** wraps `psi_analyze` and
+  verdicts the result against a budget dict, e.g.
+  `{performance: 80, LCP_ms: 2500, CLS: 0.1}`. Higher-is-better
+  category scores must meet or exceed the budget; lower-is-better
+  metrics (LCP_ms, FCP_ms, TBT_ms, TTI_ms, speed_index_ms, CLS)
+  must be at or below. Returns per-metric verdict and an overall
+  pass/fail. Unknown budget keys are collected separately so a typo
+  is surfaced rather than silently ignored. Reuses `PSI_API_KEY`.
+  **(validate)** Run against a known-fast URL with a tight budget
+  (e.g. `{performance: 90, LCP_ms: 2500}`); flip the budget to
+  `{performance: 99}` and confirm overall_verdict flips to `fail`
+  with the per-metric verdict explaining why.
+- **New MCP prompt: `structured_data_audit(urls)`** chains
+  `inspect_schema` and `validate_schema` per URL, then (when 2+
+  URLs are supplied) `hreflang_consistency_check` across the set.
+  Output is a per-URL findings list plus a global hreflang report.
+  **(validate)** In Claude Desktop, invoke `/structured_data_audit`
+  with two URLs and confirm both per-URL tool calls run in order
+  followed by the cross-URL hreflang call.
+
+### Changed
+
+- `system_status` catalog groups the four prefix-free v0.4.0 tools
+  (`inspect_schema`, `validate_schema`, `hreflang_consistency_check`,
+  `internal_link_graph`) plus `lighthouse_budget` under the existing
+  `technical` group. `lighthouse_budget` internally calls `PsiClient`
+  but is grouped with technical-SEO tools because that is when SEO
+  triage actually reaches for it (CI / pre-deploy gate). Grouping is
+  for catalog UX, not for service routing.
+- HTTP client User-Agent bumped from `SEOMonster/0.3.1 (+...)` to
+  `SEOMonster/0.4.0 (+...)`.
+
+### Round-5 validation fixes (folded in)
+
+Tester report at `Round 5` (post-v0.3.1) surfaced 9 findings + 5
+documentation gaps. All landed before tagging v0.4.0:
+
+- **CrUX `API_KEY_SERVICE_BLOCKED` remap (Round-5 §10a.iv).** Previously
+  surfaced as `AUTH_INVALID` ("check your API key"), which sent users on
+  the wrong debugging path. Now correctly classified as
+  `SERVICE_DISABLED` with the activation URL extracted into
+  `details.activation_url`. Same UX as the GA4 `SERVICE_DISABLED` path.
+  Marker list at `clients/errors.py` pinned to the verbatim upstream
+  text the validator captured.
+  **(validate)** Call `crux_history` with a `PSI_API_KEY` whose project
+  hasn't enabled the CrUX API; confirm the envelope is `SERVICE_DISABLED`
+  and `details.activation_url` is populated.
+- **`sitemap_validate` emits `missing_lastmod` finding for sitemap-index
+  too (Round-5 §10a.ii).** Previously only emitted for `urlset`. Sitemaps.org
+  spec says sitemap-index `<lastmod>` tells crawlers when the underlying
+  sub-sitemap last changed (more useful than per-URL lastmod). AI hosts
+  triaging by `findings` length now see the issue.
+- **`system_status.openWorldHint` flipped to `false` (Round-5 §10a.i).**
+  Server-internal state, not external data; hosts that cache by
+  `openWorldHint` can now cache it. Pinned to RESEARCH §5.1 matrix; new
+  regression test in `test_smoke.py` guards specific annotation overrides.
+- **`lighthouse_budget` unknown budget keys now surface as findings**
+  (Round-5 §10b.U). Previous behaviour silently stashed typos in
+  `unknown_budget_keys: ["LCP"]` and returned `overall_verdict: "pass"`
+  even though the LCP budget was never applied. New shape is structured
+  with a "did you mean LCP_ms?" hint, and the tool's schema description
+  enumerates all valid budget keys + their units + their 0-100 scale.
+  Same change documented in README.
+- **`DOCS_BASE` repointed to GitHub README (Round-5 §10c.iv).**
+  `seomonster.avansaber.com` is not live yet (LISTINGS §9 Q1 STILL
+  OPEN); every error envelope's `docs_url` was pointing at a
+  connection-refused page. Now points at
+  `https://github.com/avansaber/seo-monster/blob/main/README.md#anchor`
+  with explicit `<a name="...">` markers in README (11 anchors:
+  `#auth`, `#errors`, `#configuration`, `#destructive-mode`, `#gsc`,
+  `#ga4`, `#psi`, `#cf`, `#indexnow`, `#technical`, `#crux`).
+  Reversible when the brand subdomain stands up.
+- **IndexNow README setup section expanded (Round-5 §10a.v).** Now
+  covers key-generation rules (8-128 alphanumeric or hyphen, with a
+  `secrets.token_hex(16)` example), verification-file format
+  requirements (plain text, no trailing newline / BOM / whitespace,
+  Content-Type `text/plain`), the same-host constraint between key file
+  and submitted URLs, and a common-errors triage table.
+- **`gsc_compare_periods` `sigma_used` field documented (Round-5 §10a.iii).**
+  Tool description now explains: when `anomalies_only=true`, `sigma_used`
+  reports the population-stdev computed from the matched rows' `sort_by`
+  metric distribution; the effective z-score cutoff applied is
+  `sigma_threshold * sigma_used`.
+- **Canonical service labels across listings (Round-5 §10c.iii).**
+  Standardized on "PageSpeed Insights (PSI)" and "Chrome UX Report
+  (CrUX)" with the full form on first mention per document. Updated
+  `manifest.json`, `server.json`, and README. `server.json` description
+  now 96 chars (under the 100-char cap).
+- **PyPI Trusted Publishing step un-commented behind a feature flag
+  (Round-5 §10e.i).** `.github/workflows/release.yml` now contains a
+  ready-to-fire `Publish to PyPI` step gated by the repo variable
+  `PYPI_PUBLISH_ENABLED`. To activate: (1) set up the trusted publisher
+  in PyPI's publishing settings, (2) set the repo variable to `true`,
+  (3) push the next tag. Until then the step is skipped and the
+  pipeline behaves identically to today's manual-publish flow.
+- **mcp.so submission comment (`chatmcp/mcpso#1`) edited to remove
+  em-dash (Round-5 §10c.ii).** External-surface hygiene; the project's
+  in-repo docs were already clean.
+
+### Tests
+
+- 306 passing (up from 260 in `0.3.1`; +4 net-new tests from the Round-5
+  fixes: CrUX `API_KEY_SERVICE_BLOCKED` mapping, generic 403 fallthrough,
+  `lighthouse_budget` LCP-typo did-you-mean, and the §5.1 annotation-matrix
+  regression in `test_smoke.py`; one existing test renamed for the new
+  did-you-mean shape). Total new tests across the v0.4.0 sprint: 46 (42
+  from the new tool modules + 4 from Round-5 fixes). All offline; mock
+  at the client seam.
+
 ## [0.3.1] - 2026-05-28
 
 Discoverability release. No behaviour change.
