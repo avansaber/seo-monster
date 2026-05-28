@@ -64,6 +64,20 @@ def test_psi_api_key_method_when_key_present(make_config):
     assert psi["auth_method"] == "api_key"
 
 
+def test_indexnow_configured_when_key_present(make_config):
+    cfg = make_config(SEO_MCP_INDEXNOW_KEY="abc123", SEO_MCP_INDEXNOW_KEY_LOCATION="https://x.com/abc123.txt")
+    inx = handle({}, cfg, {}, ["system_status"])["data"]["services"]["indexnow"]
+    assert inx["configured"] is True
+    assert inx["auth_method"] == "shared_key"
+    assert inx["key_location"] == "https://x.com/abc123.txt"
+
+
+def test_indexnow_unconfigured(make_config):
+    inx = handle({}, make_config(), {}, ["system_status"])["data"]["services"]["indexnow"]
+    assert inx["configured"] is False
+    assert inx["auth_method"] is None
+
+
 def test_cf_configured_when_token_present(make_config):
     cfg = make_config(CF_API_TOKEN="cftoken", CF_ZONE="example.com")
     cf = handle({}, cfg, {}, ["system_status"])["data"]["services"]["cf"]
@@ -221,7 +235,7 @@ def test_group_tools_buckets_by_prefix():
 
 def test_group_tools_always_has_all_service_keys():
     catalog = group_tools([])
-    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "general"}
+    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "indexnow", "general"}
     assert all(v == [] for v in catalog.values())
 
 

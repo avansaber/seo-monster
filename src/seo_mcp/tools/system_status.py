@@ -48,7 +48,7 @@ TOOL: dict[str, Any] = {
 }
 
 
-_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf")
+_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf", "indexnow")
 
 
 def group_tools(tool_names: list[str]) -> dict[str, list[str]]:
@@ -145,6 +145,12 @@ def handle(
             "auth_method": "api_token" if config.cf_api_token else None,
             "reachable": _probe(clients, "cf", probe) if config.cf_api_token else None,
             "default_zone": config.cf_zone,
+        },
+        "indexnow": {
+            "configured": config.indexnow_key is not None,
+            "auth_method": "shared_key" if config.indexnow_key else None,
+            "reachable": _probe(clients, "indexnow", probe) if config.indexnow_key else None,
+            "key_location": config.indexnow_key_location,
         },
     }
 

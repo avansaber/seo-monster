@@ -50,7 +50,9 @@
         "SEO_MCP_GA4_PROPERTY_ID": "${user_config.ga4_property_id}",
         "PSI_API_KEY": "${user_config.psi_api_key}",
         "CF_API_TOKEN": "${user_config.cf_api_token}",
-        "CF_ZONE": "${user_config.cf_zone}"
+        "CF_ZONE": "${user_config.cf_zone}",
+        "SEO_MCP_INDEXNOW_KEY": "${user_config.indexnow_key}",
+        "SEO_MCP_INDEXNOW_KEY_LOCATION": "${user_config.indexnow_key_location}"
       }
     }
   },
@@ -99,6 +101,19 @@
       "type": "string",
       "title": "Cloudflare Default Zone Hostname (optional)",
       "description": "Default zone hostname for the Cloudflare tools, e.g. 'example.com'. You can also pass zone per call.",
+      "required": false
+    },
+    "indexnow_key": {
+      "type": "string",
+      "title": "IndexNow Key (optional)",
+      "description": "Shared key used to submit URLs to Bing/Yandex/Naver/Seznam/Yep via IndexNow. Any 8-128 hex string you generate; engines verify ownership by fetching https://<your-host>/<key>.txt. See https://www.indexnow.org/documentation. Required only if you want to use indexnow_submit / indexnow_bulk_submit.",
+      "required": false,
+      "sensitive": true
+    },
+    "indexnow_key_location": {
+      "type": "string",
+      "title": "IndexNow Key File URL (optional)",
+      "description": "Override the default verification location (https://<host>/<key>.txt). Set only if you host the key file at a non-standard path.",
       "required": false
     }
   },
@@ -201,6 +216,30 @@
     {
       "name": "cf_purge_cache_all",
       "description": "Purge the entire Cloudflare cache for a zone. Gated: requires SEO_MCP_ALLOW_DESTRUCTIVE=true AND a confirm value equal to the resolved zone hostname."
+    },
+    {
+      "name": "indexnow_submit",
+      "description": "Submit a single URL to IndexNow (Bing + Yandex + Naver + Seznam + Yep). Complements gsc_request_indexing for the non-Google engines."
+    },
+    {
+      "name": "indexnow_bulk_submit",
+      "description": "Submit up to 10,000 URLs sharing the same host to IndexNow in one batched request."
+    },
+    {
+      "name": "gsc_query_opportunities",
+      "description": "Queries already ranking in the top N positions but with below-target CTR. Title and meta optimization candidates."
+    },
+    {
+      "name": "gsc_query_gaps",
+      "description": "Queries that draw impressions but barely any clicks. Content opportunity signal."
+    },
+    {
+      "name": "gsc_new_queries",
+      "description": "Queries with impressions in the current window and zero impressions in the prior window. Emerging topics."
+    },
+    {
+      "name": "gsc_top_pages_by_query",
+      "description": "Which pages rank for a specific query. The cannibalization audit input."
     }
   ]
 }

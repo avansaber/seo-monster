@@ -46,6 +46,8 @@ class Config:
     psi_api_key: str | None
     cf_api_token: str | None
     cf_zone: str | None
+    indexnow_key: str | None
+    indexnow_key_location: str | None
     allow_destructive: bool
     source_path: str | None  # the config file actually read, or None
 
@@ -123,6 +125,7 @@ def load_config(
     ga4_file = file_data.get("ga4", {})
     psi_file = file_data.get("psi", {})
     cf_file = file_data.get("cloudflare", {})
+    indexnow_file = file_data.get("indexnow", {})
     server_file = file_data.get("server", {})
 
     def pick(env_key: str, file_value: Any) -> str | None:
@@ -166,6 +169,8 @@ def load_config(
         psi_api_key=pick("PSI_API_KEY", psi_file.get("api_key")),
         cf_api_token=pick("CF_API_TOKEN", cf_file.get("api_token")),
         cf_zone=pick("CF_ZONE", cf_file.get("zone")),
+        indexnow_key=pick("SEO_MCP_INDEXNOW_KEY", indexnow_file.get("key")),
+        indexnow_key_location=pick("SEO_MCP_INDEXNOW_KEY_LOCATION", indexnow_file.get("key_location")),
         allow_destructive=allow_destructive,
         source_path=source_path,
     )

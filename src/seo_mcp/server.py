@@ -27,10 +27,11 @@ from . import __version__
 from .clients.cloudflare import build_cf_client
 from .clients.ga4 import build_ga4_client
 from .clients.gsc import build_gsc_client
+from .clients.indexnow import build_indexnow_client
 from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
-from .tools import cf_tools, ga4_tools, gsc_tools, psi_tools, system_status
+from .tools import cf_tools, ga4_tools, gsc_tools, indexnow_tools, psi_tools, system_status
 
 
 server = Server("seo-mcp")
@@ -48,6 +49,7 @@ _TOOL_DEFS: list[dict[str, Any]] = [
     *ga4_tools.TOOLS,
     *psi_tools.TOOLS,
     *cf_tools.TOOLS,
+    *indexnow_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -57,6 +59,7 @@ _HANDLERS: dict[str, Any] = {
     **ga4_tools.HANDLERS,
     **psi_tools.HANDLERS,
     **cf_tools.HANDLERS,
+    **indexnow_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.
@@ -65,6 +68,7 @@ _CLIENT_BUILDERS: dict[str, Any] = {
     "ga4": build_ga4_client,
     "psi": build_psi_client,
     "cf": build_cf_client,
+    "indexnow": build_indexnow_client,
 }
 
 
