@@ -565,3 +565,6 @@ queries, or tool calls. See [PRIVACY.md](PRIVACY.md) for the full statement.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+<!-- mcp-name: io.github.avansaber/seo-monster -->
+

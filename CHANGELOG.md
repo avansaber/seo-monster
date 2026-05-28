@@ -13,6 +13,29 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.3.1] - 2026-05-28
+
+Discoverability release. No behaviour change.
+
+### Added
+
+- README carries the `<!-- mcp-name: io.github.avansaber/seo-monster -->`
+  ownership-verification marker required by the official MCP Registry
+  (`registry.modelcontextprotocol.io`) for PyPI-registry-type entries.
+  The marker is HTML-commented so it does not render in user-facing
+  views of the README, only in the raw markdown that PyPI exposes as
+  the package description.
+
+### Changed
+
+- HTTP client User-Agent bumped from `SEOMonster/0.3.0 (+...)` to
+  `SEOMonster/0.3.1 (+...)` so server-side analytics that key on the
+  UA reflect the running version.
+
+### Tests
+
+- 260 passing (no change from `0.3.0`; the marker is content-only).
+
 ## [0.3.0] - 2026-05-28
 
 The technical-SEO sprint. Surface grows to 36 tools and 5 named workflow
