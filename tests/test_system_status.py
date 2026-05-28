@@ -77,6 +77,43 @@ def test_destructive_flag_surfaced(make_config):
     assert handle({}, cfg, {}, ["system_status"])["data"]["destructive_enabled"] is True
 
 
+def test_config_source_is_env_when_no_file(make_config):
+    data = handle({}, make_config(), {}, ["system_status"])["data"]
+    assert data["config_source"] == "env"
+
+
+def test_config_source_reports_toml_path(tmp_path, make_config):
+    path = tmp_path / "seomonster.toml"
+    path.write_text('[gsc]\ndefault_site = "sc-domain:from-toml.com"\n')
+    cfg = make_config(config_path=str(path))
+    data = handle({}, cfg, {}, ["system_status"])["data"]
+    assert data["config_source"] == str(path)
+
+
+def test_ga4_reason_when_no_google(make_config):
+    data = handle({}, make_config(), {}, ["system_status"])["data"]
+    assert data["services"]["ga4"]["reason"] == "no Google auth configured"
+
+
+def test_ga4_reason_when_google_but_no_property(make_config):
+    cfg = make_config(
+        SEO_MCP_GOOGLE_OAUTH_CLIENT="/c/client.json",
+        SEO_MCP_GOOGLE_TOKEN="/c/token.json",
+    )
+    data = handle({}, cfg, {}, ["system_status"])["data"]
+    assert "no default property" in data["services"]["ga4"]["reason"]
+
+
+def test_ga4_reason_cleared_when_property_set(make_config):
+    cfg = make_config(
+        SEO_MCP_GOOGLE_OAUTH_CLIENT="/c/client.json",
+        SEO_MCP_GOOGLE_TOKEN="/c/token.json",
+        SEO_MCP_GA4_PROPERTY_ID="properties/123",
+    )
+    data = handle({}, cfg, {}, ["system_status"])["data"]
+    assert data["services"]["ga4"]["reason"] is None
+
+
 def test_default_site_and_property_surfaced(make_config):
     cfg = make_config(
         SEO_MCP_GOOGLE_OAUTH_CLIENT="/c/client.json",

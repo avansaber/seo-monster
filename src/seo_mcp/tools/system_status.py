@@ -101,6 +101,14 @@ def handle(
     method = google_auth_method(config)
     google_ready = google_configured(config)
 
+    # GA4 probe explanation: when google is configured but no GA4 property is,
+    # reachable stays null and we explain why. Saves a debugging round-trip.
+    ga4_reason: str | None = None
+    if google_ready and not config.ga4_property_id:
+        ga4_reason = "no default property configured; set SEO_MCP_GA4_PROPERTY_ID to enable the GA4 probe"
+    elif not google_ready:
+        ga4_reason = "no Google auth configured"
+
     services: dict[str, Any] = {
         "gsc": {
             "configured": google_ready,
@@ -120,6 +128,7 @@ def handle(
                 else None
             ),
             "default_property": config.ga4_property_id,
+            "reason": ga4_reason,
         },
         "psi": {
             # PSI works against the anonymous endpoint even without a key, so it
@@ -141,6 +150,9 @@ def handle(
         {
             "version": __version__,
             "destructive_enabled": config.allow_destructive,
+            # Where config values came from: the TOML path if a file was read,
+            # else "env" (env vars + defaults, no file). Useful for debugging.
+            "config_source": config.source_path or "env",
             "services": services,
             "tools": group_tools(tool_names),
         }

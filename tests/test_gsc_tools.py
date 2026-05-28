@@ -36,7 +36,28 @@ def test_list_properties(make_config, make_gsc_client, gsc_payloads):
     assert result["ok"] is True
     data = result["data"]
     assert data["count"] == 2
-    assert data["properties"][0] == {"site_url": SITE, "permission_level": "siteOwner"}
+    assert data["properties"][0] == {
+        "site_url": SITE,
+        "permission_level": "siteOwner",
+        "writable": True,
+    }
+    # siteFullUser is also writable.
+    assert data["properties"][1]["writable"] is True
+
+
+def test_list_properties_writable_false_for_restricted(make_config, make_gsc_client, gsc_payloads):
+    payloads = {
+        **gsc_payloads,
+        "sites_list": {
+            "siteEntry": [
+                {"siteUrl": "sc-domain:x.com", "permissionLevel": "siteRestrictedUser"},
+                {"siteUrl": "sc-domain:y.com", "permissionLevel": "siteUnverifiedUser"},
+            ]
+        },
+    }
+    client = make_gsc_client(payloads)
+    data = gsc_tools.gsc_list_properties({}, make_config(), {"gsc": client})["data"]
+    assert [p["writable"] for p in data["properties"]] == [False, False]
 
 
 # --- search_analytics -----------------------------------------------------

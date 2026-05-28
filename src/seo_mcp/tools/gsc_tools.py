@@ -131,7 +131,14 @@ def gsc_list_properties(arguments, config, clients) -> dict[str, Any]:
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
     properties = [
-        {"site_url": e.get("siteUrl"), "permission_level": e.get("permissionLevel")}
+        {
+            "site_url": e.get("siteUrl"),
+            "permission_level": e.get("permissionLevel"),
+            # Derived: which permission levels carry write capability. Lets the
+            # AI host pre-screen which properties support gsc_submit_sitemap
+            # and gsc_request_indexing instead of failing on the first call.
+            "writable": e.get("permissionLevel") in {"siteOwner", "siteFullUser"},
+        }
         for e in resp.get("siteEntry", [])
     ]
     return ok({"properties": properties, "count": len(properties)})
@@ -252,7 +259,8 @@ def _top_tool(name: str, dimension: str, noun: str) -> dict[str, Any]:
         "description": (
             f"Convenience wrapper: top {noun} for a property over the last N "
             f"days by clicks. Equivalent to gsc_search_analytics with "
-            f"dimensions=[\"{dimension}\"]."
+            f"dimensions=[\"{dimension}\"]. Uses the configured data_state "
+            f"(default 'all'; 'final' lags 2-3 days behind the dashboard)."
         ),
         "inputSchema": {
             "type": "object",
