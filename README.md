@@ -31,25 +31,44 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-22 tools, grouped by service. All return the same result envelope (see
+28 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
-is configured.
+is configured. The server also publishes four named [workflow prompts](#workflow-prompts).
 
 **Cross-service**
 - `system_status` - which services are configured/reachable, the Google auth
-  method and scopes, whether destructive mode is on, and the full tool catalog.
+  method and scopes, whether destructive mode is on, the full tool catalog,
+  and the list of registered prompts.
 
-**Google Search Console (10)**
-- `gsc_list_properties` - properties the credentials can see, with permission level.
+**Google Search Console (14)**
+
+*Workhorses*
+- `gsc_list_properties` - properties the credentials can see, with permission
+  level and a derived `writable` flag (true for `siteOwner` / `siteFullUser`).
 - `gsc_search_analytics` - the workhorse: clicks/impressions/CTR/position by
   dimensions, date range, filters, and `data_state`.
 - `gsc_top_queries` / `gsc_top_pages` - convenience top-N wrappers.
 - `gsc_compare_periods` - current vs prior window with per-key deltas.
+  v0.2.0 added `sort_by`, `sort_dir`, `min_delta_clicks` / `_impressions` /
+  `_position`, `anomalies_only` + `sigma_threshold`, and `top` for one-call
+  movers / losers / outliers reporting.
 - `gsc_inspect_url` - URL Inspection (index verdict, coverage, canonicals).
 - `gsc_batch_inspect_urls` - inspect up to 25 URLs, per-URL failures collected.
 - `gsc_list_sitemaps` - registered sitemaps and their status.
-- `gsc_submit_sitemap` - submit a sitemap (write, un-gated; needs the writable scope).
-- `gsc_request_indexing` - request (re)crawl via the Indexing API (write, un-gated).
+- `gsc_submit_sitemap` - submit a sitemap (write, un-gated; needs the writable
+  scope). Accepts either `sitemap_url` (friendly) or `feedpath` (raw API field).
+- `gsc_request_indexing` - request (re)crawl via the Indexing API (write,
+  un-gated). Accepts singular `url` or `urls`.
+
+*Query intelligence (v0.2.0)*
+- `gsc_query_opportunities` - queries already ranking top N with below-target
+  CTR. Title and meta optimization candidates.
+- `gsc_query_gaps` - queries that draw impressions but barely any clicks.
+  Content opportunity signal.
+- `gsc_new_queries` - queries appearing in the current window with no prior
+  impressions. Emerging topics.
+- `gsc_top_pages_by_query` - which pages rank for a specific query. The
+  cannibalization audit input.
 
 **Google Analytics 4 (4)**
 - `ga4_run_report` - the workhorse: arbitrary dimensions/metrics/date range,
@@ -67,9 +86,43 @@ is configured.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
   and TXT verification records during migrations.
-- `cf_web_analytics` - read-only edge Web Analytics (RUM), to compare against GA4. Cloudflare returns `host: null` for some sites; pass the `site_tag` to look those up explicitly.
+- `cf_web_analytics` - read-only edge Web Analytics (RUM), to compare against
+  GA4. Cloudflare returns `host: null` for some sites; pass the `site_tag` to
+  look those up explicitly.
 - `cf_purge_cache` - purge specific URLs (gated).
 - `cf_purge_cache_all` - purge an entire zone (gated + confirm token).
+
+**IndexNow (2, v0.2.0)**
+- `indexnow_submit(url)` - submit a single URL to Bing, Yandex, Naver, Seznam,
+  Yep. Complements (does not replace) `gsc_request_indexing`, which only talks
+  to Google. Requires `SEO_MCP_INDEXNOW_KEY` plus a verification file at
+  `https://<your-host>/<key>.txt`.
+- `indexnow_bulk_submit(urls)` - up to 10,000 URLs sharing one host in a
+  single POST. Mixed-host batches are rejected client-side with
+  `INVALID_INPUT` before any network call.
+
+Every tool's `tools/list` entry carries the MCP standard annotations
+(`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP
+hosts can decide what to auto-approve and what to confirm.
+
+## Workflow prompts
+
+The server publishes four named MCP prompts (via `prompts/list` /
+`prompts/get`) that chain the granular tools into common SEO workflows. Hosts
+that surface prompts (Claude Desktop's slash menu, Cursor's command palette,
+Cline's prompt picker) advertise them automatically.
+
+| Prompt | Arguments | Chains |
+|---|---|---|
+| `post_deploy_verify` | `urls`, `zone?`, `skip_psi?` | `cf_purge_cache` -> `gsc_request_indexing` -> `indexnow_bulk_submit` -> `psi_analyze` |
+| `weekly_review` | `days?`, `site_url?` | `gsc_compare_periods` (gainers + losers via sort_dir) -> `gsc_query_opportunities` -> `gsc_query_gaps` -> `ga4_organic_search_overview` |
+| `content_audit` | `site_url?`, `days?`, `top_n_queries?` | `gsc_top_queries` -> per-query `gsc_top_pages_by_query` -> cannibalization recommendation |
+| `migration_check` | `urls`, `site_url?` | `gsc_batch_inspect_urls` -> `gsc_list_sitemaps` -> canonical-agreement table -> remediation list |
+
+Why prompts and not megatools: composability. A failed step inside a megatool
+poisons the megatool's envelope and the host loses the ability to retry just
+the failing leg. Prompts hand the host a recipe; each step's envelope arrives
+intact at the LLM. See `RESEARCH-AND-PROPOSAL.md` for the full rationale.
 
 ## Install
 
@@ -92,7 +145,7 @@ flow inside Claude Desktop's MCP subprocess times out before a real user can
 finish; see [Why pre-flight auth?](#why-pre-flight-auth) below).
 
 **1. Install the bundle.** Download
-[`seo-monster-0.1.1.mcpb`](https://github.com/avansaber/seo-monster/releases/latest)
+[`seo-monster-0.2.0.mcpb`](https://github.com/avansaber/seo-monster/releases/latest)
 from GitHub releases (or, when listed, from the [Claude
 Directory](https://claude.ai/directory)) and double-click it. Claude Desktop
 verifies the bundle, runs `uv` to materialize the Python environment, and
@@ -107,6 +160,8 @@ shows a configuration form:
 | PageSpeed Insights API Key     | string, secret | no       | Stored in the OS keychain. **Strongly recommended** ([why?](#pagespeed-insights)). |
 | Cloudflare API Token           | string, secret | no       | Stored in the OS keychain. Required only for the Cloudflare tools.    |
 | Cloudflare Default Zone        | string         | no       | e.g. `example.com`.                                                   |
+| IndexNow Key                   | string, secret | no       | Required only for IndexNow tools. Any 8-128 hex string you generate.  |
+| IndexNow Key File URL          | string         | no       | Override the default verification location (`https://<host>/<key>.txt`). |
 
 Fill the fields, click **Save**, then **toggle the extension on**. Quit Claude
 Desktop completely (⌘Q on macOS) and reopen.
@@ -308,6 +363,26 @@ the permissions you need:
 | Account: `Account Analytics:Read` | `cf_web_analytics`        |
 | Zone: `Cache Purge:Purge` | `cf_purge_cache`, `cf_purge_cache_all` (only if you enable destructive mode) |
 
+### IndexNow
+
+IndexNow notifies Bing, Yandex, Naver, Seznam, and Yep when a URL is created
+or updated. Google does not participate, so the IndexNow tools complement
+rather than replace `gsc_request_indexing`.
+
+1. Generate a key. Any 8-128 character hex string works; treat it like an API
+   key (do not commit it). See [indexnow.org/documentation](https://www.indexnow.org/documentation).
+2. Set `SEO_MCP_INDEXNOW_KEY` (or use the `.mcpb` configuration form; the
+   field is marked sensitive and lands in the OS keychain).
+3. Host a verification file at `https://<your-host>/<key>.txt` whose body is
+   the key string. The first time the engines see your key they fetch this
+   file to verify ownership.
+4. Optional: set `SEO_MCP_INDEXNOW_KEY_LOCATION` if the verification file
+   lives at a non-default URL.
+
+A common error is `AUTH_INVALID` from `indexnow_submit`; that almost always
+means the engines could not fetch the verification file. Confirm the file
+returns HTTP 200 with the exact key as the body before retrying.
+
 ### Verify your setup
 
 After configuring, call `system_status` to see what is detected. Call it with
@@ -348,6 +423,8 @@ wins.
 | `PSI_API_KEY`                    | PSI     | PageSpeed Insights API key (optional).           |
 | `CF_API_TOKEN`                   | CF      | Cloudflare API token.                            |
 | `CF_ZONE`                        | CF      | Default zone hostname.                           |
+| `SEO_MCP_INDEXNOW_KEY`           | IndexNow| Shared key for the IndexNow tools (sensitive).   |
+| `SEO_MCP_INDEXNOW_KEY_LOCATION`  | IndexNow| Override default key-file URL (optional).        |
 | `SEO_MCP_ALLOW_DESTRUCTIVE`      | all     | `true` enables cache-purge tools. Default off.   |
 | `SEO_MCP_CONFIG`                 | all     | Path to the TOML config file.                    |
 
@@ -429,9 +506,11 @@ uv run seo-monster auth     # one-time OAuth consent (or `uv run seo-mcp auth`)
 ```
 
 The package exposes two console-script aliases: `seo-monster` (canonical,
-matches the PyPI distribution) and `seo-mcp` (kept for local dev so you do not
-have to retype the longer name). Both invoke the same entry point; production
-configs should use `seo-monster`.
+matches the PyPI distribution) and `seo-mcp` (a v0.1.x dev alias kept for
+back-compat). Both invoke the same entry point. As of v0.2.0, invoking the
+server via `seo-mcp` emits a one-line stderr deprecation notice; nothing on
+stdout, so the MCP protocol channel is unaffected. Production configs should
+use `seo-monster`; the alias will be removed in a future major release.
 
 Tests are fully offline: they mock at the client layer, so no network and no
 credentials are needed to run them.
@@ -442,6 +521,17 @@ credentials are needed to run them.
 > stable for back-compat; the version readout is a quirk of the SDK
 > (`create_initialization_options()` does not propagate the package version).
 > The package's real version is in `pyproject.toml` and `seo_mcp.__version__`.
+
+## Changelog
+
+Release-by-release notes, including the validation checks each version's
+external testing pass should cover, live in [CHANGELOG.md](CHANGELOG.md).
+
+## Privacy
+
+SEOMonster runs entirely on your machine and talks only to the upstream APIs
+you configure. The maintainers do not see any of your data, credentials,
+queries, or tool calls. See [PRIVACY.md](PRIVACY.md) for the full statement.
 
 ## License
 
