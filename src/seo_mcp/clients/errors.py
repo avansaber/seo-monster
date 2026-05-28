@@ -202,9 +202,21 @@ def map_http_status(status: int, body: str, *, service: str) -> ApiError:
             details={"status": 404, "body": body[:300]},
         )
     if status == 429:
+        # Service-specific remediation. PSI's anonymous quota is shared across
+        # all callers without a key, and in practice often instant-429: telling
+        # the user "retry later" without mentioning the key is misleading.
+        if "pagespeed" in service.lower():
+            remediation = (
+                "Set PSI_API_KEY for per-project quota (free; create one in "
+                "Google Cloud Console after enabling the PageSpeed Insights API). "
+                "Anonymous PSI uses a shared quota that is often exhausted."
+            )
+        else:
+            remediation = "Retry after a short delay."
         return ApiError(
             ErrorCode.RATE_LIMITED,
-            f"{service} rate limit hit (HTTP 429). Retry after a delay.",
+            f"{service} rate limit hit (HTTP 429).",
+            remediation=remediation,
             details={"status": 429, "body": body[:300]},
         )
     return ApiError(

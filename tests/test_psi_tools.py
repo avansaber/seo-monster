@@ -164,3 +164,30 @@ def test_build_url_repeats_category_param():
 def test_map_http_status(status, body, expected):
     error = map_http_status(status, body, service="PageSpeed Insights")
     assert str(error.code) == expected
+
+
+def test_psi_429_has_actionable_remediation():
+    # Round-2 feedback 2h: every other error envelope carries a remediation;
+    # the PSI 429 used to return None and tell users "retry later" without
+    # explaining why a key matters.
+    error = map_http_status(429, "Quota exceeded", service="PageSpeed Insights")
+    assert str(error.code) == "RATE_LIMITED"
+    assert error.remediation is not None
+    assert "PSI_API_KEY" in error.remediation
+
+
+def test_psi_429_envelope_through_tool(make_config):
+    # End-to-end: a 429 from analyze() reaches the tool envelope with the
+    # remediation field populated.
+    client = _client_raising(ApiError(ErrorCode.RATE_LIMITED, "PSI rate-limited",
+                                      remediation="Set PSI_API_KEY for per-project quota."))
+    result = psi_tools.psi_analyze({"url": "https://example.com"}, make_config(), {"psi": client})
+    assert result["error"]["code"] == "RATE_LIMITED"
+    assert "PSI_API_KEY" in result["error"]["remediation"]
+
+
+def test_cf_429_keeps_generic_remediation():
+    # Only PSI gets the key-specific remediation; CF's 429 still uses the
+    # generic retry hint.
+    error = map_http_status(429, "Rate limited", service="Cloudflare")
+    assert error.remediation == "Retry after a short delay."
