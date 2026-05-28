@@ -1,0 +1,46 @@
+# Files and directories excluded from the .mcpb archive.
+# The bundle should contain only what is needed at install time:
+# manifest.json, pyproject.toml, src/seo_mcp/, LICENSE, README.md, uv.lock.
+
+# Per the execution command
+tests/
+dist/
+.git/
+.cursor/
+__pycache__/
+.env
+.env.*
+
+# Credential / token files (defense in depth; the .gitignore already blocks
+# these, but a developer's working tree could still hold them locally).
+*.pem
+*.key
+sa.json
+client_secret*.json
+token*.json
+token.txt
+psi_api_key.txt
+.credentials/
+
+# Build artifacts and Python tooling caches
+.venv/
+venv/
+*.egg-info/
+*.egg
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Internal docs not needed at runtime
+DESIGN.md
+PLAN.md
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# The bundle itself (in case it is re-packed in place)
+*.mcpb
