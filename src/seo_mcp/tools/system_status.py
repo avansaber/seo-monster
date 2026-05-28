@@ -96,6 +96,7 @@ def handle(
     config: Config,
     clients: Mapping[str, Any],
     tool_names: list[str],
+    prompt_names: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build the system_status envelope. See module docstring for semantics."""
     probe = bool(arguments.get("probe", False))
@@ -163,5 +164,6 @@ def handle(
             "config_source": config.source_path or "env",
             "services": services,
             "tools": group_tools(tool_names),
+            "prompts": list(prompt_names or []),
         }
     )

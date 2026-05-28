@@ -21,9 +21,16 @@ from typing import Any, Mapping
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    GetPromptResult,
+    Prompt,
+    PromptMessage,
+    TextContent,
+    Tool,
+)
 
 from . import __version__
+from . import prompts as prompts_module
 from .clients.cloudflare import build_cf_client
 from .clients.ga4 import build_ga4_client
 from .clients.gsc import build_gsc_client
@@ -120,7 +127,9 @@ def dispatch(
     """
     if name == "system_status":
         return system_status.handle(
-            arguments, config, clients, registered_tool_names()
+            arguments, config, clients,
+            registered_tool_names(),
+            prompts_module.prompt_names(),
         )
 
     handler = _HANDLERS.get(name)
@@ -142,6 +151,39 @@ async def list_tools() -> list[Tool]:
     parsed into a ``ToolAnnotations`` instance per the MCP 2025-03-26 spec.
     """
     return [Tool.model_validate(d) for d in _TOOL_DEFS]
+
+
+@server.list_prompts()
+async def list_prompts() -> list[Prompt]:
+    """Advertise the workflow prompts the host can invoke.
+
+    Prompts are named, parameterized recipes that chain existing tools (see
+    ``prompts.py``). They replace the parent-session's idea of monolithic
+    ``post_deploy_verify`` / ``pre_deploy_check`` tools, which would have
+    sacrificed composability for convenience.
+    """
+    return [Prompt.model_validate(p) for p in prompts_module.PROMPTS]
+
+
+@server.get_prompt()
+async def get_prompt(name: str, arguments: dict[str, Any] | None = None) -> GetPromptResult:
+    """Render a prompt's body for the host.
+
+    Each prompt returns a single user-role message with the workflow
+    instructions templated against the user-supplied arguments. The host's
+    LLM reads this message and executes the steps by calling the tools the
+    workflow names.
+    """
+    body = prompts_module.render(name, arguments)
+    return GetPromptResult(
+        description=next(
+            (p["description"] for p in prompts_module.PROMPTS if p["name"] == name),
+            None,
+        ),
+        messages=[
+            PromptMessage(role="user", content=TextContent(type="text", text=body)),
+        ],
+    )
 
 
 @server.call_tool()
