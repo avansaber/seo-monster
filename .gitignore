@@ -2,6 +2,7 @@
 *.json
 !package.json
 !manifest.json
+!server.json
 sa.json
 client_secret*.json
 token*.json
