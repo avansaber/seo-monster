@@ -38,6 +38,13 @@ htmlcov/
 # Internal docs not needed at runtime
 DESIGN.md
 PLAN.md
+RESEARCH-AND-PROPOSAL.md
+LISTINGS-PLAN.md
+CHANGELOG.md
+PRIVACY.md
+
+# Brand and submission drafts (built in marketing/, not part of the server)
+marketing/
 
 # OS noise
 .DS_Store
