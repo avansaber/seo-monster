@@ -87,6 +87,42 @@ def test_every_registered_tool_is_routed():
             )
 
 
+def test_legacy_alias_detection():
+    pytest.importorskip("mcp")
+    from seo_mcp.server import _legacy_alias_invocation
+
+    # Detect the deprecated alias when invoked with its name.
+    assert _legacy_alias_invocation("/usr/local/bin/seo-mcp") is True
+    assert _legacy_alias_invocation("seo-mcp") is True
+    assert _legacy_alias_invocation("seo-mcp.exe") is True  # Windows console script
+
+    # Do NOT flag the canonical name or unrelated argv0 values.
+    assert _legacy_alias_invocation("/usr/local/bin/seo-monster") is False
+    assert _legacy_alias_invocation("seo-monster.exe") is False
+    assert _legacy_alias_invocation("python") is False
+    assert _legacy_alias_invocation(None) is False
+    assert _legacy_alias_invocation("") is False
+
+
+def test_legacy_alias_warning_emitted(capsys):
+    pytest.importorskip("mcp")
+    from seo_mcp.server import _warn_if_legacy_alias
+
+    # Canonical name: nothing on stderr.
+    _warn_if_legacy_alias("/path/to/seo-monster")
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == ""
+
+    # Deprecated alias: one-line stderr notice.
+    _warn_if_legacy_alias("/path/to/seo-mcp")
+    captured = capsys.readouterr()
+    assert "deprecation" in captured.err
+    assert "seo-monster" in captured.err
+    # And nothing on stdout (stdio protocol channel must stay clean).
+    assert captured.out == ""
+
+
 def test_every_tool_carries_mcp_annotations():
     """MCP 2025-03-26 introduced tool annotations. Anthropic's Connectors
     Directory rejects ~30% of submissions for missing them. This test guards

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from typing import Any, Mapping
 
@@ -204,6 +205,40 @@ async def _async_main() -> None:
         )
 
 
+def _legacy_alias_invocation(argv0: str | None) -> bool:
+    """True when the process was launched via the deprecated ``seo-mcp``
+    console alias (rather than the canonical ``seo-monster``).
+
+    Both console scripts point at this main(); we tell them apart by
+    sys.argv[0]'s basename. The argv0 argument is kept explicit (rather
+    than reading sys.argv directly) so tests can drive it without
+    monkeypatching the global.
+    """
+    if not argv0:
+        return False
+    base = os.path.basename(argv0)
+    # Strip Windows ".exe" / launchers.
+    if base.endswith(".exe"):
+        base = base[:-4]
+    return base == "seo-mcp"
+
+
+def _warn_if_legacy_alias(argv0: str | None) -> None:
+    """Emit a one-line stderr deprecation notice when launched via the
+    ``seo-mcp`` alias. Stderr is the right channel for stdio MCP servers
+    (the MCP protocol uses stdout); the host captures stderr in its log
+    pane without polluting the JSON-RPC stream."""
+    if _legacy_alias_invocation(argv0):
+        print(
+            "deprecation: the 'seo-mcp' console alias is kept for "
+            "v0.1.x back-compat; prefer 'seo-monster' (or 'uvx seo-monster') "
+            "in production configs. Alias will be removed in a future major "
+            "release.",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
 def main() -> None:
     """Console-script entry point.
 
@@ -216,6 +251,7 @@ def main() -> None:
     we never confuse an MCP host that launches the server with no extra
     arguments with a user typing a CLI command.
     """
+    _warn_if_legacy_alias(sys.argv[0] if sys.argv else None)
     argv = sys.argv[1:]
     if argv and argv[0] == "auth":
         from .cli import auth_main
