@@ -1,6 +1,7 @@
 # Credentials and tokens (never commit; this package ships zero secrets)
 *.json
 !package.json
+!manifest.json
 sa.json
 client_secret*.json
 token*.json

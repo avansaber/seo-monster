@@ -512,29 +512,61 @@ same resolver in `config.py`.
 
 ## Install and distribution
 
-Distributed on PyPI as a `uvx`-runnable package (mcp-gsc path). The project is
-**SEOMonster** and publishes as **`seo-monster-mcp`**; the primary console script
-matches that name (with `seo-mcp` kept as a dev alias), and the import package
-stays `seo_mcp`. The snippets below predate the rename and use `seo-mcp`; the
-README uses the published `seo-monster-mcp`.
+SEOMonster is a **local, user-credential-driven, open-source utility**. No
+cloud infrastructure, no shared developer credentials, no hosted broker. There
+are two officially supported install paths:
 
-`uvx` runs the published package in an ephemeral environment, so there is
-nothing to `pip install` and no virtualenv to manage. GUI hosts do not read the
-shell profile, so the config must use the **absolute path** to `uvx` (mcp-gsc
-documents this same gotcha). Find it with `which uvx`.
+1. **MCPB bundle** for Claude Desktop (primary). A signed `.mcpb` archive that
+   installs in one click. The `manifest.json` declares the configuration inputs
+   (Google OAuth client path, token cache path, GA4 property id, PSI key,
+   Cloudflare token, default Cloudflare zone). Claude Desktop renders those as a
+   form, stores secret-typed inputs in the OS keychain (macOS Keychain, Windows
+   Credential Manager), and auto-injects them into the server process as the
+   `SEO_MCP_*` environment variables the server already reads.
+2. **`uvx` execution** for CLI/IDE hosts that do not consume `.mcpb` bundles
+   (Cursor, Cline, Codex). The published PyPI distribution is
+   **`seo-monster-mcp`** and the console script of the same name maps to
+   `seo_mcp.server:main`. `seo-mcp` is kept as a dev alias. The import package
+   stays `seo_mcp`.
 
-### Claude Desktop (`claude_desktop_config.json`)
+The `.mcpb` bundle and the `uvx` path run the *same* Python package and the
+*same* tool surface. The difference is only how the host launches the server
+and how it collects credentials.
+
+### Claude Desktop (primary: `.mcpb` bundle)
+
+The user downloads the signed `seo-monster-mcp-0.1.0.mcpb` archive and
+double-clicks it. Claude Desktop:
+
+1. Verifies the bundle, runs `uv` to materialize the Python environment from
+   the bundled `pyproject.toml`, and shows the configuration form derived from
+   the manifest.
+2. Stores `cf_api_token` and `psi_api_key` (declared `sensitive`) in the OS
+   keychain. Plain-string and file inputs are stored in Claude Desktop's
+   per-extension settings.
+3. Launches the server with the user-config values mapped into the
+   `SEO_MCP_GOOGLE_OAUTH_CLIENT`, `SEO_MCP_GOOGLE_TOKEN`,
+   `SEO_MCP_GA4_PROPERTY_ID`, `PSI_API_KEY`, `CF_API_TOKEN`, and `CF_ZONE`
+   environment variables. On first Google-backed tool call, the server opens a
+   browser for one-time OAuth consent and writes the token to
+   `SEO_MCP_GOOGLE_TOKEN`.
+
+The manifest's user_config inputs and their env-var mapping are the contract
+between Claude Desktop and the server; the server itself reads only the
+`SEO_MCP_*` env vars (and the existing TOML fallback path) and is otherwise
+unaware of the bundle wrapper. This keeps the `uvx` path identical in behavior.
+
+### Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`)
 
 ```json
 {
   "mcpServers": {
-    "seo": {
+    "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-mcp"],
+      "args": ["seo-monster-mcp"],
       "env": {
-        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
-        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json",
-        "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:example.com",
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json",
         "SEO_MCP_GA4_PROPERTY_ID": "properties/123456789",
         "PSI_API_KEY": "AIza...",
         "CF_API_TOKEN": "..."
@@ -544,27 +576,17 @@ documents this same gotcha). Find it with `which uvx`.
 }
 ```
 
-The snippet above uses the recommended OAuth path. For the service-account
-alternative, replace the two `SEO_MCP_GOOGLE_OAUTH_CLIENT`/`SEO_MCP_GOOGLE_TOKEN`
-entries with a single `SEO_MCP_GOOGLE_CREDENTIALS` pointing at the key JSON. On
-first launch with OAuth, the server opens a browser for one-time consent and
-writes the token to `SEO_MCP_GOOGLE_TOKEN`; later launches are silent.
-
-### Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`)
-
-Same object shape under `mcpServers`. Cursor reads the identical schema.
-
 ### Cline (`cline_mcp_settings.json`)
 
 ```json
 {
   "mcpServers": {
-    "seo": {
+    "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
-      "args": ["seo-mcp"],
+      "args": ["seo-monster-mcp"],
       "env": {
-        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
-        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json"
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json"
       },
       "alwaysAllow": ["system_status", "gsc_search_analytics", "ga4_run_report", "psi_analyze"]
     }
@@ -572,24 +594,26 @@ Same object shape under `mcpServers`. Cursor reads the identical schema.
 }
 ```
 
-`alwaysAllow` lists read tools so Cline does not prompt on every call; write
-tools are deliberately left off so they always prompt.
+`alwaysAllow` lists read tools so Cline does not prompt on every call; the
+Cloudflare cache-purge tools are deliberately left off so they always prompt.
 
 ### Codex (`~/.codex/config.toml`)
 
 ```toml
-[mcp_servers.seo]
+[mcp_servers.seomonster]
 command = "/Users/me/.local/bin/uvx"
-args = ["seo-mcp"]
+args = ["seo-monster-mcp"]
 
-[mcp_servers.seo.env]
-SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-mcp/client_secret.json"
-SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-mcp/token.json"
-SEO_MCP_GSC_DEFAULT_SITE = "sc-domain:example.com"
+[mcp_servers.seomonster.env]
+SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-monster/client_secret.json"
+SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-monster/token.json"
+SEO_MCP_GA4_PROPERTY_ID = "properties/123456789"
 ```
 
-A local-development path (`uv run seo-mcp` from a clone, or `pip install -e .`)
-is documented in the README for contributors, mirroring tailtest's "Path 3".
+A local-development path (`uv run seo-monster-mcp` from a clone, or `pip install
+-e .`) is documented in the README for contributors. GUI hosts do not read the
+shell profile, so the `command` field must use the **absolute path** to `uvx`
+(find it with `which uvx`).
 
 ## Test plan
 
@@ -667,6 +691,14 @@ Recorded here so the design's rationale stays auditable.
    `ga4_traffic_by_channel`, `ga4_organic_search_overview`) ship alongside the
    generic `gsc_search_analytics` / `ga4_run_report` workhorses, because they
    reduce the AI's chance of mis-constructing GA4/GSC payloads and save context.
+9. **Local-only product, ratified.** SEOMonster ships exclusively as a local,
+   user-credential-driven, open-source utility. No cloud broker, no hosted
+   proxy, no shared/embedded developer OAuth client. The two supported install
+   paths are the MCPB bundle (primary, for Claude Desktop, one-click) and direct
+   `uvx` (for CLI/IDE hosts like Cursor, Cline, and Codex). The shared
+   developer-credential and hosted-broker options that were considered during
+   brainstorming are explicitly out of scope and will not be revisited unless
+   this decision is formally reopened.
 
 ## Final tool count (v1)
 
@@ -681,9 +713,3 @@ Recorded here so the design's rationale stays auditable.
 - **PSI (1):** `psi_analyze`.
 - **CF (6):** `cf_list_zones`, `cf_zone_info`, `cf_list_dns`, `cf_web_analytics`,
   `cf_purge_cache`, `cf_purge_cache_all`.
-
-8. **Convenience tools vs one workhorse per service.** I proposed several
-   convenience wrappers (`gsc_top_queries`, `ga4_top_landing_pages`, etc.) on top
-   of the generic `gsc_search_analytics` / `ga4_run_report`. They make the AI's
-   job easier but enlarge the surface. Keep all of them, or trim to the generic
-   workhorse plus only the highest-value convenience tools?

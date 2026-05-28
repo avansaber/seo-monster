@@ -1,0 +1,199 @@
+{
+  "manifest_version": "0.4",
+  "name": "seo-monster-mcp",
+  "display_name": "SEOMonster",
+  "version": "0.1.0",
+  "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare.",
+  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights, and Cloudflare. All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
+  "author": {
+    "name": "AvanSaber Inc.",
+    "email": "support@avansaber.com",
+    "url": "https://seomonster.avansaber.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avansaber/seo-monster-mcp"
+  },
+  "homepage": "https://seomonster.avansaber.com",
+  "documentation": "https://seomonster.avansaber.com",
+  "support": "https://github.com/avansaber/seo-monster-mcp/issues",
+  "keywords": [
+    "seo",
+    "seomonster",
+    "search-console",
+    "ga4",
+    "pagespeed",
+    "cloudflare",
+    "mcp"
+  ],
+  "privacy_policies": [
+    "https://policies.google.com/privacy",
+    "https://www.cloudflare.com/privacypolicy/"
+  ],
+
+  "server": {
+    "type": "uv",
+    "entry_point": "src/seo_mcp/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "${__dirname}",
+        "seo-monster-mcp"
+      ],
+      "env": {
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "${user_config.google_oauth_client}",
+        "SEO_MCP_GOOGLE_TOKEN": "${user_config.google_token}",
+        "SEO_MCP_GA4_PROPERTY_ID": "${user_config.ga4_property_id}",
+        "PSI_API_KEY": "${user_config.psi_api_key}",
+        "CF_API_TOKEN": "${user_config.cf_api_token}",
+        "CF_ZONE": "${user_config.cf_zone}"
+      }
+    }
+  },
+
+  "user_config": {
+    "google_oauth_client": {
+      "type": "file",
+      "title": "Google OAuth Client Secrets JSON",
+      "description": "Path to your Desktop-app OAuth client-secrets JSON, downloaded from Google Cloud Console (APIs & Services > Credentials > Create credentials > OAuth client ID > Desktop app). Required for Search Console, Indexing, and GA4 tools.",
+      "required": true
+    },
+    "google_token": {
+      "type": "string",
+      "title": "Google OAuth Token Cache Path",
+      "description": "Writable path where the cached OAuth token is stored. On first use, a browser opens for one-time consent and the token is written here. Default places it in your home config directory.",
+      "required": true,
+      "default": "${HOME}/.config/seo-monster/token.json"
+    },
+    "ga4_property_id": {
+      "type": "string",
+      "title": "GA4 Default Property ID (optional)",
+      "description": "Default GA4 property for the GA4 tools, e.g. 'properties/123456789' or bare '123456789'. You can also pass property_id per call.",
+      "required": false
+    },
+    "psi_api_key": {
+      "type": "string",
+      "title": "PageSpeed Insights API Key (optional)",
+      "description": "Optional. PSI works anonymously; a key only raises rate limits. Create one in Google Cloud Console after enabling the PageSpeed Insights API.",
+      "required": false,
+      "sensitive": true
+    },
+    "cf_api_token": {
+      "type": "string",
+      "title": "Cloudflare API Token (optional)",
+      "description": "Bearer token for the Cloudflare tools. Generate at dash.cloudflare.com > My Profile > API Tokens with Zone:Read, DNS:Read, Account Analytics:Read, and (only if you enable destructive mode) Cache Purge:Purge.",
+      "required": false,
+      "sensitive": true
+    },
+    "cf_zone": {
+      "type": "string",
+      "title": "Cloudflare Default Zone Hostname (optional)",
+      "description": "Default zone hostname for the Cloudflare tools, e.g. 'example.com'. You can also pass zone per call.",
+      "required": false
+    }
+  },
+
+  "compatibility": {
+    "claude_desktop": ">=1.0.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
+  },
+
+  "tools_generated": false,
+  "prompts_generated": false,
+  "tools": [
+    {
+      "name": "system_status",
+      "description": "Discovery tool. Reports which services are configured/reachable, the Google auth method and scopes, whether destructive mode is on, and the full tool catalog. Call this first when unsure of the setup."
+    },
+    {
+      "name": "gsc_list_properties",
+      "description": "List every Search Console property the configured credentials can see, with each property's permission level."
+    },
+    {
+      "name": "gsc_search_analytics",
+      "description": "The workhorse GSC tool: clicks, impressions, CTR, and position by dimensions, date range, dimension filters, and data_state."
+    },
+    {
+      "name": "gsc_top_queries",
+      "description": "Convenience wrapper: top queries for a property by clicks over the last N days."
+    },
+    {
+      "name": "gsc_top_pages",
+      "description": "Convenience wrapper: top pages for a property by clicks over the last N days."
+    },
+    {
+      "name": "gsc_compare_periods",
+      "description": "Compare two equal-length time windows (current vs prior) and return per-key deltas in clicks, impressions, CTR, and position, plus keys present in only one window."
+    },
+    {
+      "name": "gsc_inspect_url",
+      "description": "Inspect a single URL via the URL Inspection API: index verdict, coverage state, crawl info, canonicals, and mobile/rich-results summaries when present."
+    },
+    {
+      "name": "gsc_batch_inspect_urls",
+      "description": "Inspect up to 25 URLs in one call. Per-URL failures are collected so a transient error does not fail the whole batch."
+    },
+    {
+      "name": "gsc_list_sitemaps",
+      "description": "List the sitemaps Google knows about for a property, with submission and indexing status."
+    },
+    {
+      "name": "gsc_submit_sitemap",
+      "description": "Submit a sitemap to Search Console. Routine SEO write, available by default; requires the writable webmasters scope."
+    },
+    {
+      "name": "gsc_request_indexing",
+      "description": "Request (re)crawl of one or more URLs via the Indexing API (URL_UPDATED). Routine SEO write, available by default; requires the indexing scope."
+    },
+    {
+      "name": "ga4_run_report",
+      "description": "Workhorse GA4 tool: run a Google Analytics 4 report with arbitrary dimensions, metrics, date range, optional dimension filter, and ordering."
+    },
+    {
+      "name": "ga4_top_landing_pages",
+      "description": "Convenience: top landing pages by sessions, filtered to organic search by default. Returns engagement rate and conversions alongside sessions."
+    },
+    {
+      "name": "ga4_traffic_by_channel",
+      "description": "Convenience: sessions, engaged sessions, and conversions broken down by default channel group. Separates organic from paid / referral / direct at a glance."
+    },
+    {
+      "name": "ga4_organic_search_overview",
+      "description": "Organic-search health: window totals (sessions, engaged sessions, engagement rate, average session duration, conversions) plus a day-by-day trend."
+    },
+    {
+      "name": "psi_analyze",
+      "description": "Run PageSpeed Insights on a URL. Returns Lighthouse category scores, lab Core Web Vitals, and field Core Web Vitals (CrUX) when available."
+    },
+    {
+      "name": "cf_list_zones",
+      "description": "List the Cloudflare zones the API token can see, with status, plan, and id."
+    },
+    {
+      "name": "cf_zone_info",
+      "description": "Zone overview for a hostname: status, plan, paused, name servers, created and modified timestamps."
+    },
+    {
+      "name": "cf_list_dns",
+      "description": "List DNS records for a zone (read-only). Useful for verifying the canonical host and TXT verification records during SEO migrations."
+    },
+    {
+      "name": "cf_web_analytics",
+      "description": "Read-only Cloudflare Web Analytics (edge RUM). Lists all account sites or returns a single site by hostname or tag. Complements GA4 with edge-measured visits."
+    },
+    {
+      "name": "cf_purge_cache",
+      "description": "Purge specific URLs from the Cloudflare cache so crawlers refetch updated content. Gated: requires SEO_MCP_ALLOW_DESTRUCTIVE=true."
+    },
+    {
+      "name": "cf_purge_cache_all",
+      "description": "Purge the entire Cloudflare cache for a zone. Gated: requires SEO_MCP_ALLOW_DESTRUCTIVE=true AND a confirm value equal to the resolved zone hostname."
+    }
+  ]
+}

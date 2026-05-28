@@ -20,10 +20,14 @@ Codex) can query your own data with your own credentials.
 
 ## Requirements
 
-- Python 3.11 or newer.
-- [`uv`](https://docs.astral.sh/uv/) (provides `uvx`). Install it, then find the
-  absolute path to `uvx` with `which uvx` (GUI hosts do not read your shell
-  profile, so the config below needs the full path).
+For the **`.mcpb` bundle path** (Claude Desktop): just Claude Desktop on macOS
+or Windows. The bundle declares Python 3.11+ as a runtime; Claude Desktop
+materializes the environment for you. No prior `uv` install needed.
+
+For the **`uvx` path** (Cursor, Cline, Codex, advanced Claude Desktop): Python
+3.11 or newer plus [`uv`](https://docs.astral.sh/uv/) (which provides `uvx`).
+Find the absolute path to `uvx` with `which uvx`; GUI hosts do not read your
+shell profile, so MCP configs need the full path.
 
 ## Tools
 
@@ -69,27 +73,57 @@ is configured.
 
 ## Install
 
-`uvx` runs the published package in an ephemeral environment, so there is
-nothing to `pip install` and no virtualenv to manage. Add one of the snippets
-below to your host's MCP config, using the **absolute path** to `uvx`.
+SEOMonster ships **two install paths**, both fully local:
 
-The snippets lead with the recommended OAuth setup. For the service-account
-alternative, replace the two `SEO_MCP_GOOGLE_OAUTH_CLIENT` /
-`SEO_MCP_GOOGLE_TOKEN` entries with a single `SEO_MCP_GOOGLE_CREDENTIALS` (see
-[Auth](#auth)).
+- **`.mcpb` bundle** for Claude Desktop. One-click install, GUI form for
+  credentials, secret-typed inputs stored in the OS keychain. Recommended for
+  most users.
+- **`uvx`** for Cursor, Cline, Codex, and Claude Desktop power users who prefer
+  to hand-edit MCP config files.
 
-### Claude Desktop (`claude_desktop_config.json`)
+Both paths run the same Python package (`seo_mcp`) and expose the same 22-tool
+surface. The difference is only how the host launches the server and how it
+collects credentials.
+
+### Claude Desktop (recommended): `.mcpb` bundle
+
+Download `seo-monster-mcp-0.1.0.mcpb` from the [Claude Directory](https://claude.ai/directory)
+(or from the project's GitHub releases) and double-click it. Claude Desktop
+verifies the bundle, runs `uv` to materialize a Python environment from the
+bundled `pyproject.toml`, and shows a configuration form derived from the
+manifest:
+
+| Field                          | Type           | Required | Notes                                                                 |
+|--------------------------------|----------------|----------|-----------------------------------------------------------------------|
+| Google OAuth Client Secrets    | file picker    | yes      | Desktop-app client-secrets JSON from Google Cloud Console.            |
+| Google OAuth Token Cache Path  | string         | yes      | Defaults to `~/.config/seo-monster/token.json`. Written on consent.   |
+| GA4 Default Property ID        | string         | no       | `properties/123456789` or bare `123456789`.                           |
+| PageSpeed Insights API Key     | string, secret | no       | Stored in the OS keychain. Optional; PSI works anonymously.           |
+| Cloudflare API Token           | string, secret | no       | Stored in the OS keychain. Required only for the Cloudflare tools.    |
+| Cloudflare Default Zone        | string         | no       | e.g. `example.com`.                                                   |
+
+On first Google-backed tool call, a browser opens for one-time OAuth consent
+and the token is cached at the path you chose. Later runs refresh silently.
+The Cloudflare cache-purge tools stay inert unless you enable destructive mode
+(see [Destructive mode](#destructive-mode)).
+
+### `uvx` for Cursor, Cline, Codex (and Claude Desktop power users)
+
+`uvx` runs the published PyPI package `seo-monster-mcp` in an ephemeral
+environment. Add the snippet for your host below, using the **absolute path**
+to `uvx` (find it with `which uvx`; GUI hosts do not read your shell profile).
+
+#### Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`)
 
 ```json
 {
   "mcpServers": {
-    "seo": {
+    "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
       "args": ["seo-monster-mcp"],
       "env": {
-        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
-        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json",
-        "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:example.com",
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json",
         "SEO_MCP_GA4_PROPERTY_ID": "properties/123456789",
         "PSI_API_KEY": "AIza...",
         "CF_API_TOKEN": "..."
@@ -99,21 +133,17 @@ alternative, replace the two `SEO_MCP_GOOGLE_OAUTH_CLIENT` /
 }
 ```
 
-### Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`)
-
-Same object shape under `mcpServers`; Cursor reads the identical schema.
-
-### Cline (`cline_mcp_settings.json`)
+#### Cline (`cline_mcp_settings.json`)
 
 ```json
 {
   "mcpServers": {
-    "seo": {
+    "seomonster": {
       "command": "/Users/me/.local/bin/uvx",
       "args": ["seo-monster-mcp"],
       "env": {
-        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-mcp/client_secret.json",
-        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-mcp/token.json"
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "/Users/me/.config/seo-monster/client_secret.json",
+        "SEO_MCP_GOOGLE_TOKEN": "/Users/me/.config/seo-monster/token.json"
       },
       "alwaysAllow": ["system_status", "gsc_search_analytics", "ga4_run_report", "psi_analyze"]
     }
@@ -124,18 +154,23 @@ Same object shape under `mcpServers`; Cursor reads the identical schema.
 `alwaysAllow` lists read tools so Cline does not prompt on each call. Leave the
 cache-purge tools off so they always prompt.
 
-### Codex (`~/.codex/config.toml`)
+#### Codex (`~/.codex/config.toml`)
 
 ```toml
-[mcp_servers.seo]
+[mcp_servers.seomonster]
 command = "/Users/me/.local/bin/uvx"
 args = ["seo-monster-mcp"]
 
-[mcp_servers.seo.env]
-SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-mcp/client_secret.json"
-SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-mcp/token.json"
-SEO_MCP_GSC_DEFAULT_SITE = "sc-domain:example.com"
+[mcp_servers.seomonster.env]
+SEO_MCP_GOOGLE_OAUTH_CLIENT = "/Users/me/.config/seo-monster/client_secret.json"
+SEO_MCP_GOOGLE_TOKEN = "/Users/me/.config/seo-monster/token.json"
+SEO_MCP_GA4_PROPERTY_ID = "properties/123456789"
 ```
+
+#### Claude Desktop, direct `uvx` (advanced)
+
+If you prefer to hand-edit `claude_desktop_config.json` instead of using the
+`.mcpb` bundle, the same snippet shape as Cursor above works.
 
 ## Auth
 
