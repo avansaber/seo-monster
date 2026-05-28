@@ -67,7 +67,7 @@ is configured.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
   and TXT verification records during migrations.
-- `cf_web_analytics` - read-only edge Web Analytics (RUM), to compare against GA4.
+- `cf_web_analytics` - read-only edge Web Analytics (RUM), to compare against GA4. Cloudflare returns `host: null` for some sites; pass the `site_tag` to look those up explicitly.
 - `cf_purge_cache` - purge specific URLs (gated).
 - `cf_purge_cache_all` - purge an entire zone (gated + confirm token).
 
@@ -87,25 +87,56 @@ collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
 
-Download `seo-monster-0.1.0.mcpb` from the [Claude Directory](https://claude.ai/directory)
-(or from the project's GitHub releases) and double-click it. Claude Desktop
-verifies the bundle, runs `uv` to materialize a Python environment from the
-bundled `pyproject.toml`, and shows a configuration form derived from the
-manifest:
+Three short steps. The OAuth consent is **run once from a terminal** (the GUI
+flow inside Claude Desktop's MCP subprocess times out before a real user can
+finish; see [Why pre-flight auth?](#why-pre-flight-auth) below).
+
+**1. Install the bundle.** Download
+[`seo-monster-0.1.1.mcpb`](https://github.com/avansaber/seo-monster/releases/latest)
+from GitHub releases (or, when listed, from the [Claude
+Directory](https://claude.ai/directory)) and double-click it. Claude Desktop
+verifies the bundle, runs `uv` to materialize the Python environment, and
+shows a configuration form:
 
 | Field                          | Type           | Required | Notes                                                                 |
 |--------------------------------|----------------|----------|-----------------------------------------------------------------------|
 | Google OAuth Client Secrets    | file picker    | yes      | Desktop-app client-secrets JSON from Google Cloud Console.            |
 | Google OAuth Token Cache Path  | string         | yes      | Defaults to `~/.config/seo-monster/token.json`. Written on consent.   |
+| GSC Default Property           | string         | no       | e.g. `sc-domain:example.com` or `https://www.example.com/`.           |
 | GA4 Default Property ID        | string         | no       | `properties/123456789` or bare `123456789`.                           |
-| PageSpeed Insights API Key     | string, secret | no       | Stored in the OS keychain. Optional; PSI works anonymously.           |
+| PageSpeed Insights API Key     | string, secret | no       | Stored in the OS keychain. **Strongly recommended** ([why?](#pagespeed-insights)). |
 | Cloudflare API Token           | string, secret | no       | Stored in the OS keychain. Required only for the Cloudflare tools.    |
 | Cloudflare Default Zone        | string         | no       | e.g. `example.com`.                                                   |
 
-On first Google-backed tool call, a browser opens for one-time OAuth consent
-and the token is cached at the path you chose. Later runs refresh silently.
-The Cloudflare cache-purge tools stay inert unless you enable destructive mode
-(see [Destructive mode](#destructive-mode)).
+Fill the fields, click **Save**, then **toggle the extension on**. Quit Claude
+Desktop completely (⌘Q on macOS) and reopen.
+
+**2. Run the one-time OAuth consent from a terminal.** Before using any
+Google-backed tool, run:
+
+```sh
+uvx seo-monster auth
+```
+
+A browser opens. Approve the requested scopes. The command writes
+`token.json` to the path you configured (default `~/.config/seo-monster/token.json`)
+with `0600` permissions, then exits. This step is the recommended pattern; it
+sidesteps the timeout that Claude Desktop imposes on every tool call.
+
+**3. Start a new chat in Claude Desktop and use the tools.** Click the 🔧
+tools icon in the input box; you should see 22 SEOMonster tools. Try
+`system_status` first to verify everything is configured.
+
+#### Why pre-flight auth?
+
+The OAuth installed-app flow opens a local browser and waits for the user to
+finish the consent screen. Inside Claude Desktop, MCP servers are launched as
+subprocesses whose tool calls have a ~30-60 second timeout. Real users do not
+complete browser consent that fast, so the originating call times out, and
+since every Google tool retries the flow until a token exists, every call
+times out in turn. Running `uvx seo-monster auth` once from a terminal puts
+the token on disk; from that point on, Claude Desktop's MCP server just reads
+the cached token and silently refreshes it as needed.
 
 ### `uvx` for Cursor, Cline, Codex (and Claude Desktop power users)
 
@@ -194,11 +225,20 @@ grants.
 3. Point the server at it and at a writable token path:
    - `SEO_MCP_GOOGLE_OAUTH_CLIENT` = path to the client-secrets JSON
    - `SEO_MCP_GOOGLE_TOKEN` = a writable path where the token will be cached
-4. On first use the server opens a browser for one-time consent and writes the
-   token to `SEO_MCP_GOOGLE_TOKEN`. Later runs refresh it silently.
+4. **One-time:** run `uvx seo-monster auth` from a terminal. A browser opens;
+   approve the scopes. The command writes `token.json` (`0600`) and exits.
+5. Subsequent runs (server-side) refresh the token silently. **The server
+   never opens a browser**; if the cached token is missing, tools return
+   `AUTH_MISSING` pointing back at the `auth` command.
 
 The signed-in Google account must have access to the Search Console properties
 and GA4 properties you query.
+
+**Token-cache hardening.** The cached token is refresh-capable and equivalent
+to a long-lived credential for the requested scopes. The server writes it with
+`0600` and its parent directory with `0700`. Keep `SEO_MCP_GOOGLE_TOKEN` under
+a directory you control (e.g. `~/.config/seo-monster/`) and do not put it on a
+shared filesystem.
 
 ### Google - service account (advanced, headless)
 
@@ -212,6 +252,11 @@ For fully headless or server deployments where a browser is not available:
    - GA4: add it as a Viewer on the property.
 
 If both OAuth and a service account are configured, OAuth is used.
+
+> **Coverage note.** The OAuth installed-app path is exercised in our
+> validation pass and in production-style smoke tests. The service-account
+> path is documented but not independently validated against a live Cloud
+> project. If you hit issues on the SA path, please open an issue.
 
 ### Scopes (minimal vs full)
 
@@ -232,9 +277,22 @@ scope returns `SCOPE_INSUFFICIENT` with remediation, never a crash.
 
 ### PageSpeed Insights
 
-PSI works without a key (anonymous, with tighter rate limits). To raise the
-limits, create an API key in the Cloud Console (enable the PageSpeed Insights
-API) and set `PSI_API_KEY`.
+PSI works without a key in principle, but in practice the **anonymous quota is
+shared across every caller without a key and is frequently exhausted**: a
+single `psi_analyze` call against the anonymous endpoint often returns
+`RATE_LIMITED`. **Treat the anonymous mode as a fallback, not the steady
+state.**
+
+To get reliable PSI access:
+
+1. In Cloud Console, enable the **PageSpeed Insights API**.
+2. Create an **API key** (Credentials > Create credentials > API key). It
+   takes a minute. The key is free.
+3. Set `PSI_API_KEY` (or use the field in the `.mcpb` configuration form).
+
+The PSI API only accepts the key as a URL query parameter (not a header), so
+treat PSI keys as low-sensitivity. Scope the key to the PageSpeed Insights
+API only and attach no other GCP roles.
 
 ### Cloudflare
 
@@ -365,12 +423,25 @@ Error codes:
 git clone https://github.com/avansaber/seo-monster
 cd seo-monster
 uv venv && uv pip install -e ".[dev]"
-uv run pytest            # offline test suite
-uv run seo-monster   # run the server over stdio
+uv run pytest               # offline test suite
+uv run seo-monster          # run the server over stdio
+uv run seo-monster auth     # one-time OAuth consent (or `uv run seo-mcp auth`)
 ```
+
+The package exposes two console-script aliases: `seo-monster` (canonical,
+matches the PyPI distribution) and `seo-mcp` (kept for local dev so you do not
+have to retype the longer name). Both invoke the same entry point; production
+configs should use `seo-monster`.
 
 Tests are fully offline: they mock at the client layer, so no network and no
 credentials are needed to run them.
+
+> **Server identity note.** Some MCP host UIs display the server name as
+> `seo-mcp` and the version as the `mcp` SDK version (e.g. `1.27.1`). The
+> server-name string is the value we passed to `Server("seo-mcp")` and is kept
+> stable for back-compat; the version readout is a quirk of the SDK
+> (`create_initialization_options()` does not propagate the package version).
+> The package's real version is in `pyproject.toml` and `seo_mcp.__version__`.
 
 ## License
 
