@@ -418,6 +418,109 @@ def test_generic_403_still_maps_to_auth_invalid(make_config, make_gsc_client, gs
     assert result["error"]["code"] == "AUTH_INVALID"
 
 
+# --- v0.2.0 query intelligence -------------------------------------------
+
+
+def _qa_payload(rows):
+    return {"rows": [
+        {"keys": [r[0]], "clicks": r[1], "impressions": r[2], "ctr": r[3], "position": r[4]}
+        for r in rows
+    ]}
+
+
+def test_query_opportunities_filters_and_sorts(make_config, make_gsc_client, gsc_payloads):
+    # Rows: (query, clicks, impressions, ctr, position)
+    payload = _qa_payload([
+        ("a-top-low-ctr",       3, 1000, 0.003, 6.0),    # passes: pos<=10, ctr<=.03, impr>=100
+        ("b-top-low-ctr-bigger",5, 5000, 0.001, 5.0),    # passes; should sort first (more impressions)
+        ("c-top-but-ctr-fine",  90, 1000, 0.09, 4.0),    # rejected: CTR above threshold
+        ("d-below-rank",        2, 1000, 0.002, 25.0),   # rejected: position > 10
+        ("e-low-volume",        1, 50,   0.02, 7.0),     # rejected: impressions < 100
+    ])
+    responses = dict(gsc_payloads); responses["search"] = payload
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_query_opportunities({}, _cfg(make_config), {"gsc": client})
+    assert result["ok"] is True
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert keys == ["b-top-low-ctr-bigger", "a-top-low-ctr"]
+    assert result["data"]["filters_applied"] == {"position_max": 10.0, "ctr_max": 0.03, "impressions_min": 100}
+
+
+def test_query_opportunities_respects_custom_thresholds(make_config, make_gsc_client, gsc_payloads):
+    payload = _qa_payload([("ok", 1, 200, 0.005, 8.0)])  # passes both default and custom
+    responses = dict(gsc_payloads); responses["search"] = payload
+    client = make_gsc_client(responses)
+    # With ctr_max=0.001, the row is rejected.
+    result = gsc_tools.gsc_query_opportunities({"ctr_max": 0.001}, _cfg(make_config), {"gsc": client})
+    assert result["data"]["row_count"] == 0
+
+
+def test_query_gaps_filters_and_sorts(make_config, make_gsc_client, gsc_payloads):
+    payload = _qa_payload([
+        ("a-many-impr-no-click", 0, 500, 0.0, 14.0),   # passes
+        ("b-some-clicks",        5, 800, 0.006, 11.0),  # rejected: clicks > 2
+        ("c-no-impressions",     0, 10,  0.0, 30.0),   # rejected: impressions < 50
+        ("d-also-passes",        1, 100, 0.01, 8.0),   # passes; should sort below "a"
+    ])
+    responses = dict(gsc_payloads); responses["search"] = payload
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_query_gaps({}, _cfg(make_config), {"gsc": client})
+    assert [r["keys"][0] for r in result["data"]["rows"]] == ["a-many-impr-no-click", "d-also-passes"]
+
+
+def test_new_queries_returns_only_unseen_in_prior(make_config, make_gsc_client):
+    current = _qa_payload([
+        ("brand-new",   2, 50, 0.04, 12.0),
+        ("seen-before", 4, 80, 0.05, 9.0),
+    ])
+    prior = _qa_payload([
+        ("seen-before", 1, 30, 0.03, 14.0),
+        ("ancient",     0, 5,  0.0,  40.0),
+    ])
+    client = make_gsc_client({"search": [current, prior]})
+    result = gsc_tools.gsc_new_queries({"days": 7, "prior_days": 28, "impressions_min": 1},
+                                       _cfg(make_config), {"gsc": client})
+    keys = [r["keys"][0] for r in result["data"]["rows"]]
+    assert keys == ["brand-new"]
+    # Two calls (current + prior) with non-overlapping date windows.
+    assert len(client._service.calls) == 2
+    a, b = (c[1]["body"] for c in client._service.calls)
+    assert a["startDate"] != b["startDate"]
+
+
+def test_top_pages_by_query_requires_query(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_top_pages_by_query({}, _cfg(make_config), {"gsc": client})
+    assert result["error"]["code"] == "INVALID_INPUT"
+
+
+def test_top_pages_by_query_builds_query_filter(make_config, make_gsc_client, gsc_payloads):
+    payload = {"rows": [
+        {"keys": ["https://x/blog/a"], "clicks": 5, "impressions": 100, "ctr": 0.05, "position": 4.0},
+        {"keys": ["https://x/blog/b"], "clicks": 1, "impressions": 30, "ctr": 0.03, "position": 9.0},
+    ]}
+    responses = dict(gsc_payloads); responses["search"] = payload
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_top_pages_by_query({"query": "seo monster", "days": 30}, _cfg(make_config), {"gsc": client})
+    assert result["ok"] is True
+    assert result["data"]["query"] == "seo monster"
+    assert result["data"]["row_count"] == 2
+    _, kw = client._service.calls[0]
+    body = kw["body"]
+    assert body["dimensions"] == ["page"]
+    groups = body["dimensionFilterGroups"]
+    assert groups[0]["filters"][0] == {"dimension": "query", "operator": "equals", "expression": "seo monster"}
+
+
+def test_query_intelligence_returns_auth_missing_when_unconfigured(make_config):
+    cfg = make_config()
+    for tool in ("gsc_query_opportunities", "gsc_query_gaps",
+                 "gsc_new_queries", "gsc_top_pages_by_query"):
+        handler = gsc_tools.HANDLERS[tool]
+        result = handler({"query": "x"}, cfg, {})
+        assert result["error"]["code"] == "AUTH_MISSING", tool
+
+
 @pytest.mark.parametrize(
     "status,expected",
     [(401, "AUTH_INVALID"), (403, "AUTH_INVALID"), (404, "NOT_FOUND"), (429, "RATE_LIMITED"), (500, "UPSTREAM_ERROR")],

@@ -715,6 +715,284 @@ def gsc_request_indexing(arguments, config, clients) -> dict[str, Any]:
     return ok({"submitted_count": len(submitted), "submitted": submitted, "failed": failed})
 
 
+# --- query intelligence (v0.2.0) ------------------------------------------
+#
+# These four tools are pure filter+sort over `gsc_search_analytics` results.
+# They do not introduce new client calls beyond what already exists; the
+# value they add is presenting the right slice for a common SEO task so the
+# AI host does not have to assemble dimension filters and CTR thresholds.
+
+TOOL_QUERY_OPPORTUNITIES = {
+    "name": "gsc_query_opportunities",
+    "description": (
+        "Queries already ranking in the top N positions but with below-target "
+        "CTR. These are title and meta-description optimization candidates. "
+        "Returns rows sorted by impressions desc (the bigger the impression "
+        "volume, the more clicks a CTR lift unlocks)."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "site_url": {"type": "string", "description": "Defaults to the configured default site."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Lookback window. Defaults to 28."},
+            "position_max": {"type": "number", "minimum": 1, "maximum": 100, "description": "Only include queries with average position <= this. Defaults to 10."},
+            "ctr_max": {"type": "number", "minimum": 0, "maximum": 1, "description": "Only include queries with CTR <= this (e.g. 0.03 = 3%). Defaults to 0.03."},
+            "impressions_min": {"type": "integer", "minimum": 1, "maximum": 1000000, "description": "Drop low-volume noise. Defaults to 100."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Max rows to return. Defaults to 50."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_query_opportunities(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    site = resolve_site(arguments, config)
+    if not site:
+        return missing_site_error()
+
+    days = int(arguments.get("days", 28))
+    position_max = float(arguments.get("position_max", 10.0))
+    ctr_max = float(arguments.get("ctr_max", 0.03))
+    impressions_min = int(arguments.get("impressions_min", 100))
+    limit = int(arguments.get("limit", 50))
+    end = _today().isoformat()
+    start = (_today() - timedelta(days=days)).isoformat()
+    try:
+        resp = _run_query(
+            client, site,
+            start=start, end=end, dimensions=["query"],
+            row_limit=25000, data_state=config.gsc_data_state,
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    rows = []
+    for r in resp.get("rows", []):
+        if r.get("impressions", 0) < impressions_min:
+            continue
+        if r.get("position", 999) > position_max:
+            continue
+        if r.get("ctr", 0) > ctr_max:
+            continue
+        rows.append(_normalize_row(r))
+    rows.sort(key=lambda x: x["impressions"], reverse=True)
+    rows = rows[:limit]
+    return ok(
+        {
+            "site_url": site, "days": days,
+            "start_date": start, "end_date": end,
+            "row_count": len(rows), "rows": rows,
+            "filters_applied": {
+                "position_max": position_max,
+                "ctr_max": ctr_max,
+                "impressions_min": impressions_min,
+            },
+        }
+    )
+
+
+TOOL_QUERY_GAPS = {
+    "name": "gsc_query_gaps",
+    "description": (
+        "Queries that drive impressions but very few clicks. These are content "
+        "opportunity signals: a page is being shown for the query, the click "
+        "experience is not landing. Returns rows sorted by impressions desc."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "site_url": {"type": "string"},
+            "days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Defaults to 28."},
+            "impressions_min": {"type": "integer", "minimum": 1, "maximum": 1000000, "description": "Floor for inclusion. Defaults to 50."},
+            "clicks_max": {"type": "integer", "minimum": 0, "maximum": 1000, "description": "Drop queries that already convert. Defaults to 2."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Defaults to 50."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_query_gaps(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    site = resolve_site(arguments, config)
+    if not site:
+        return missing_site_error()
+
+    days = int(arguments.get("days", 28))
+    impressions_min = int(arguments.get("impressions_min", 50))
+    clicks_max = int(arguments.get("clicks_max", 2))
+    limit = int(arguments.get("limit", 50))
+    end = _today().isoformat()
+    start = (_today() - timedelta(days=days)).isoformat()
+    try:
+        resp = _run_query(
+            client, site,
+            start=start, end=end, dimensions=["query"],
+            row_limit=25000, data_state=config.gsc_data_state,
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    rows = []
+    for r in resp.get("rows", []):
+        if r.get("impressions", 0) < impressions_min:
+            continue
+        if r.get("clicks", 0) > clicks_max:
+            continue
+        rows.append(_normalize_row(r))
+    rows.sort(key=lambda x: x["impressions"], reverse=True)
+    rows = rows[:limit]
+    return ok(
+        {
+            "site_url": site, "days": days,
+            "start_date": start, "end_date": end,
+            "row_count": len(rows), "rows": rows,
+            "filters_applied": {
+                "impressions_min": impressions_min,
+                "clicks_max": clicks_max,
+            },
+        }
+    )
+
+
+TOOL_NEW_QUERIES = {
+    "name": "gsc_new_queries",
+    "description": (
+        "Queries that have impressions in the current window but had no "
+        "impressions in the prior comparison window. Useful for spotting "
+        "emerging topics or pages that just started ranking."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "site_url": {"type": "string"},
+            "days": {"type": "integer", "minimum": 1, "maximum": 240, "description": "Current window in days. Defaults to 7."},
+            "prior_days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Prior window in days. Defaults to 28 (so 7 vs 28 catches genuinely new entries)."},
+            "impressions_min": {"type": "integer", "minimum": 1, "description": "Minimum impressions in the current window to include. Defaults to 5."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Defaults to 50."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_new_queries(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    site = resolve_site(arguments, config)
+    if not site:
+        return missing_site_error()
+
+    days = int(arguments.get("days", 7))
+    prior_days = int(arguments.get("prior_days", 28))
+    impressions_min = int(arguments.get("impressions_min", 5))
+    limit = int(arguments.get("limit", 50))
+    today = _today()
+    current_end = today
+    current_start = today - timedelta(days=days)
+    prior_end = current_start - timedelta(days=1)
+    prior_start = prior_end - timedelta(days=prior_days)
+
+    try:
+        current_resp = _run_query(
+            client, site,
+            start=current_start.isoformat(), end=current_end.isoformat(),
+            dimensions=["query"], row_limit=25000, data_state=config.gsc_data_state,
+        )
+        prior_resp = _run_query(
+            client, site,
+            start=prior_start.isoformat(), end=prior_end.isoformat(),
+            dimensions=["query"], row_limit=25000, data_state=config.gsc_data_state,
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    prior_keys = {_key_of(r) for r in prior_resp.get("rows", [])}
+    new_rows = []
+    for r in current_resp.get("rows", []):
+        if _key_of(r) in prior_keys:
+            continue
+        if r.get("impressions", 0) < impressions_min:
+            continue
+        new_rows.append(_normalize_row(r))
+    new_rows.sort(key=lambda x: x["impressions"], reverse=True)
+    new_rows = new_rows[:limit]
+    return ok(
+        {
+            "site_url": site,
+            "current_window": {"start_date": current_start.isoformat(), "end_date": current_end.isoformat(), "days": days},
+            "prior_window": {"start_date": prior_start.isoformat(), "end_date": prior_end.isoformat(), "days": prior_days},
+            "row_count": len(new_rows), "rows": new_rows,
+            "filters_applied": {"impressions_min": impressions_min},
+        }
+    )
+
+
+TOOL_TOP_PAGES_BY_QUERY = {
+    "name": "gsc_top_pages_by_query",
+    "description": (
+        "Which pages rank for a specific query. The classic cannibalization "
+        "audit input: if multiple pages rank for the same query, you typically "
+        "want to consolidate or differentiate them. Filters search_analytics "
+        "by an exact query match and returns rows by page dimension."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Exact query string. Required."},
+            "site_url": {"type": "string", "description": "Defaults to the configured default site."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Defaults to 28."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Defaults to 20."},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_top_pages_by_query(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    query = arguments.get("query")
+    if not query:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "query is required.", docs_url=DOCS_BASE + "gsc")
+    site = resolve_site(arguments, config)
+    if not site:
+        return missing_site_error()
+    days = int(arguments.get("days", 28))
+    limit = int(arguments.get("limit", 20))
+    end = _today().isoformat()
+    start = (_today() - timedelta(days=days)).isoformat()
+    try:
+        resp = _run_query(
+            client, site,
+            start=start, end=end, dimensions=["page"],
+            row_limit=limit, data_state=config.gsc_data_state,
+            filters=[{"dimension": "query", "operator": "equals", "expression": query}],
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    rows = [_normalize_row(r) for r in resp.get("rows", [])][:limit]
+    return ok(
+        {
+            "site_url": site, "query": query, "days": days,
+            "start_date": start, "end_date": end,
+            "row_count": len(rows), "rows": rows,
+        }
+    )
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -728,6 +1006,11 @@ TOOLS = [
     TOOL_LIST_SITEMAPS,
     TOOL_SUBMIT_SITEMAP,
     TOOL_REQUEST_INDEXING,
+    # v0.2.0 query intelligence
+    TOOL_QUERY_OPPORTUNITIES,
+    TOOL_QUERY_GAPS,
+    TOOL_NEW_QUERIES,
+    TOOL_TOP_PAGES_BY_QUERY,
 ]
 
 HANDLERS = {
@@ -741,4 +1024,9 @@ HANDLERS = {
     "gsc_list_sitemaps": gsc_list_sitemaps,
     "gsc_submit_sitemap": gsc_submit_sitemap,
     "gsc_request_indexing": gsc_request_indexing,
+    # v0.2.0 query intelligence
+    "gsc_query_opportunities": gsc_query_opportunities,
+    "gsc_query_gaps": gsc_query_gaps,
+    "gsc_new_queries": gsc_new_queries,
+    "gsc_top_pages_by_query": gsc_top_pages_by_query,
 }
