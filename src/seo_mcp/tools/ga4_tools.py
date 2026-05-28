@@ -69,11 +69,13 @@ TOOL_RUN_REPORT = {
         "type": "object",
         "properties": {
             "property_id": {"type": "string", "description": "GA4 property ('properties/123' or '123'). Defaults to the configured property."},
-            "start_date": {"type": "string", "description": "ISO date or GA4 relative. Defaults to 28daysAgo."},
+            "start_date": {"type": "string", "description": "ISO date or GA4 relative. Defaults to 28daysAgo. Wins over `days` when both are set."},
             "end_date": {"type": "string", "description": "ISO date or 'today'. Defaults to today."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Convenience alias: derives end='today', start='Ndaysago'. Ignored when start_date is set explicitly."},
             "dimensions": {"type": "array", "items": {"type": "string"}, "description": "GA4 dimension API names. Defaults to [\"date\"]."},
             "metrics": {"type": "array", "items": {"type": "string"}, "description": "GA4 metric API names. Defaults to [\"sessions\"]."},
             "row_limit": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "Defaults to 1000."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "Alias for row_limit. row_limit wins when both are set."},
             "dimension_filter": {
                 "type": "object",
                 "description": "Optional filter. Simple form: {\"field\": \"sessionDefaultChannelGroup\", \"value\": \"Organic Search\", \"match_type\": \"EXACT\"} or {\"field\": ..., \"in_list\": [...]}.",
@@ -130,9 +132,18 @@ def ga4_run_report(arguments, config, clients) -> dict[str, Any]:
 
     dimensions = arguments.get("dimensions") or ["date"]
     metrics = arguments.get("metrics") or ["sessions"]
-    start_date = arguments.get("start_date") or "28daysAgo"
+    # Date resolution: explicit start_date wins. Otherwise, if `days` was given
+    # as a convenience alias, derive start = "Ndaysago" (GA4 relative form).
+    days = arguments.get("days")
+    if arguments.get("start_date"):
+        start_date = arguments["start_date"]
+    elif days is not None:
+        start_date = f"{int(days)}daysAgo"
+    else:
+        start_date = "28daysAgo"
     end_date = arguments.get("end_date") or "today"
-    row_limit = int(arguments.get("row_limit", 1000))
+    # row_limit wins; `limit` is the friendlier alias.
+    row_limit = int(arguments.get("row_limit", arguments.get("limit", 1000)))
 
     try:
         data = _report(

@@ -92,6 +92,31 @@ def test_run_report_metric_value_coercion(make_config, make_ga4_client, ga4_resp
     assert metrics[1] == 0.835 and isinstance(metrics[1], float)
 
 
+def test_run_report_accepts_days_alias(make_config, make_ga4_client, ga4_response):
+    client = make_ga4_client(ga4_response(["date"], ["sessions"], []))
+    ga4_tools.ga4_run_report({"days": 14}, _cfg(make_config), {"ga4": client})
+    req = client._analytics.requests[0]
+    assert req.date_ranges[0].start_date == "14daysAgo"
+    assert req.date_ranges[0].end_date == "today"
+
+
+def test_run_report_accepts_limit_alias(make_config, make_ga4_client, ga4_response):
+    client = make_ga4_client(ga4_response(["date"], ["sessions"], []))
+    ga4_tools.ga4_run_report({"limit": 250}, _cfg(make_config), {"ga4": client})
+    assert client._analytics.requests[0].limit == 250
+
+
+def test_run_report_start_date_wins_over_days(make_config, make_ga4_client, ga4_response):
+    client = make_ga4_client(ga4_response(["date"], ["sessions"], []))
+    ga4_tools.ga4_run_report(
+        {"start_date": "2026-01-01", "end_date": "2026-01-31", "days": 365},
+        _cfg(make_config),
+        {"ga4": client},
+    )
+    req = client._analytics.requests[0]
+    assert req.date_ranges[0].start_date == "2026-01-01"
+
+
 def test_run_report_bare_property_id_is_normalized(make_config, make_ga4_client, ga4_response):
     client = make_ga4_client(ga4_response(["date"], ["sessions"], []))
     ga4_tools.ga4_run_report({"property_id": "987654"}, make_config(), {"ga4": client})
