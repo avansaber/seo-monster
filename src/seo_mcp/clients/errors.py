@@ -107,6 +107,34 @@ def map_google_exception(exc: Exception) -> ApiError:
             details={"activation_url": match.group(0) if match else None, "raw": text[:500]},
         )
 
+    # GSC URL Inspection returns 403 with these markers when the inspected
+    # URL falls outside the property's verified scope. That is a scope
+    # mismatch, NOT bad credentials: routing it to AUTH_INVALID sent users on
+    # a wild-goose chase debugging their OAuth setup (see round-2 feedback
+    # 7a.i). Surface it as NOT_FOUND with a remediation that points at the
+    # property-scope concept.
+    lowered = text.lower()
+    if status == 403 and any(
+        m in lowered
+        for m in (
+            "not under the verified",
+            "not under the property",
+            "url is not under",
+            "outside the property",
+            "forbidden for this site",
+        )
+    ):
+        return ApiError(
+            ErrorCode.NOT_FOUND,
+            "The URL is outside the configured property's scope.",
+            remediation=(
+                "Pass a site_url whose prefix matches this URL, or use a broader "
+                "'sc-domain:' property that covers it. The credentials are fine; "
+                "the property just does not include this URL."
+            ),
+            details={"status": 403, "raw": text[:500]},
+        )
+
     if status in (401, 403):
         return ApiError(
             ErrorCode.AUTH_INVALID,

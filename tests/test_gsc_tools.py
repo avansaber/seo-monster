@@ -349,6 +349,35 @@ def test_request_indexing_service_disabled_extracts_activation_url(make_config, 
 # --- upstream error mapping -----------------------------------------------
 
 
+def test_property_scope_403_maps_to_not_found(make_config, make_gsc_client, gsc_payloads, fake_http_error):
+    # Round-2 feedback 7a.i: when GSC returns 403 with a 'URL not under the
+    # verified property' message, that is a scope mismatch, not bad creds.
+    # The mapper should NOT route it to AUTH_INVALID.
+    responses = dict(gsc_payloads)
+    responses["inspect"] = fake_http_error(
+        403,
+        "Forbidden. The URL is not under the verified site / property scope.",
+    )
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_inspect_url(
+        {"url": "https://other.example.com/page"}, _cfg(make_config), {"gsc": client}
+    )
+    assert result["ok"] is False
+    assert result["error"]["code"] == "NOT_FOUND"
+    assert "property" in result["error"]["remediation"].lower()
+    assert "site_url" in result["error"]["remediation"]
+
+
+def test_generic_403_still_maps_to_auth_invalid(make_config, make_gsc_client, gsc_payloads, fake_http_error):
+    # The new branch is property-scope-specific; an unrelated 403 still goes
+    # to AUTH_INVALID. Guards against over-broad remap.
+    responses = dict(gsc_payloads)
+    responses["sites_list"] = fake_http_error(403, "Insufficient permissions for this account.")
+    client = make_gsc_client(responses)
+    result = gsc_tools.gsc_list_properties({}, _cfg(make_config), {"gsc": client})
+    assert result["error"]["code"] == "AUTH_INVALID"
+
+
 @pytest.mark.parametrize(
     "status,expected",
     [(401, "AUTH_INVALID"), (403, "AUTH_INVALID"), (404, "NOT_FOUND"), (429, "RATE_LIMITED"), (500, "UPSTREAM_ERROR")],
