@@ -150,14 +150,16 @@ TOOL_SEARCH_ANALYTICS = {
         "type": "object",
         "properties": {
             "site_url": {"type": "string", "description": "Property to query. Defaults to the configured default site."},
-            "start_date": {"type": "string", "description": "ISO date YYYY-MM-DD. Defaults to 28 days ago."},
+            "start_date": {"type": "string", "description": "ISO date YYYY-MM-DD. Defaults to 28 days ago. Wins over `days` when both are set."},
             "end_date": {"type": "string", "description": "ISO date YYYY-MM-DD. Defaults to today."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Lookback window in days. Convenience alias: derives end=today, start=today-days. Ignored when start_date is set explicitly."},
             "dimensions": {
                 "type": "array",
                 "items": {"type": "string", "enum": _DIMENSIONS},
                 "description": "Defaults to [\"query\"].",
             },
             "row_limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Defaults to 1000."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Alias for row_limit. row_limit wins when both are set."},
             "start_row": {"type": "integer", "minimum": 0, "description": "Pagination offset. Defaults to 0."},
             "search_type": {"type": "string", "enum": _SEARCH_TYPES, "description": "Defaults to web."},
             "data_state": {
@@ -193,10 +195,21 @@ def gsc_search_analytics(arguments, config, clients) -> dict[str, Any]:
     if not site:
         return missing_site_error()
 
+    # Date resolution: explicit start_date/end_date win. Otherwise, if `days`
+    # was given as a convenience alias, derive end=today and start=today-days.
+    # Otherwise fall back to the 28-day default.
+    days = arguments.get("days")
     end = arguments.get("end_date") or _today().isoformat()
-    start = arguments.get("start_date") or (_today() - timedelta(days=28)).isoformat()
+    if arguments.get("start_date"):
+        start = arguments["start_date"]
+    elif days is not None:
+        start = (_today() - timedelta(days=int(days))).isoformat()
+    else:
+        start = (_today() - timedelta(days=28)).isoformat()
     dimensions = arguments.get("dimensions") or ["query"]
-    row_limit = int(arguments.get("row_limit", 1000))
+    # row_limit wins; `limit` is an accepted alias for AI hosts that conflate it
+    # with the top-N tools.
+    row_limit = int(arguments.get("row_limit", arguments.get("limit", 1000)))
     start_row = int(arguments.get("start_row", 0))
     search_type = arguments.get("search_type", "web")
     data_state = arguments.get("data_state") or config.gsc_data_state
@@ -320,8 +333,10 @@ TOOL_COMPARE_PERIODS = {
                 "description": "Defaults to [\"query\"].",
             },
             "current_days": {"type": "integer", "minimum": 1, "maximum": 240, "description": "Length of each window in days. Defaults to 28."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 240, "description": "Alias for current_days. current_days wins when both are set."},
             "gap_days": {"type": "integer", "minimum": 0, "maximum": 240, "description": "Days between the two windows. Defaults to 0."},
             "row_limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Rows per window query. Defaults to 1000."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Alias for row_limit. row_limit wins when both are set."},
         },
         "additionalProperties": False,
     },
@@ -341,9 +356,11 @@ def gsc_compare_periods(arguments, config, clients) -> dict[str, Any]:
         return missing_site_error()
 
     dimensions = arguments.get("dimensions") or ["query"]
-    current_days = int(arguments.get("current_days", 28))
+    # current_days wins; `days` is the friendlier alias for AI hosts that
+    # already used it on the top-N tools.
+    current_days = int(arguments.get("current_days", arguments.get("days", 28)))
     gap_days = int(arguments.get("gap_days", 0))
-    row_limit = int(arguments.get("row_limit", 1000))
+    row_limit = int(arguments.get("row_limit", arguments.get("limit", 1000)))
 
     today = _today()
     current_end = today
@@ -560,15 +577,17 @@ TOOL_SUBMIT_SITEMAP = {
     "name": "gsc_submit_sitemap",
     "description": (
         "Submit a sitemap to Search Console. Requires the writable webmasters "
-        "scope. Available by default (a routine SEO task; not gated)."
+        "scope. Available by default (a routine SEO task; not gated). Accepts "
+        "either `sitemap_url` (preferred, friendly name) or `feedpath` (the raw "
+        "API field name; kept for back-compat)."
     ),
     "inputSchema": {
         "type": "object",
         "properties": {
-            "feedpath": {"type": "string", "description": "Full sitemap URL, e.g. https://www.example.com/sitemap.xml. Required."},
+            "sitemap_url": {"type": "string", "description": "Full sitemap URL, e.g. https://www.example.com/sitemap.xml. Preferred."},
+            "feedpath": {"type": "string", "description": "Alias for sitemap_url (the raw Google API field name). Either works; sitemap_url wins when both are set."},
             "site_url": {"type": "string", "description": "Owning property. Defaults to the configured default site."},
         },
-        "required": ["feedpath"],
         "additionalProperties": False,
     },
 }
@@ -578,17 +597,22 @@ def gsc_submit_sitemap(arguments, config, clients) -> dict[str, Any]:
     client, error = _require(clients)
     if error:
         return error
-    feedpath = arguments.get("feedpath")
-    if not feedpath:
-        return err(ErrorCode.INVALID_INPUT, _SERVICE, "feedpath is required.", docs_url=DOCS_BASE + "gsc")
+    sitemap_url = arguments.get("sitemap_url") or arguments.get("feedpath")
+    if not sitemap_url:
+        return err(
+            ErrorCode.INVALID_INPUT,
+            _SERVICE,
+            "sitemap_url (or feedpath) is required.",
+            docs_url=DOCS_BASE + "gsc",
+        )
     site = resolve_site(arguments, config)
     if not site:
         return missing_site_error()
     try:
-        client.submit_sitemap(site, feedpath)
+        client.submit_sitemap(site, sitemap_url)
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
-    return ok({"site_url": site, "feedpath": feedpath, "submitted": True})
+    return ok({"site_url": site, "sitemap_url": sitemap_url, "submitted": True})
 
 
 # --- indexing request -----------------------------------------------------
@@ -597,23 +621,26 @@ TOOL_REQUEST_INDEXING = {
     "name": "gsc_request_indexing",
     "description": (
         "Ask Google to (re)crawl one or more URLs via the Indexing API "
-        "(URL_UPDATED). Requires the indexing scope. Available by default. A "
-        "scope or disabled-API error stops the batch and is returned with "
-        "remediation; per-URL errors are collected."
+        "(URL_UPDATED). Requires the indexing scope. Available by default. "
+        "Accepts a single `url` (string) or `urls` (array up to "
+        f"{_MAX_INDEXING_BATCH}). A scope or disabled-API error stops the batch "
+        "and is returned with remediation; per-URL errors are collected. "
+        "`notify_time: null` on success is normal upstream behavior, not a "
+        "failure."
     ),
     "inputSchema": {
         "type": "object",
         "properties": {
+            "url": {"type": "string", "description": "Single URL convenience form. Either url or urls is required."},
             "urls": {
                 "type": "array",
                 "items": {"type": "string"},
                 "minItems": 1,
                 "maxItems": _MAX_INDEXING_BATCH,
-                "description": f"URLs to request indexing for (max {_MAX_INDEXING_BATCH}).",
+                "description": f"URLs to request indexing for (max {_MAX_INDEXING_BATCH}). Either url or urls is required.",
             },
             "site_url": {"type": "string", "description": "Informational; the Indexing API is project-scoped, not property-scoped."},
         },
-        "required": ["urls"],
         "additionalProperties": False,
     },
 }
@@ -630,9 +657,14 @@ def gsc_request_indexing(arguments, config, clients) -> dict[str, Any]:
     client, error = _require(clients)
     if error:
         return error
+    # Accept singular `url` as a convenience for AI hosts that default to it;
+    # canonical `urls` (array) wins when both are given.
     urls = arguments.get("urls") or []
+    single = arguments.get("url")
+    if not urls and single:
+        urls = [single]
     if not urls:
-        return err(ErrorCode.INVALID_INPUT, _SERVICE, "urls must be a non-empty list.", docs_url=DOCS_BASE + "gsc")
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "url (string) or urls (non-empty array) is required.", docs_url=DOCS_BASE + "gsc")
     if len(urls) > _MAX_INDEXING_BATCH:
         return err(
             ErrorCode.INVALID_INPUT,

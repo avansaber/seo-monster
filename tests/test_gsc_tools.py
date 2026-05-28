@@ -92,6 +92,48 @@ def test_search_analytics_builds_filter_groups(make_config, make_gsc_client, gsc
     ]
 
 
+def test_search_analytics_accepts_days_alias(make_config, make_gsc_client, gsc_payloads):
+    from datetime import date, timedelta
+
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_search_analytics({"days": 7}, _cfg(make_config), {"gsc": client})
+    assert result["ok"] is True
+    expected_start = (date.today() - timedelta(days=7)).isoformat()
+    assert result["data"]["start_date"] == expected_start
+    _, kw = client._service.calls[0]
+    assert kw["body"]["startDate"] == expected_start
+
+
+def test_search_analytics_accepts_limit_alias(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    gsc_tools.gsc_search_analytics({"limit": 7}, _cfg(make_config), {"gsc": client})
+    _, kw = client._service.calls[0]
+    assert kw["body"]["rowLimit"] == 7
+
+
+def test_search_analytics_start_date_wins_over_days(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    gsc_tools.gsc_search_analytics(
+        {"start_date": "2026-01-01", "end_date": "2026-01-31", "days": 365},
+        _cfg(make_config),
+        {"gsc": client},
+    )
+    _, kw = client._service.calls[0]
+    assert kw["body"]["startDate"] == "2026-01-01"
+
+
+def test_compare_periods_accepts_days_and_limit_aliases(make_config, make_gsc_client):
+    empty = {"rows": []}
+    client = make_gsc_client({"search": [empty, empty]})
+    result = gsc_tools.gsc_compare_periods(
+        {"days": 7, "limit": 5}, _cfg(make_config), {"gsc": client}
+    )
+    assert result["ok"] is True
+    # Both compare queries used the alias-derived row_limit.
+    for _, kw in client._service.calls:
+        assert kw["body"]["rowLimit"] == 5
+
+
 def test_search_analytics_missing_site_returns_invalid_input(make_config, make_gsc_client, gsc_payloads):
     client = make_gsc_client(gsc_payloads)
     result = gsc_tools.gsc_search_analytics({}, make_config(), {"gsc": client})
@@ -207,23 +249,46 @@ def test_list_sitemaps(make_config, make_gsc_client, gsc_payloads):
     assert result["data"]["sitemaps"][0]["is_sitemaps_index"] is True
 
 
-def test_submit_sitemap_ungated(make_config, make_gsc_client, gsc_payloads):
+def test_submit_sitemap_ungated_feedpath_backcompat(make_config, make_gsc_client, gsc_payloads):
     # No destructive flag set; submit must still work (un-gated write).
+    # `feedpath` still accepted as a back-compat alias.
     client = make_gsc_client(gsc_payloads)
     result = gsc_tools.gsc_submit_sitemap(
         {"feedpath": "https://www.example.com/sitemap.xml"}, _cfg(make_config), {"gsc": client}
     )
     assert result["ok"] is True
     assert result["data"]["submitted"] is True
+    assert result["data"]["sitemap_url"] == "https://www.example.com/sitemap.xml"
     op, kw = client._service.calls[0]
     assert op == "submit"
     assert kw["feedpath"] == "https://www.example.com/sitemap.xml"
 
 
-def test_submit_sitemap_requires_feedpath(make_config, make_gsc_client, gsc_payloads):
+def test_submit_sitemap_accepts_sitemap_url_alias(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_submit_sitemap(
+        {"sitemap_url": "https://www.example.com/sitemap.xml"}, _cfg(make_config), {"gsc": client}
+    )
+    assert result["ok"] is True
+    assert result["data"]["sitemap_url"] == "https://www.example.com/sitemap.xml"
+
+
+def test_submit_sitemap_sitemap_url_wins_over_feedpath(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    gsc_tools.gsc_submit_sitemap(
+        {"sitemap_url": "https://example.com/new.xml", "feedpath": "https://example.com/old.xml"},
+        _cfg(make_config),
+        {"gsc": client},
+    )
+    _, kw = client._service.calls[0]
+    assert kw["feedpath"] == "https://example.com/new.xml"
+
+
+def test_submit_sitemap_requires_one_of(make_config, make_gsc_client, gsc_payloads):
     client = make_gsc_client(gsc_payloads)
     result = gsc_tools.gsc_submit_sitemap({}, _cfg(make_config), {"gsc": client})
     assert result["error"]["code"] == "INVALID_INPUT"
+    assert "sitemap_url" in result["error"]["message"]
 
 
 # --- request_indexing -----------------------------------------------------
@@ -237,6 +302,23 @@ def test_request_indexing_ungated_success(make_config, make_gsc_client, gsc_payl
     assert result["ok"] is True
     assert result["data"]["submitted_count"] == 1
     assert result["data"]["submitted"][0]["notify_time"] == "2026-05-27T12:00:00Z"
+
+
+def test_request_indexing_accepts_singular_url_alias(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_request_indexing(
+        {"url": "https://www.example.com/new"}, _cfg(make_config), {"gsc": client}
+    )
+    assert result["ok"] is True
+    assert result["data"]["submitted_count"] == 1
+    assert result["data"]["submitted"][0]["url"] == "https://www.example.com/new"
+
+
+def test_request_indexing_requires_url_or_urls(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_request_indexing({}, _cfg(make_config), {"gsc": client})
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "url" in result["error"]["message"]
 
 
 def test_request_indexing_scope_error_stops_batch(make_config, make_gsc_client, gsc_payloads, fake_http_error):
