@@ -564,7 +564,7 @@ def gsc_inspect_url(arguments, config, clients) -> dict[str, Any]:
     if not site:
         return missing_site_error()
     try:
-        resp = client.inspect_url(url, site)
+        resp = client.inspect_url(url=url, site_url=site)
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
     return ok(_shape_inspection(url, resp.get("inspectionResult", {})))
@@ -618,7 +618,7 @@ def gsc_batch_inspect_urls(arguments, config, clients) -> dict[str, Any]:
     failed: list[dict[str, Any]] = []
     for url in urls:
         try:
-            resp = client.inspect_url(url, site)
+            resp = client.inspect_url(url=url, site_url=site)
             results.append(_shape_inspection(url, resp.get("inspectionResult", {})))
         except ApiError as exc:
             failed.append({"url": url, "code": str(exc.code), "message": exc.message})
@@ -1293,7 +1293,10 @@ def gsc_coverage_audit(arguments, config, clients) -> dict[str, Any]:
     failed: list[dict[str, Any]] = []
     for url in urls[:200]:
         try:
-            result = client.inspect_url(site, url)
+            # Round 6 §11b.i: the bug was here, with positional (site, url).
+            # client.inspect_url is now kwargs-only so this call site cannot
+            # silently regress.
+            result = client.inspect_url(url=url, site_url=site)
         except ApiError as exc:
             failed.append({"url": url, "code": exc.code.value, "message": exc.message})
             continue

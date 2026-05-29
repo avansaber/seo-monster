@@ -747,3 +747,55 @@ def test_coverage_audit_rejects_empty_urls(make_config, make_gsc_client, gsc_pay
     result = gsc_tools.gsc_coverage_audit({"urls": []}, cfg, {"gsc": client})
     assert result["ok"] is False
     assert result["error"]["code"] == "INVALID_INPUT"
+
+
+# --- Round 6 §11b.i regression guard ------------------------------------
+
+
+def test_gsc_client_inspect_url_is_kwargs_only():
+    """Round 6 §11b.i: an arg-order swap in gsc_coverage_audit returned 100%
+    NOT_FOUND on a real account because mocked tests accept any positional
+    arg. The kwargs-only signature on GscClient.inspect_url turns the bug
+    class into a TypeError. This test pins the keyword-only contract so a
+    refactor can't silently break it again."""
+    import inspect as inspect_module
+    from seo_mcp.clients.gsc import GscClient
+
+    sig = inspect_module.signature(GscClient.inspect_url)
+    params = sig.parameters
+    # 'self' plus url and site_url, all named.
+    assert set(params) == {"self", "url", "site_url"}
+    # url and site_url must be KEYWORD_ONLY.
+    assert params["url"].kind is inspect_module.Parameter.KEYWORD_ONLY, (
+        "GscClient.inspect_url(url, ...) must be keyword-only; "
+        "see Round 6 §11b.i regression"
+    )
+    assert params["site_url"].kind is inspect_module.Parameter.KEYWORD_ONLY, (
+        "GscClient.inspect_url(site_url=...) must be keyword-only; "
+        "see Round 6 §11b.i regression"
+    )
+
+
+def test_coverage_audit_passes_url_not_site_to_inspect(make_config, make_gsc_client, gsc_payloads):
+    """Round 6 §11b.i: assert each per-URL inspect call is invoked with the
+    correct URL as the ``url`` kwarg. Captures the kwargs from the recorded
+    fake-service calls; if a future refactor passes the property string
+    instead of the URL, this test fails."""
+    cfg = _cfg(make_config)
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_coverage_audit(
+        {"urls": ["https://example.com/a", "https://example.com/b"]},
+        cfg, {"gsc": client},
+    )
+    assert result["ok"] is True
+    # FakeGscService records every call as (op_name, kwargs_dict).
+    inspect_calls = [
+        call for call in client._service.calls if call[0] == "inspect"
+    ]
+    assert len(inspect_calls) == 2
+    bodies = [call[1]["body"] for call in inspect_calls]
+    # inspectionUrl field carries the URL we asked about, NOT the property.
+    assert bodies[0]["inspectionUrl"] == "https://example.com/a"
+    assert bodies[0]["siteUrl"] == SITE
+    assert bodies[1]["inspectionUrl"] == "https://example.com/b"
+    assert bodies[1]["siteUrl"] == SITE

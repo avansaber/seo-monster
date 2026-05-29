@@ -45,7 +45,15 @@ class GscClient:
             self._search.searchanalytics().query(siteUrl=site_url, body=body)
         )
 
-    def inspect_url(self, url: str, site_url: str) -> dict[str, Any]:
+    def inspect_url(self, *, url: str, site_url: str) -> dict[str, Any]:
+        """Inspect a single URL within a verified property.
+
+        Keyword-only by design: Round 6 §11b.i caught a positional argument
+        swap in ``gsc_coverage_audit`` that returned 100% NOT_FOUND on a real
+        account. Mocked tests couldn't catch it because mocks accept any
+        positional arg. Forcing kwargs at the call site turns that bug class
+        into a TypeError at import time.
+        """
         body = {"inspectionUrl": url, "siteUrl": site_url}
         return self._execute(self._search.urlInspection().index().inspect(body=body))
 
