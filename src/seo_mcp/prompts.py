@@ -101,6 +101,21 @@ PROMPTS: list[dict[str, Any]] = [
             {"name": "urls", "description": "JSON array of absolute URLs to audit. Required (at least 1).", "required": True},
         ],
     },
+    {
+        "name": "pre_deploy_check",
+        "description": (
+            "Deploy-gate workflow. For each URL: inspect_meta, "
+            "check_canonical, validate_schema, redirect_chain_audit, "
+            "mixed_content_check. Plus robots_txt_validate for the site. "
+            "The recognizable label SEO teams reach for before pushing a "
+            "production deploy. Complements technical_seo_audit (which "
+            "audits one URL deeply) and structured_data_audit (which "
+            "focuses on Rich Results). Use this for the broad batch check."
+        ),
+        "arguments": [
+            {"name": "urls", "description": "JSON array of absolute URLs to gate before deploy. Required (at least 1).", "required": True},
+        ],
+    },
 ]
 
 
@@ -292,6 +307,70 @@ def _render_structured_data_audit(args: dict[str, Any]) -> str:
     )
 
 
+def _render_pre_deploy_check(args: dict[str, Any]) -> str:
+    urls = args.get("urls") or "(none provided)"
+    # Take the first URL's host root for robots_txt_validate; if no URL or
+    # not parseable, the LLM falls back to an explicit prompt.
+    from urllib.parse import urlparse
+    host_root = "(derive the site_url from the first URL)"
+    first_url = ""
+    if isinstance(urls, list) and urls:
+        first_url = urls[0]
+    elif isinstance(urls, str) and urls != "(none provided)":
+        # Allow stringified arrays for hosts that pass JSON-encoded strings.
+        try:
+            parsed = json.loads(urls)
+            if isinstance(parsed, list) and parsed:
+                first_url = parsed[0]
+        except (ValueError, TypeError):
+            pass
+    if first_url:
+        p = urlparse(first_url)
+        if p.scheme and p.netloc:
+            host_root = f"{p.scheme}://{p.netloc}/"
+    return (
+        "# Pre-deploy check\n\n"
+        "## Arguments\n"
+        f"- urls: {urls}\n\n"
+        "## Workflow\n"
+        "Run as a deploy gate. Execute in order; one envelope per tool "
+        "invocation so the host's audit log captures every check.\n\n"
+        "  1. Call `robots_txt_validate` with "
+        f"`{{ \"site_url\": \"{host_root}\", \"probes\": [{{ "
+        "\"user_agent\": \"Googlebot\", \"url\": \"<the first URL>\" }] }}` "
+        "to confirm robots.txt does not block the deploy host and "
+        "Googlebot can crawl at least one of the URLs.\n"
+        "  2. For each URL in `urls`, call `inspect_meta` "
+        "with `{ \"url\": <the_url> }` to capture title, meta description, "
+        "canonical, OG cards, hreflang, H1 count.\n"
+        "  3. For each URL, call `check_canonical` "
+        "with `{ \"url\": <the_url> }` to verify canonical resolves to 2xx "
+        "and matches the fetched URL.\n"
+        "  4. For each URL, call `validate_schema` with `{ \"url\": "
+        "<the_url> }` to verdict any JSON-LD blocks against the Google "
+        "Rich Results required-field set.\n"
+        "  5. For each URL, call `redirect_chain_audit` with "
+        "`{ \"url\": <the_url> }` to detect chain length, protocol "
+        "downgrades, and non-2xx termini.\n"
+        "  6. For each URL, call `mixed_content_check` with "
+        "`{ \"url\": <the_url> }` (no-op for http:// URLs).\n\n"
+        "## Output\n"
+        "Produce a deploy-gate verdict. Block the deploy if ANY of:\n"
+        "- robots.txt would block Googlebot on any URL (`probes[*].allowed: "
+        "false`),\n"
+        "- a URL's canonical target returns non-2xx,\n"
+        "- a redirect chain returns a non-2xx terminus or contains a loop,\n"
+        "- mixed_content_check returns `mixed_content_found` on an "
+        "https:// URL,\n"
+        "- validate_schema returns `verdict=fail` on any JSON-LD block "
+        "where `missing_required` is non-empty (skip if the page has no "
+        "JSON-LD; that's not a deploy-blocker on its own).\n\n"
+        "Otherwise approve the deploy. Surface every check result in a "
+        "concise per-URL table the user can paste into the PR or deploy "
+        "ticket."
+    )
+
+
 _RENDERERS = {
     "post_deploy_verify": _render_post_deploy_verify,
     "weekly_review": _render_weekly_review,
@@ -299,6 +378,7 @@ _RENDERERS = {
     "migration_check": _render_migration_check,
     "technical_seo_audit": _render_technical_seo_audit,
     "structured_data_audit": _render_structured_data_audit,
+    "pre_deploy_check": _render_pre_deploy_check,
 }
 
 

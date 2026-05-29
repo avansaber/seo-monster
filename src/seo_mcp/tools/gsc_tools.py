@@ -1073,6 +1073,259 @@ def gsc_top_pages_by_query(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- v0.5.0 multi-property + lifecycle tools ------------------------------
+#
+# Four tools that reinforce moat 1 (multi-source breadth) of the plan: fleet
+# views across many GSC properties + page-level lifecycle wrappers + a
+# heuristic coverage audit. All ride on the existing GscClient; no new auth
+# or client surface.
+
+
+TOOL_PORTFOLIO_SUMMARY = {
+    "name": "gsc_portfolio_summary",
+    "description": (
+        "Multi-property fleet view. Lists every property the credentials can "
+        "see and returns a one-row summary per property (total clicks, "
+        "impressions, average CTR, average position) for the last N days. "
+        "The single fastest answer to 'how is the portfolio doing?' across "
+        "agency or multi-brand setups. Honors the v0.2.0 alias convention "
+        "(`days`) and applies the configured data_state."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "days": {"type": "integer", "minimum": 1, "maximum": 480, "description": "Lookback window. Defaults to 28."},
+            "include": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional allow-list of site_url values to include. Defaults to all visible properties.",
+            },
+            "exclude": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional deny-list of site_url values to skip.",
+            },
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_portfolio_summary(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    days = int(arguments.get("days", 28))
+    include = set(arguments.get("include") or [])
+    exclude = set(arguments.get("exclude") or [])
+
+    try:
+        sites_resp = client.list_sites()
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    end = _today().isoformat()
+    start = (_today() - timedelta(days=days)).isoformat()
+
+    properties: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for entry in sites_resp.get("siteEntry", []):
+        site = entry.get("siteUrl")
+        if not site:
+            continue
+        if include and site not in include:
+            continue
+        if site in exclude:
+            continue
+        try:
+            # Single aggregated query per property: no dimensions ->
+            # GSC returns one row of totals.
+            resp = _run_query(
+                client, site,
+                start=start, end=end,
+                dimensions=[], row_limit=1,
+                data_state=config.gsc_data_state,
+            )
+        except ApiError as exc:
+            errors.append({"site_url": site, "code": exc.code.value, "message": exc.message})
+            continue
+        rows = resp.get("rows") or []
+        if rows:
+            row = _normalize_row(rows[0])
+            properties.append({
+                "site_url": site,
+                "permission_level": entry.get("permissionLevel"),
+                "writable": entry.get("permissionLevel") in {"siteOwner", "siteFullUser"},
+                "clicks": row["clicks"],
+                "impressions": row["impressions"],
+                "ctr": row["ctr"],
+                "position": row["position"],
+            })
+        else:
+            properties.append({
+                "site_url": site,
+                "permission_level": entry.get("permissionLevel"),
+                "writable": entry.get("permissionLevel") in {"siteOwner", "siteFullUser"},
+                "clicks": 0, "impressions": 0, "ctr": 0.0, "position": None,
+            })
+
+    # Portfolio-level rollup. Position is intentionally NOT averaged at the
+    # rollup layer because impression-weighted averaging would give a more
+    # meaningful number, and the AI host can compute that from the per-row
+    # data if it wants to.
+    portfolio_totals = {
+        "clicks": sum(p["clicks"] for p in properties),
+        "impressions": sum(p["impressions"] for p in properties),
+        "property_count": len(properties),
+    }
+
+    return ok({
+        "days": days,
+        "start_date": start,
+        "end_date": end,
+        "portfolio_totals": portfolio_totals,
+        "properties": properties,
+        "errors": errors,
+    })
+
+
+def _movers_tool(name: str, direction: str, description_verb: str) -> dict[str, Any]:
+    """Tool-schema builder for the trending/decaying page wrappers. Both
+    are convenience aliases over gsc_compare_periods with dimensions=["page"]
+    and a fixed sort direction on delta_impressions."""
+    return {
+        "name": name,
+        "description": (
+            f"Pages whose impressions {description_verb} most over the last "
+            "N days vs the prior N days. Equivalent to "
+            "`gsc_compare_periods` with `dimensions=[\"page\"]`, "
+            f"`sort_by=\"delta_impressions\"`, `sort_dir=\"{direction}\"`. "
+            "Use this for lifecycle triage (find pages to invest in or "
+            "rescue)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "site_url": {"type": "string", "description": "Defaults to the configured default site."},
+                "days": {"type": "integer", "minimum": 1, "maximum": 240, "description": "Length of each window. Defaults to 28."},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 25000, "description": "Top-N to return. Defaults to 25."},
+            },
+            "additionalProperties": False,
+        },
+        "annotations": annotations(read=True),
+    }
+
+
+def _movers_handler(direction: str):
+    def handler(arguments, config, clients) -> dict[str, Any]:
+        # Translate to gsc_compare_periods arguments and dispatch directly to
+        # its handler. This keeps the underlying statistical machinery (z-score,
+        # filters, sigma_used) consistent across the three lifecycle tools.
+        days = int(arguments.get("days", 28))
+        limit = int(arguments.get("limit", 25))
+        compare_args = {
+            "site_url": arguments.get("site_url"),
+            "dimensions": ["page"],
+            "current_days": days,
+            "row_limit": 25000,  # pull broad; the compare_periods top caps after sort
+            "sort_by": "delta_impressions",
+            "sort_dir": direction,
+            "top": limit,
+        }
+        return gsc_compare_periods(compare_args, config, clients)
+    return handler
+
+
+TOOL_TRENDING_PAGES = _movers_tool("gsc_trending_pages", "desc", "grew")
+TOOL_DECAYING_PAGES = _movers_tool("gsc_decaying_pages", "asc", "fell")
+gsc_trending_pages = _movers_handler("desc")
+gsc_decaying_pages = _movers_handler("asc")
+
+
+TOOL_COVERAGE_AUDIT = {
+    "name": "gsc_coverage_audit",
+    "description": (
+        "Heuristic coverage audit. The GSC Index Coverage report is NOT "
+        "exposed in the public API, so this tool takes a user-supplied URL "
+        "list (typically pulled from a sitemap) and bulk-inspects each, then "
+        "rolls up the verdicts (PASS / PARTIAL / FAIL plus coverage_state "
+        "frequencies). Honest substitute for the Coverage UI; the AI host "
+        "can use the rollup to decide which URLs to deep-inspect."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "site_url": {"type": "string", "description": "Defaults to the configured default site."},
+            "urls": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 200,
+                "description": "Absolute URLs to audit (cap 200; chunks of 25 are inspected per GSC's URL Inspection batch limit).",
+            },
+        },
+        "required": ["urls"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def gsc_coverage_audit(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    site = resolve_site(arguments, config)
+    if not site:
+        return missing_site_error()
+    urls = arguments.get("urls") or []
+    if not urls:
+        return err(
+            ErrorCode.INVALID_INPUT, _SERVICE,
+            "urls must be a non-empty list.",
+            docs_url=DOCS_BASE + "gsc",
+        )
+
+    verdict_counts: dict[str, int] = {}
+    coverage_counts: dict[str, int] = {}
+    per_url: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for url in urls[:200]:
+        try:
+            result = client.inspect_url(site, url)
+        except ApiError as exc:
+            failed.append({"url": url, "code": exc.code.value, "message": exc.message})
+            continue
+        # Match the unwrap convention used by gsc_inspect_url: the response
+        # carries an inspectionResult wrapper that _shape_inspection expects
+        # to be passed unwrapped.
+        shaped = _shape_inspection(url, result.get("inspectionResult", {}))
+        verdict = shaped.get("verdict") or "UNKNOWN"
+        coverage = shaped.get("coverage_state") or "Unknown"
+        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+        coverage_counts[coverage] = coverage_counts.get(coverage, 0) + 1
+        per_url.append({
+            "url": url,
+            "verdict": verdict,
+            "coverage_state": coverage,
+            "indexing_state": shaped.get("indexing_state"),
+            "last_crawl_time": shaped.get("last_crawl_time"),
+            "google_canonical": shaped.get("google_canonical"),
+            "user_canonical": shaped.get("user_canonical"),
+        })
+
+    return ok({
+        "site_url": site,
+        "audited_count": len(per_url),
+        "failed_count": len(failed),
+        "verdict_counts": verdict_counts,
+        "coverage_state_counts": coverage_counts,
+        "per_url": per_url,
+        "failed": failed,
+    })
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -1091,6 +1344,11 @@ TOOLS = [
     TOOL_QUERY_GAPS,
     TOOL_NEW_QUERIES,
     TOOL_TOP_PAGES_BY_QUERY,
+    # v0.5.0 multi-property + lifecycle
+    TOOL_PORTFOLIO_SUMMARY,
+    TOOL_TRENDING_PAGES,
+    TOOL_DECAYING_PAGES,
+    TOOL_COVERAGE_AUDIT,
 ]
 
 HANDLERS = {
@@ -1109,4 +1367,9 @@ HANDLERS = {
     "gsc_query_gaps": gsc_query_gaps,
     "gsc_new_queries": gsc_new_queries,
     "gsc_top_pages_by_query": gsc_top_pages_by_query,
+    # v0.5.0 multi-property + lifecycle
+    "gsc_portfolio_summary": gsc_portfolio_summary,
+    "gsc_trending_pages": gsc_trending_pages,
+    "gsc_decaying_pages": gsc_decaying_pages,
+    "gsc_coverage_audit": gsc_coverage_audit,
 }

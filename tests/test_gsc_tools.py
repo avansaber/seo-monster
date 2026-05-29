@@ -629,3 +629,121 @@ def test_status_mapping_on_list_properties(make_config, make_gsc_client, gsc_pay
     result = gsc_tools.gsc_list_properties({}, make_config(), {"gsc": client})
     assert result["ok"] is False
     assert result["error"]["code"] == expected
+
+
+# --- v0.5.0 multi-property + lifecycle ------------------------------------
+
+
+def test_portfolio_summary_aggregates_per_property(make_config, make_gsc_client, gsc_payloads):
+    # Two visible properties; both succeed with the same one-row aggregate.
+    payloads = dict(gsc_payloads)
+    payloads["search"] = {"rows": [{"keys": [], "clicks": 100, "impressions": 5000, "ctr": 0.02, "position": 6.0}]}
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_portfolio_summary({"days": 14}, make_config(), {"gsc": client})
+    assert result["ok"] is True
+    d = result["data"]
+    assert d["days"] == 14
+    assert d["portfolio_totals"]["property_count"] == 2
+    assert d["portfolio_totals"]["clicks"] == 200  # 100 + 100
+    assert d["portfolio_totals"]["impressions"] == 10000  # 5000 + 5000
+    sites = {p["site_url"] for p in d["properties"]}
+    assert sites == {"sc-domain:example.com", "https://www.example.com/"}
+
+
+def test_portfolio_summary_include_filter(make_config, make_gsc_client, gsc_payloads):
+    payloads = dict(gsc_payloads)
+    payloads["search"] = {"rows": [{"keys": [], "clicks": 100, "impressions": 5000, "ctr": 0.02, "position": 6.0}]}
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_portfolio_summary(
+        {"days": 14, "include": ["sc-domain:example.com"]},
+        make_config(), {"gsc": client},
+    )
+    assert result["data"]["portfolio_totals"]["property_count"] == 1
+    assert result["data"]["properties"][0]["site_url"] == "sc-domain:example.com"
+
+
+def test_portfolio_summary_collects_per_property_errors(make_config, make_gsc_client, gsc_payloads, fake_http_error):
+    """Per-property failures should not poison the rollup; they go to .errors."""
+    payloads = dict(gsc_payloads)
+    payloads["search"] = [
+        # first property: success
+        {"rows": [{"keys": [], "clicks": 50, "impressions": 1000, "ctr": 0.05, "position": 4.0}]},
+        # second property: 403
+        fake_http_error(403, "no access"),
+    ]
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_portfolio_summary({"days": 7}, make_config(), {"gsc": client})
+    d = result["data"]
+    assert len(d["properties"]) == 1
+    assert len(d["errors"]) == 1
+    assert d["errors"][0]["code"] == "AUTH_INVALID"
+
+
+def test_trending_pages_translates_to_compare_periods(make_config, make_gsc_client, gsc_payloads):
+    """The trending wrapper should hit compare_periods with dimensions=["page"],
+    sort_dir=desc, top=limit. We verify by checking the returned filters_applied."""
+    payloads = dict(gsc_payloads)
+    payloads["search"] = {"rows": [{"keys": ["https://example.com/a"], "clicks": 50, "impressions": 800, "ctr": 0.06, "position": 5.0}]}
+    cfg = _cfg(make_config)
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_trending_pages({"days": 14, "limit": 5}, cfg, {"gsc": client})
+    assert result["ok"] is True
+    filters = result["data"]["filters_applied"]
+    assert filters["sort_by"] == "delta_impressions"
+    assert filters["sort_dir"] == "desc"
+    assert filters["top"] == 5
+
+
+def test_decaying_pages_uses_ascending_sort(make_config, make_gsc_client, gsc_payloads):
+    payloads = dict(gsc_payloads)
+    payloads["search"] = {"rows": [{"keys": ["https://example.com/a"], "clicks": 50, "impressions": 800, "ctr": 0.06, "position": 5.0}]}
+    cfg = _cfg(make_config)
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_decaying_pages({"days": 28}, cfg, {"gsc": client})
+    filters = result["data"]["filters_applied"]
+    assert filters["sort_dir"] == "asc"
+    assert filters["sort_by"] == "delta_impressions"
+
+
+def test_coverage_audit_rolls_up_verdicts(make_config, make_gsc_client, gsc_payloads):
+    """Each URL is inspected; the rollup tallies verdict_counts and
+    coverage_state_counts. Three URLs all pass."""
+    cfg = _cfg(make_config)
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_coverage_audit(
+        {"urls": ["https://example.com/a", "https://example.com/b", "https://example.com/c"]},
+        cfg, {"gsc": client},
+    )
+    assert result["ok"] is True
+    d = result["data"]
+    assert d["audited_count"] == 3
+    assert d["failed_count"] == 0
+    assert d["verdict_counts"]["PASS"] == 3
+    assert "Submitted and indexed" in d["coverage_state_counts"]
+
+
+def test_coverage_audit_collects_per_url_failures(make_config, make_gsc_client, gsc_payloads, fake_http_error):
+    """A per-URL failure should not fail the whole call; it goes to .failed."""
+    payloads = dict(gsc_payloads)
+    payloads["inspect"] = [
+        gsc_payloads["inspect"],
+        fake_http_error(403),
+    ]
+    cfg = _cfg(make_config)
+    client = make_gsc_client(payloads)
+    result = gsc_tools.gsc_coverage_audit(
+        {"urls": ["https://example.com/a", "https://example.com/dead"]},
+        cfg, {"gsc": client},
+    )
+    d = result["data"]
+    assert d["audited_count"] == 1
+    assert d["failed_count"] == 1
+    assert d["failed"][0]["url"] == "https://example.com/dead"
+
+
+def test_coverage_audit_rejects_empty_urls(make_config, make_gsc_client, gsc_payloads):
+    cfg = _cfg(make_config)
+    client = make_gsc_client(gsc_payloads)
+    result = gsc_tools.gsc_coverage_audit({"urls": []}, cfg, {"gsc": client})
+    assert result["ok"] is False
+    assert result["error"]["code"] == "INVALID_INPUT"
