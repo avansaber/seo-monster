@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SEOMonster icon">
+  <title>SEOMonster</title>
+  <rect width="256" height="256" rx="48" fill="#0E1726"/>
+  <g transform="translate(40 56)">
+    <path d="M8 12 L8 132 Q8 144 20 144 L156 144 Q168 144 168 132 L168 12 L138 42 L118 18 L88 48 L58 18 L38 42 Z"
+          fill="#2BD9A8"/>
+    <circle cx="56" cy="78" r="11" fill="#0E1726"/>
+    <circle cx="120" cy="78" r="11" fill="#0E1726"/>
+    <circle cx="60" cy="74" r="3.5" fill="#F5F7FA"/>
+    <circle cx="124" cy="74" r="3.5" fill="#F5F7FA"/>
+    <path d="M48 112 L60 120 L78 110 L96 120 L114 110 L128 120" stroke="#0E1726" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>

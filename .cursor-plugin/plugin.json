@@ -1,0 +1,33 @@
+{
+  "name": "seomonster",
+  "displayName": "SEOMonster",
+  "version": "0.5.0",
+  "description": "User-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, Chrome UX Report, and a stdlib HTTP client for technical-SEO checks.",
+  "author": {
+    "name": "AvanSaber Inc.",
+    "email": "support@avansaber.com",
+    "url": "https://seomonster.avansaber.com"
+  },
+  "license": "MIT",
+  "homepage": "https://seomonster.avansaber.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avansaber/seo-monster"
+  },
+  "keywords": [
+    "seo",
+    "mcp",
+    "search-console",
+    "ga4",
+    "pagespeed",
+    "cloudflare",
+    "indexnow",
+    "crux",
+    "technical-seo",
+    "claude",
+    "cursor",
+    "ai"
+  ],
+  "logo": "assets/logo.svg",
+  "category": "Developer Tools"
+}

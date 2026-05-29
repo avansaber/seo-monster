@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "seomonster": {
+      "command": "uvx",
+      "args": ["seo-monster"],
+      "env": {
+        "SEO_MCP_GOOGLE_OAUTH_CLIENT": "${SEO_MCP_GOOGLE_OAUTH_CLIENT}",
+        "SEO_MCP_GOOGLE_TOKEN": "${SEO_MCP_GOOGLE_TOKEN}",
+        "SEO_MCP_GSC_DEFAULT_SITE": "${SEO_MCP_GSC_DEFAULT_SITE}",
+        "SEO_MCP_GA4_PROPERTY_ID": "${SEO_MCP_GA4_PROPERTY_ID}",
+        "PSI_API_KEY": "${PSI_API_KEY}",
+        "CF_API_TOKEN": "${CF_API_TOKEN}",
+        "CF_ZONE": "${CF_ZONE}",
+        "SEO_MCP_INDEXNOW_KEY": "${SEO_MCP_INDEXNOW_KEY}",
+        "SEO_MCP_INDEXNOW_KEY_LOCATION": "${SEO_MCP_INDEXNOW_KEY_LOCATION}"
+      }
+    }
+  }
+}

@@ -3,6 +3,8 @@
 !package.json
 !manifest.json
 !server.json
+!.cursor-plugin/plugin.json
+!.mcp.json
 sa.json
 client_secret*.json
 token*.json
