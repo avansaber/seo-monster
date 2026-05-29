@@ -13,6 +13,82 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.5.0] - 2026-05-28
+
+The multi-property + lifecycle sprint. Surface grows to 45 tools and 7
+named workflow prompts. No new auth surface; the four new tools reuse
+the existing `GscClient`, the new prompt chains tools we already
+shipped. No breaking changes for v0.4.x consumers; everything is
+additive.
+
+### Added
+
+- **Four new GSC tools (multi-property + lifecycle theme):**
+  - **`gsc_portfolio_summary(days, include?, exclude?)`** — multi-property
+    fleet view. Lists every property the credentials can see, runs one
+    aggregated query per property (clicks, impressions, CTR, position
+    over the last N days), and returns per-property rows plus a
+    portfolio-level rollup. Honors optional `include` and `exclude`
+    allow/deny lists.
+    **(validate)** Pass `days=14` against a real account with multiple
+    GSC properties; confirm `portfolio_totals.property_count` matches
+    the visible count and each row has the expected metrics.
+  - **`gsc_trending_pages(days, limit)`** — pages whose impressions grew
+    most over the last N days vs the prior N days. Wrapper on
+    `gsc_compare_periods` with `dimensions=["page"]`,
+    `sort_by="delta_impressions"`, `sort_dir="desc"`.
+    **(validate)** Pass `days=14, limit=10` against a real property;
+    confirm `filters_applied.sort_dir == "desc"` and rows are ordered by
+    descending `delta_impressions`.
+  - **`gsc_decaying_pages(days, limit)`** — same wrapper, ascending
+    sort. Pages whose impressions fell most.
+    **(validate)** Pass `days=14, limit=10`; confirm
+    `filters_applied.sort_dir == "asc"`.
+  - **`gsc_coverage_audit(urls, site_url?)`** — heuristic coverage
+    audit. The GSC Index Coverage report is not exposed in the public
+    API, so this tool takes a user-supplied URL list (typically from a
+    sitemap), bulk-inspects each, and rolls up `verdict_counts` and
+    `coverage_state_counts`. Cap 200 URLs per call.
+    **(validate)** Pass a list of 5-10 URLs from a real site; confirm
+    `verdict_counts` and `coverage_state_counts` populate and per-URL
+    failures (e.g. URLs outside the property's scope) land in
+    `.failed` instead of poisoning the call.
+- **One new prompt:** **`pre_deploy_check(urls)`** — recognizable
+  deploy-gate label. Runs `robots_txt_validate` against the host root,
+  then for each URL: `inspect_meta`, `check_canonical`, `validate_schema`,
+  `redirect_chain_audit`, `mixed_content_check`. Output is a deploy-gate
+  verdict (block on critical issues, approve otherwise) plus a per-URL
+  table. Complements `technical_seo_audit` (one URL deep) and
+  `structured_data_audit` (Rich Results focus) by covering the broad
+  batch case.
+  **(validate)** In Claude Desktop, invoke `/pre_deploy_check` with two
+  staging URLs and confirm all 6 tool calls fire in order followed by
+  the deploy-gate verdict.
+- **`llms-install.md`** at the repo root. Short-form install for AI
+  coding agents (Cline, Cursor, Codex) per the `llms-install.md`
+  convention. Lists env vars, OAuth pre-flight CLI, and the
+  `system_status` discovery convention.
+
+### Changed
+
+- **`DOCS_BASE` flips back to the brand subdomain.** Every error
+  envelope's `docs_url` now points at `https://seomonster.avansaber.com#anchor`
+  (was: GitHub README anchors as a v0.4.0 interim per Round-5
+  §10c.iv). The subdomain is now provisioned at the DNS layer; the
+  full marketing site content lands in parallel with this release.
+- **HTTP client User-Agent** bumped from `SEOMonster/0.4.0 (+...)` to
+  `SEOMonster/0.5.0 (+...)`.
+- **`manifest.json`** `tools[]` array extended with the 4 new GSC tools.
+
+### Tests
+
+- 314 passing (up from 306 in `0.4.0`). 8 new offline tests in
+  `test_gsc_tools.py` covering the 4 new tools: portfolio aggregation,
+  include filter, per-property error collection, trending sort
+  direction, decaying sort direction, coverage rollup, coverage
+  per-URL failures, coverage empty-URLs guard. All offline; mock at
+  the client seam.
+
 ## [0.4.0] - 2026-05-28
 
 The structured-data + cross-site-consistency sprint. Surface grows to 41

@@ -35,9 +35,9 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-41 tools, grouped by service. All return the same result envelope (see
+45 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
-is configured. The server also publishes six named [workflow prompts](#workflow-prompts).
+is configured. The server also publishes seven named [workflow prompts](#workflow-prompts).
 
 **Cross-service**
 - `system_status` - which services are configured/reachable, the Google auth
@@ -45,7 +45,7 @@ is configured. The server also publishes six named [workflow prompts](#workflow-
   and the list of registered prompts.
 
 <a name="gsc"></a>
-**Google Search Console (14)**
+**Google Search Console (18)**
 
 *Workhorses*
 - `gsc_list_properties` - properties the credentials can see, with permission
@@ -74,6 +74,23 @@ is configured. The server also publishes six named [workflow prompts](#workflow-
   impressions. Emerging topics.
 - `gsc_top_pages_by_query` - which pages rank for a specific query. The
   cannibalization audit input.
+
+*Multi-property + lifecycle (v0.5.0)*
+- `gsc_portfolio_summary(days, include?, exclude?)` - multi-property fleet
+  view. Per-property one-row summary (clicks, impressions, CTR, position)
+  for the last N days, plus a portfolio-level rollup. Honors optional
+  `include` / `exclude` filters. The single fastest answer to "how is the
+  whole portfolio doing?" across agency or multi-brand setups.
+- `gsc_trending_pages(days, limit)` - pages whose impressions grew most over
+  the last N days vs the prior N days. Wrapper on `gsc_compare_periods` with
+  `dimensions=["page"], sort_by="delta_impressions", sort_dir="desc"`.
+- `gsc_decaying_pages(days, limit)` - same wrapper, ascending sort. Pages
+  to rescue.
+- `gsc_coverage_audit(urls, site_url?)` - heuristic coverage audit. The GSC
+  Index Coverage report is not exposed in the API; this tool takes a user-
+  supplied URL list (typically pulled from a sitemap) and bulk-inspects
+  each, then rolls up verdicts (PASS / PARTIAL / FAIL) and coverage_state
+  frequencies.
 
 <a name="ga4"></a>
 **Google Analytics 4 (4)**
@@ -164,7 +181,7 @@ hosts can decide what to auto-approve and what to confirm.
 
 ## Workflow prompts
 
-The server publishes six named MCP prompts (via `prompts/list` /
+The server publishes seven named MCP prompts (via `prompts/list` /
 `prompts/get`) that chain the granular tools into common SEO workflows. Hosts
 that surface prompts (Claude Desktop's slash menu, Cursor's command palette,
 Cline's prompt picker) advertise them automatically.
@@ -177,6 +194,7 @@ Cline's prompt picker) advertise them automatically.
 | `migration_check` | `urls`, `site_url?` | `gsc_batch_inspect_urls` -> `gsc_list_sitemaps` -> canonical-agreement table -> remediation list |
 | `technical_seo_audit` | `url` | `inspect_meta` -> `check_canonical` -> `redirect_chain_audit` -> `mixed_content_check` -> `robots_txt_validate` -> `sitemap_health` -> severity-ranked triage list |
 | `structured_data_audit` | `urls` | per-URL `inspect_schema` -> `validate_schema` -> (if 2+ URLs) `hreflang_consistency_check` -> per-URL + cross-URL report |
+| `pre_deploy_check` | `urls` | `robots_txt_validate` -> per-URL `inspect_meta` -> `check_canonical` -> `validate_schema` -> `redirect_chain_audit` -> `mixed_content_check` -> deploy-gate verdict (block on critical issues, approve otherwise) |
 
 Why prompts and not megatools: composability. A failed step inside a megatool
 poisons the megatool's envelope and the host loses the ability to retry just
