@@ -47,6 +47,13 @@ PRIVACY.md
 # Brand and submission drafts (built in marketing/, not part of the server)
 marketing/
 
+# Local-only planning / submission staging. Round 6 §11b.ii caught this
+# entry missing; without it, local `npx @anthropic-ai/mcpb pack` leaked
+# .private/cursor-submission/* into the bundle. CI checkouts never see
+# .private/ (it's gitignored), so the published v0.5.0 .mcpb was clean,
+# but a developer's local pack would not have been.
+.private/
+
 # OS noise
 .DS_Store
 Thumbs.db

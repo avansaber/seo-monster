@@ -13,6 +13,87 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.5.1] - 2026-05-28
+
+Patch release closing the two ship-blockers and one partial-fix
+identified by the external Round-6 validator (`FEEDBACK.md` §11i pre-tag
+checklist). No new features, no surface change. 45 tools / 7 prompts
+unchanged.
+
+### Fixed
+
+- **`gsc_coverage_audit` was unusable on real properties (Round 6
+  §11b.i).** The handler called `client.inspect_url(site, url)` with
+  the positional arguments swapped; the underlying
+  `GscClient.inspect_url(url, site_url)` interpreted the property URL
+  as the inspection URL, returning `NOT_FOUND` for every URL. Mocked
+  tests in `test_gsc_tools.py` could not catch this because positional
+  mock signatures accept anything.
+  **Fix:** call site corrected to use keywords. To prevent this bug
+  class from recurring, `GscClient.inspect_url` is now **keyword-only**
+  (`def inspect_url(self, *, url, site_url)`). All three handlers
+  (`gsc_inspect_url`, `gsc_batch_inspect_urls`, `gsc_coverage_audit`)
+  updated to the kwargs form.
+  **Test:** `test_gsc_client_inspect_url_is_kwargs_only` pins the
+  keyword-only contract via `inspect.signature` so a future refactor
+  cannot silently remove the `*,`. `test_coverage_audit_passes_url_not_site_to_inspect`
+  asserts the per-URL call body's `inspectionUrl` field carries the
+  URL, not the property.
+  **(validate)** Call `gsc_coverage_audit` with a real `site_url` and
+  5-10 URLs you know are indexed; confirm `verdict_counts` and
+  `coverage_state_counts` populate and `audited_count == len(urls)`
+  with empty `failed`.
+
+- **`.mcpbignore` was missing `.private/` (Round 6 §11b.ii).** Local
+  `npx @anthropic-ai/mcpb pack` runs against the working tree, which
+  has access to `.private/cursor-submission/*` (gitignored but
+  present). The shipped v0.5.0 `.mcpb` on GitHub was clean because CI
+  checks out from git (never sees `.private/`), but a developer's
+  local pack would have leaked 7 files including draft submission
+  bodies and the email template. **Fix:** `.private/` added to
+  `.mcpbignore`, alongside the existing `marketing/` entry.
+  **(validate)** Run `npx @anthropic-ai/mcpb pack` against the
+  working tree at this commit; verify the produced bundle contains
+  no `.private/`, `marketing/`, or `*.md` planning paths.
+
+- **Round 5 §10a.v IndexNow doc partial close (Round 6 §11d.i).** The
+  v0.4.0 fix added Claude Desktop install-form labels and the full
+  Auth section setup steps. The Tools-section blurb for
+  `indexnow_submit` / `indexnow_bulk_submit` still didn't mention
+  `SEO_MCP_INDEXNOW_KEY_LOCATION` or cross-reference the setup
+  section. **Fix:** Tools section now links into the Auth IndexNow
+  section for the full setup story, and calls out
+  `SEO_MCP_INDEXNOW_KEY_LOCATION` as the env var to set when a CDN
+  rewrites `/key.txt` paths. The Auth section already had key
+  generation, file format rules, same-host constraint, and a
+  common-errors triage table from v0.4.0; no changes there.
+
+### Changed
+
+- **CI release workflow** (`release.yml`) now has a defense-in-depth
+  scan that rejects any unpacked artifact containing `.private/`,
+  `marketing/`, `PLAN.md`, `RESEARCH-AND-PROPOSAL.md`,
+  `LISTINGS-PLAN.md`, `EMAIL_DRAFT.md`, or `SUBMISSION_GUIDE.md`
+  paths. The existing credential-pattern scan stays in place. This
+  catches the bug class behind §11b.ii even if `.mcpbignore` or the
+  `pyproject.toml` sdist-exclude block drift again in the future.
+- HTTP client User-Agent bumped from `SEOMonster/0.5.0` to
+  `SEOMonster/0.5.1`.
+
+### Tests
+
+- 316 passing (up from 314 in `0.5.0`; +2 new tests:
+  `test_gsc_client_inspect_url_is_kwargs_only` and
+  `test_coverage_audit_passes_url_not_site_to_inspect`).
+
+### Not changed
+
+- Tool count: **45** (unchanged from v0.5.0).
+- Prompt count: **7** (unchanged from v0.5.0).
+- No tools renamed or removed.
+- API stability: existing handlers still accept the same arguments;
+  this is a pure-internal client refactor invisible to MCP callers.
+
 ## [0.5.0] - 2026-05-28
 
 The multi-property + lifecycle sprint. Surface grows to 45 tools and 7

@@ -110,7 +110,27 @@ jobs:
             echo "LEAK: real credential pattern found in an artifact"
             exit 1
           fi
-          echo "all three artifacts CLEAN"
+          # Round 6 §11b.ii companion fix: defense-in-depth against private
+          # planning / submission staging leaking into any artifact, even if
+          # .mcpbignore or sdist-exclude drift again in the future. CI is
+          # already protected because git ls-tree never sees gitignored
+          # files; this is the safety net for any artifact that bypassed
+          # that path (e.g. if pyproject's sdist-exclude were ever removed).
+          forbidden_paths=$(find "$tmp" \( \
+            -path '*/.private/*' \
+            -o -path '*/marketing/*' \
+            -o -name 'PLAN.md' \
+            -o -name 'RESEARCH-AND-PROPOSAL.md' \
+            -o -name 'LISTINGS-PLAN.md' \
+            -o -name 'EMAIL_DRAFT.md' \
+            -o -name 'SUBMISSION_GUIDE.md' \
+            \) 2>/dev/null)
+          if [ -n "$forbidden_paths" ]; then
+            echo "LEAK: private planning / submission paths found in an artifact:"
+            echo "$forbidden_paths"
+            exit 1
+          fi
+          echo "all three artifacts CLEAN (credentials + private paths)"
 
       - name: Upload artifacts to the GitHub release
         # Creates the release if it does not exist. Does not overwrite the

@@ -122,10 +122,13 @@ is configured. The server also publishes seven named [workflow prompts](#workflo
 - `indexnow_submit(url)` - submit a single URL to Bing, Yandex, Naver, Seznam,
   Yep. Complements (does not replace) `gsc_request_indexing`, which only talks
   to Google. Requires `SEO_MCP_INDEXNOW_KEY` plus a verification file at
-  `https://<your-host>/<key>.txt`.
+  `https://<your-host>/<key>.txt` (see [IndexNow setup](#indexnow) for the full
+  key + file format + same-host rules).
 - `indexnow_bulk_submit(urls)` - up to 10,000 URLs sharing one host in a
   single POST. Mixed-host batches are rejected client-side with
-  `INVALID_INPUT` before any network call.
+  `INVALID_INPUT` before any network call. The `SEO_MCP_INDEXNOW_KEY_LOCATION`
+  env var overrides the default verification-file URL when your CDN rewrites
+  `/key.txt` paths.
 
 <a name="technical"></a>
 **Technical SEO (7, v0.3.0)** - no credentials needed; built-in HTTP client.
