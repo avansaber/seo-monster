@@ -15,13 +15,16 @@ from enum import StrEnum
 from typing import Any
 
 
-# Base for the ``docs_url`` field. Anchors map to documentation sections of
-# the brand site at ``seomonster.avansaber.com``. v0.4.0 routed this at the
-# GitHub README as an interim (Round-5 §10c.iv) while the brand subdomain
-# was unavailable; v0.5.0 flips back to the canonical brand URL now that
-# the subdomain is provisioned. README anchors remain in place as a
-# documentation fallback should a user view source.
-DOCS_BASE = "https://seomonster.avansaber.com#"
+# Base for the ``docs_url`` field. Anchors map to documentation sections.
+# History: v0.4.0 routed this at the GitHub README as an interim (Round-5
+# §10c.iv); v0.5.0 flipped to the brand subdomain. But the live brand site
+# is a marketing page with none of these anchor targets (#auth, #cf, #psi,
+# ...), so every remediation link landed at the page top (FEEDBACK §10c.iv,
+# re-confirmed 2026-05-30). v0.6.0 routes back to the GitHub README, which
+# carries an explicit ``<a name="...">`` anchor for every value below
+# (auth, configuration, destructive-mode, gsc, psi, cf, indexnow, technical,
+# crux), so each docs_url resolves to the right section.
+DOCS_BASE = "https://github.com/avansaber/seo-monster/blob/main/README.md#"
 
 
 class ErrorCode(StrEnum):

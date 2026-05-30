@@ -54,6 +54,10 @@ marketing/
 # but a developer's local pack would not have been.
 .private/
 
+# Claude Code conversation exports (dated YYYY-MM-DD-HHMMSS-*.txt). May quote
+# secrets/private planning; gitignored too, but a local pack could still see them.
+20??-??-??-*.txt
+
 # OS noise
 .DS_Store
 Thumbs.db

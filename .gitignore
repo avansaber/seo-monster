@@ -34,6 +34,10 @@ PLAN.md
 marketing/
 .private/
 
+# Claude Code conversation exports (dated YYYY-MM-DD-HHMMSS-*.txt). These can
+# quote secrets and private planning content; never commit them.
+20??-??-??-*.txt
+
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/

@@ -30,7 +30,6 @@ from mcp.types import (
     Tool,
 )
 
-from . import __version__
 from . import prompts as prompts_module
 from .clients.cloudflare import build_cf_client
 from .clients.crux import build_crux_client
@@ -285,9 +284,10 @@ def main() -> None:
     """Console-script entry point.
 
     With no arguments, starts the MCP server over stdio. With a recognized
-    subcommand, dispatches to that. Currently supported subcommand:
+    subcommand, dispatches to that. Currently supported subcommands:
 
-        seo-monster auth   - run the one-time Google OAuth consent flow.
+        seo-monster auth    - run the one-time Google OAuth consent flow.
+        seo-monster setup   - interactively configure CF/PSI/IndexNow + defaults.
 
     The subcommand dispatch is intentionally simple (positional argv[1]) so
     we never confuse an MCP host that launches the server with no extra
@@ -298,6 +298,9 @@ def main() -> None:
     if argv and argv[0] == "auth":
         from .cli import auth_main
         sys.exit(auth_main(argv[1:]))
+    if argv and argv[0] == "setup":
+        from .cli import setup_main
+        sys.exit(setup_main(argv[1:]))
     asyncio.run(_async_main())
 
 

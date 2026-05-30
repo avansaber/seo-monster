@@ -24,6 +24,12 @@ DATA_STATE_DEFAULT = "all"
 _DATA_STATES = {"all", "final"}
 _TRUTHY = {"true", "1", "yes", "on"}
 
+# Perms for the config file written by ``seo-monster setup``. The file can hold
+# secrets (CF token, PSI key, IndexNow key), so it is created user-only, like
+# the OAuth token cache. Mirrors clients/google_auth.py._write_token.
+_CONFIG_DIR_MODE = 0o700
+_CONFIG_FILE_MODE = 0o600
+
 
 @dataclass(frozen=True)
 class GoogleAuthConfig:
@@ -90,8 +96,7 @@ def _load_file(config_path: str | None, env: Mapping[str, str]) -> tuple[dict[st
     ``SEO_MCP_CONFIG`` env, then the default location. Returns the parsed dict
     (empty if no readable file) and the path actually read (or None).
     """
-    candidate = config_path or env.get("SEO_MCP_CONFIG") or DEFAULT_CONFIG_PATH
-    path = Path(candidate).expanduser()
+    path = resolve_config_path(env, config_path)
     if not path.is_file():
         return {}, None
     try:
@@ -174,3 +179,97 @@ def load_config(
         allow_destructive=allow_destructive,
         source_path=source_path,
     )
+
+
+def resolve_config_path(
+    env: Mapping[str, str] | None = None,
+    config_path: str | None = None,
+) -> Path:
+    """The TOML config path the server reads / ``seo-monster setup`` writes.
+
+    Single source of truth shared by ``_load_file`` and the setup CLI so the
+    write target can never drift from the read target. Resolution order:
+    explicit ``config_path`` arg, then ``SEO_MCP_CONFIG`` env, then the default.
+    """
+    env = os.environ if env is None else env
+    candidate = config_path or env.get("SEO_MCP_CONFIG") or DEFAULT_CONFIG_PATH
+    return Path(candidate).expanduser()
+
+
+def read_config_toml(path: Path) -> dict[str, Any]:
+    """Parse an existing config TOML into a raw dict (empty if absent/unreadable).
+
+    Used by ``seo-monster setup`` to pre-fill current values so a re-run that
+    skips a field keeps the existing value rather than wiping it.
+    """
+    if not path.is_file():
+        return {}
+    try:
+        with path.open("rb") as fh:
+            return tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def _toml_escape(value: str) -> str:
+    """Escape a string for a TOML basic (double-quoted) string. Our values are
+    tokens / paths / ids / hostnames, so only backslash and double-quote need
+    handling; newlines are stripped by the caller (single-line prompts)."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _toml_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return f'"{_toml_escape(str(value))}"'
+
+
+def write_config_toml(path: Path, sections: Mapping[str, Mapping[str, Any]]) -> Path:
+    """Write ``sections`` to ``path`` as TOML with locked-down perms (0600 file,
+    0700 dir), mirroring the OAuth token-cache hardening.
+
+    ``sections`` maps a TOML table name (e.g. "cloudflare") to a flat dict of
+    string/bool values. Empty values (None or "") are dropped, and a table with
+    no surviving values is omitted entirely, so a partial setup never writes
+    empty stanzas. The output round-trips through ``tomllib`` (and therefore
+    ``load_config``). Returns the written path.
+    """
+    lines = [
+        "# SEOMonster configuration, written by `seo-monster setup`.",
+        "# This file may hold secrets; it is created with 0600 permissions.",
+        "# Environment variables override anything set here.",
+        "",
+    ]
+    for table, kv in sections.items():
+        items = {
+            k: v
+            for k, v in kv.items()
+            if v is not None and not (isinstance(v, str) and v.strip() == "")
+        }
+        if not items:
+            continue
+        lines.append(f"[{table}]")
+        for key, value in items.items():
+            scalar = value.strip() if isinstance(value, str) else value
+            lines.append(f"{key} = {_toml_scalar(scalar)}")
+        lines.append("")
+    content = "\n".join(lines).rstrip() + "\n"
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Best-effort chmod: silently skipped where POSIX modes don't apply (Windows).
+    try:
+        os.chmod(path.parent, _CONFIG_DIR_MODE)
+    except (OSError, NotImplementedError):
+        pass
+    path.write_text(content)
+    try:
+        os.chmod(path, _CONFIG_FILE_MODE)
+    except (OSError, NotImplementedError):
+        pass
+    return path
+
+
+def config_file_mode() -> int:
+    """Expose the expected file mode for tests."""
+    return _CONFIG_FILE_MODE

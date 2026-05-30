@@ -33,7 +33,7 @@ from ..errors import ErrorCode
 from .errors import ApiError
 
 
-_USER_AGENT = "SEOMonster/0.5.1 (+https://seomonster.avansaber.com)"
+_USER_AGENT = "SEOMonster/0.6.0 (+https://seomonster.avansaber.com)"
 _DEFAULT_TIMEOUT = 20
 _DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_REDIRECTS = 10

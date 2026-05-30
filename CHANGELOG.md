@@ -13,6 +13,51 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.6.0] - 2026-05-30
+
+Setup-CLI release. Adds an interactive `seo-monster setup` so MCP host configs
+need no secrets, and repoints error-envelope `docs_url` links to the GitHub
+README (which carries the anchors those links target). 45 tools / 7 prompts
+unchanged.
+
+### Added
+
+- **`seo-monster setup`** - interactive subcommand that collects the Cloudflare
+  token, PageSpeed Insights key, IndexNow key, and the default GSC / GA4
+  properties, validates what it can against the upstream APIs, and writes them
+  to `~/.config/seo-mcp/config.toml` with `0600` permissions (parent dir
+  `0700`). A rejected credential is not written; an unreachable (offline) one
+  is saved with a note. Re-runnable: blank answers keep existing values.
+  Environment variables still override the file. Google OAuth stays on the
+  separate `seo-monster auth` flow.
+  **(validate)** Run `seo-monster setup`; enter a clearly-bad Cloudflare token:
+  it is reported rejected and not persisted to the file. Re-run and skip a
+  field: the prior value survives. With the file written, an env var set in the
+  host (e.g. `CF_API_TOKEN`) still wins at runtime. Piping no input (non-TTY)
+  exits cleanly with code 1, not a traceback.
+
+### Changed
+
+- README documents `seo-monster setup` as the recommended credential path;
+  per-service environment variables are framed as the manual / CI alternative.
+- `config.py` exposes `resolve_config_path` as the single source of truth for
+  the config-file location, shared by the loader and the setup writer.
+
+### Fixed
+
+- Error-envelope `docs_url` links pointed at `seomonster.avansaber.com#<anchor>`,
+  but the live site has none of those anchor targets, so every remediation link
+  landed at the page top (FEEDBACK Round-5 §10c.iv). `docs_url` now points at
+  the GitHub README, which carries an explicit `<a name>` anchor for each value.
+  **(validate)** Trigger any `INVALID_INPUT` (e.g. `psi_analyze` with no `url`):
+  the `docs_url` resolves to the matching README section.
+
+### Internal
+
+- Removed an unused `__version__` import in `server.py`.
+- `.gitignore` / `.mcpbignore` / sdist exclude now drop dated conversation-export
+  `.txt` files, preventing accidental transcript or secret leaks.
+
 ## [0.5.1] - 2026-05-28
 
 Patch release closing the two ship-blockers and one partial-fix

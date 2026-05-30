@@ -345,6 +345,29 @@ The four services authenticate independently. Configure only the ones you use;
 a tool for an unconfigured service returns a clear `AUTH_MISSING` error rather
 than failing the server.
 
+### Quick setup (recommended): `seo-monster setup`
+
+Run `seo-monster setup` once from a terminal. It interactively collects your
+Cloudflare token, PageSpeed Insights key, IndexNow key, and the default GSC and
+GA4 properties, validates what it can against the live APIs, and writes them to
+`~/.config/seo-mcp/config.toml` with `0600` permissions. Your MCP host config
+then needs no secrets in it:
+
+```json
+{ "command": "uvx", "args": ["seo-monster"] }
+```
+
+Two things `setup` does not do, by design:
+
+- **Google OAuth** still uses the separate one-time browser step. After `setup`,
+  run `seo-monster auth` to complete Google consent (see the next section).
+- It never overrides environment variables. Anything set in your host's `env`
+  block still wins over the config file, so CI and Docker keep using env vars.
+
+`setup` is re-runnable: existing values are shown as defaults and kept when you
+leave a field blank. The sections below document the per-service env vars, which
+are what `setup` writes for you and what CI pipelines can set directly.
+
 ### Google (Search Console + Analytics 4) - OAuth, recommended
 
 This is the lower-friction path: no Cloud service account, no per-property email
@@ -519,7 +542,8 @@ gated; they are routine, low-blast-radius SEO tasks.
 ## Configuration
 
 Resolution is environment-first, with a TOML file fallback. Environment always
-wins.
+wins. The config file is normally written for you by `seo-monster setup` (with
+`0600` permissions); you can also write it by hand or set the env vars below.
 
 | Env var                          | Service | Purpose                                          |
 |----------------------------------|---------|--------------------------------------------------|
