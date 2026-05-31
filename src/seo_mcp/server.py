@@ -43,6 +43,7 @@ from .errors import ErrorCode, err
 from .tools import (
     budget_tools,
     cf_tools,
+    content_tools,
     crux_tools,
     ga4_tools,
     gsc_tools,
@@ -86,6 +87,8 @@ _TOOL_DEFS: list[dict[str, Any]] = [
     *hreflang_tools.TOOLS,
     *linkgraph_tools.TOOLS,
     *budget_tools.TOOLS,
+    # v0.7 content intelligence (Layer 1)
+    *content_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -105,6 +108,7 @@ _HANDLERS: dict[str, Any] = {
     **hreflang_tools.HANDLERS,
     **linkgraph_tools.HANDLERS,
     **budget_tools.HANDLERS,
+    **content_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.
