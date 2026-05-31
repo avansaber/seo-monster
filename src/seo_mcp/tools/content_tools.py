@@ -166,19 +166,56 @@ def _query_of(row: dict[str, Any]) -> str:
     return keys[0] if keys else ""
 
 
-def _ga4_landing_value(clients: Mapping[str, Any], config: Any, days: int) -> dict[str, float] | None:
+# Discrete reasons the GA4 value multiplier did or did not run, so the caller
+# can tell "GA4 not configured" from "GA4 configured but no organic conversions"
+# (FEEDBACK v0.7.3 §17e.i). Carried in filters_applied.ga4_value_status.
+GA4_VALUE_APPLIED = "applied"
+GA4_VALUE_NO_PROPERTY = "no_ga4_property"
+GA4_VALUE_UNREACHABLE = "ga4_unreachable"
+GA4_VALUE_NO_CONVERSIONS = "no_conversions"
+
+# One note per status so the soft-fallback cause is unambiguous in the response
+# (FEEDBACK v0.7.3 §17e.i). All not-applied statuses leave every multiplier 1.0.
+_GA4_VALUE_NOTE = {
+    GA4_VALUE_APPLIED: (
+        "GA4 value weighting applied: each candidate is boosted up to +50% by "
+        "the organic conversions of its top ranking page."
+    ),
+    GA4_VALUE_NO_PROPERTY: (
+        "GA4 value weighting not applied: no GA4 property is configured. All "
+        "value multipliers are 1.0 (scoring is Search-Console-only). Configure "
+        "a GA4 property to weight topics by the revenue/conversions they drive."
+    ),
+    GA4_VALUE_UNREACHABLE: (
+        "GA4 value weighting not applied: a GA4 property is configured but was "
+        "not reachable (auth, scope, or API error). All value multipliers are "
+        "1.0; this run is Search-Console-only and did not fail on the GA4 gap."
+    ),
+    GA4_VALUE_NO_CONVERSIONS: (
+        "GA4 value weighting not applied: the GA4 property is reachable but "
+        "reported no organic-search conversions in the window. All value "
+        "multipliers are 1.0. Define key events / conversions in GA4 to enable "
+        "value weighting."
+    ),
+}
+
+
+def _ga4_landing_value(
+    clients: Mapping[str, Any], config: Any, days: int
+) -> tuple[str, dict[str, float] | None]:
     """Optional GA4 weighting (RULESETS §1.3): map landing-page PATH to organic
-    conversions over the window. Returns None when GA4 is not configured or not
-    reachable, in which case value weighting is skipped (every multiplier 1.0)."""
+    conversions over the window. Returns ``(status, value_map)`` where status is
+    one of the ``GA4_VALUE_*`` constants and value_map is None unless weighting
+    actually ran. Soft: any not-applied status leaves every multiplier at 1.0."""
     prop = getattr(config, "ga4_property_id", None)
     if not prop:
-        return None
+        return GA4_VALUE_NO_PROPERTY, None
     try:
         ga4 = clients.get("ga4")
     except Exception:
-        return None
+        return GA4_VALUE_UNREACHABLE, None
     if ga4 is None:
-        return None
+        return GA4_VALUE_UNREACHABLE, None
     from ..clients.ga4 import normalize_property_id
 
     try:
@@ -196,7 +233,7 @@ def _ga4_landing_value(clients: Mapping[str, Any], config: Any, days: int) -> di
             },
         )
     except Exception:
-        return None
+        return GA4_VALUE_UNREACHABLE, None
     out: dict[str, float] = {}
     for row in report.get("rows", []):
         dims = row.get("dimensions") or []
@@ -206,7 +243,11 @@ def _ga4_landing_value(clients: Mapping[str, Any], config: Any, days: int) -> di
         conv = (mets[0] if mets else 0) or 0
         path = str(dims[0]).split("?")[0].rstrip("/") or "/"
         out[path] = out.get(path, 0.0) + float(conv)
-    return out or None
+    # The property is reachable but returned no organic conversions in-window:
+    # a distinct, actionable state (configure conversions) vs no GA4 at all.
+    if not out or max(out.values()) <= 0:
+        return GA4_VALUE_NO_CONVERSIONS, None
+    return GA4_VALUE_APPLIED, out
 
 
 def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Mapping[str, Any]) -> dict[str, Any]:
@@ -262,7 +303,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             top_page_per_query[q] = page
 
     # Optional GA4 value weighting (RULESETS §1.3): path -> organic conversions.
-    value_map = _ga4_landing_value(clients, config, days)
+    ga4_value_status, value_map = _ga4_landing_value(clients, config, days)
     max_conv = max(value_map.values(), default=0.0) if value_map else 0.0
 
     # First pass: compute raw signals for each in-band candidate.
@@ -372,20 +413,15 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             "filters_applied": {
                 "impressions_min": impressions_min,
                 "position_ceiling": _POSITION_CEILING,
-                "ga4_value_weighted": bool(value_map),
+                "ga4_value_weighted": ga4_value_status == GA4_VALUE_APPLIED,
+                "ga4_value_status": ga4_value_status,
             },
             "notes": [
                 "Scored from your own Search Console data; ranks by expected "
                 "return on effort, not by guaranteed position.",
                 "The expected-CTR curve is self-calibrated from your buckets "
                 "with at least 5 queries; a reference curve fills sparse buckets.",
-                (
-                    "GA4 value weighting applied: each candidate is boosted up to "
-                    "+50% by the organic conversions of its top ranking page."
-                    if value_map else
-                    "GA4 value weighting not applied (no GA4 property configured, "
-                    "or no organic conversion data); all value multipliers are 1.0."
-                ),
+                _GA4_VALUE_NOTE[ga4_value_status],
             ],
         }
     )

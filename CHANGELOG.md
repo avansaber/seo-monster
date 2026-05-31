@@ -13,6 +13,25 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.5] - 2026-05-31
+
+`content_opportunities` soft-fallback disambiguation. No new tools or prompts
+(52 tools / 13 prompts).
+
+### Changed
+
+- `content_opportunities` now reports a discrete `filters_applied.ga4_value_status`
+  (`applied` / `no_ga4_property` / `ga4_unreachable` / `no_conversions`) and a
+  cause-specific note, so the response distinguishes "no GA4 property configured"
+  from "GA4 configured but no organic conversions in the window" from "GA4
+  configured but unreachable". Previously a single note collapsed all not-applied
+  causes (FEEDBACK v0.7.3 §17e.i). `filters_applied.ga4_value_weighted` is
+  retained (now `true` only when status is `applied`) for back-compatibility.
+  **(validate)** With a GA4 property but no organic conversions, status is
+  `no_conversions` and every `value_multiplier` is 1.0; with no GA4 property,
+  status is `no_ga4_property`; with conversions present, status is `applied` and
+  the best-converting candidate is boosted.
+
 ## [0.7.4] - 2026-05-31
 
 Completes `ga4_setup_audit` with its v1alpha checks. No new tools or prompts

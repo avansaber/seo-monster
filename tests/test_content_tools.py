@@ -157,6 +157,7 @@ def test_ga4_value_weighting_reranks(make_gsc_client, make_ga4_client, ga4_respo
     cfg = make_config(SEO_MCP_GSC_DEFAULT_SITE="sc-domain:example.com", SEO_MCP_GA4_PROPERTY_ID="properties/1")
     d = content_tools.content_opportunities({"impressions_min": 100}, cfg, {"gsc": gsc, "ga4": ga4})["data"]
     assert d["filters_applied"]["ga4_value_weighted"] is True
+    assert d["filters_applied"]["ga4_value_status"] == content_tools.GA4_VALUE_APPLIED
     by_q = {c["target_query"]: c for c in d["candidates"]}
     assert by_q["alpha"]["components"]["value_multiplier"] == 1.5  # 1.0 + 0.5*(100/100)
     assert by_q["beta"]["components"]["value_multiplier"] == 1.0   # 0 conversions
@@ -167,6 +168,47 @@ def test_no_ga4_property_means_no_value_weighting(make_gsc_client, make_config):
     # GSC-only (no GA4 property) -> value weighting skipped, all multipliers 1.0.
     d = _run(make_gsc_client, make_config, impressions_min=100)["data"]
     assert d["filters_applied"]["ga4_value_weighted"] is False
+    assert d["filters_applied"]["ga4_value_status"] == content_tools.GA4_VALUE_NO_PROPERTY
+    assert all(c["components"]["value_multiplier"] == 1.0 for c in d["candidates"])
+    # The cause-specific note names the missing property (FEEDBACK v0.7.3 §17e.i).
+    assert any("no GA4 property is configured" in n for n in d["notes"])
+
+
+def test_ga4_configured_but_unreachable_reports_distinct_status(make_gsc_client, make_config):
+    # GA4 property configured but no GA4 client wired -> "ga4_unreachable", which
+    # is distinct from "no_ga4_property". Still soft: every multiplier stays 1.0.
+    cfg = make_config(
+        SEO_MCP_GSC_DEFAULT_SITE="sc-domain:example.com",
+        SEO_MCP_GA4_PROPERTY_ID="properties/1",
+    )
+    gsc = make_gsc_client({"search": [_current_rows(), _prior_rows(), _query_page_rows()]})
+    d = content_tools.content_opportunities({"impressions_min": 100}, cfg, {"gsc": gsc})["data"]
+    assert d["filters_applied"]["ga4_value_weighted"] is False
+    assert d["filters_applied"]["ga4_value_status"] == content_tools.GA4_VALUE_UNREACHABLE
+    assert all(c["components"]["value_multiplier"] == 1.0 for c in d["candidates"])
+
+
+def test_ga4_reachable_but_no_conversions_reports_distinct_status(
+    make_gsc_client, make_ga4_client, ga4_response, make_config
+):
+    # GA4 reachable, but the property reports zero organic conversions in-window
+    # -> "no_conversions", distinct from a missing/unreachable property.
+    cur = {"rows": [_q("alpha", clicks=50, impressions=5000, ctr=0.01, position=5.0)]}
+    prior = {"rows": [_q("alpha", clicks=50, impressions=5000, ctr=0.01, position=5.0)]}
+    qp = {"rows": [_qp("alpha", "https://example.com/alpha", 5000)]}
+    gsc = make_gsc_client({"search": [cur, prior, qp]})
+    ga4 = make_ga4_client(
+        ga4_response(["landingPage"], ["conversions"], [(["/alpha"], ["0"])])
+    )
+    cfg = make_config(
+        SEO_MCP_GSC_DEFAULT_SITE="sc-domain:example.com",
+        SEO_MCP_GA4_PROPERTY_ID="properties/1",
+    )
+    d = content_tools.content_opportunities(
+        {"impressions_min": 100}, cfg, {"gsc": gsc, "ga4": ga4}
+    )["data"]
+    assert d["filters_applied"]["ga4_value_weighted"] is False
+    assert d["filters_applied"]["ga4_value_status"] == content_tools.GA4_VALUE_NO_CONVERSIONS
     assert all(c["components"]["value_multiplier"] == 1.0 for c in d["candidates"])
 
 
