@@ -34,6 +34,7 @@ from . import prompts as prompts_module
 from .clients.cloudflare import build_cf_client
 from .clients.crux import build_crux_client
 from .clients.ga4 import build_ga4_client
+from .clients.ga4_admin import build_ga4_admin_client
 from .clients.gsc import build_gsc_client
 from .clients.http import build_http_client
 from .clients.indexnow import build_indexnow_client
@@ -117,6 +118,7 @@ _HANDLERS: dict[str, Any] = {
 _CLIENT_BUILDERS: dict[str, Any] = {
     "gsc": build_gsc_client,
     "ga4": build_ga4_client,
+    "ga4_admin": build_ga4_admin_client,
     "psi": build_psi_client,
     "cf": build_cf_client,
     "indexnow": build_indexnow_client,

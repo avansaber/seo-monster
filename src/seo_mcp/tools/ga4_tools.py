@@ -322,6 +322,153 @@ def ga4_organic_search_overview(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- ga4_setup_audit (Admin API; reads property config for SEO readiness) ---
+#
+# Uses the analyticsadmin v1beta REST client (no new dependency). The rules are
+# a pure function over the normalized config so they test without any client.
+# RULESETS §2; v1beta subset. The v1alpha checks (enhanced measurement, site
+# search, Google Signals) are deferred and listed in the response.
+
+# event_data_retention values >= 14 months (anything but the 2-month default).
+_ACCEPTABLE_RETENTION = {
+    "FOURTEEN_MONTHS", "TWENTY_SIX_MONTHS", "THIRTY_EIGHT_MONTHS", "FIFTY_MONTHS",
+}
+
+
+def _finding(rule_id: str, severity: str, observed: str, expected: str, why: str, benign: str) -> dict[str, Any]:
+    return {
+        "rule_id": rule_id,
+        "severity": severity,
+        "observed": observed,
+        "expected": expected,
+        "why": why,
+        "benign_exception": benign,
+    }
+
+
+def _audit_setup(cfg: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Apply the GA4-for-SEO setup rules to a normalized config dict. Pure: no
+    client, no I/O. Every non-info finding carries why + benign_exception so the
+    audit grades rather than scolds (RULESETS §0 / §2)."""
+    findings: list[dict[str, Any]] = []
+
+    if cfg.get("web_stream_count", 0) == 0:
+        findings.append(_finding(
+            "ga4.web_stream", "critical",
+            f"{cfg.get('stream_count', 0)} streams, 0 web", ">= 1 web data stream",
+            "No web data stream means the property captures no website measurement at all.",
+            "App-only property (out of SEO scope).",
+        ))
+
+    if cfg.get("key_event_count", 0) == 0:
+        findings.append(_finding(
+            "ga4.key_events", "high",
+            "0 key events", ">= 1 key event / conversion",
+            "Without key events you cannot measure organic outcomes, which is what makes content and SEO work provable.",
+            "Brand-new property, or a purely informational site with no conversion concept.",
+        ))
+
+    retention = cfg.get("data_retention")
+    if retention == "TWO_MONTHS":
+        findings.append(_finding(
+            "ga4.data_retention", "medium",
+            "TWO_MONTHS (default)", "14 months or longer",
+            "The 2-month default discards the history needed for year-over-year SEO trend analysis.",
+            "Intentionally short for a privacy or compliance reason.",
+        ))
+    elif retention is not None and retention not in _ACCEPTABLE_RETENTION:
+        findings.append(_finding(
+            "ga4.data_retention", "info",
+            str(retention), "14 months or longer",
+            "Could not classify the data-retention setting against the known values.",
+            "New or 360-only retention value; verify it is at least 14 months.",
+        ))
+
+    if cfg.get("custom_dimension_count", 0) == 0:
+        findings.append(_finding(
+            "ga4.content_grouping", "low",
+            "no custom dimensions", "a content-group custom dimension",
+            "Content-group custom dimensions let you analyze organic performance by content type.",
+            "Optional; many sites do fine without it.",
+        ))
+
+    return findings
+
+
+TOOL_SETUP_AUDIT = {
+    "name": "ga4_setup_audit",
+    "description": (
+        "Audit a GA4 property's configuration for SEO-measurement readiness "
+        "(read-only): is a web data stream present, are key events / "
+        "conversions defined, is data retention long enough for year-over-year "
+        "analysis, and are content-group custom dimensions set. Findings are "
+        "severity-graded with the reason and the benign exception for each. "
+        "Answers 'can this property actually measure my organic outcomes?' It "
+        "checks hygiene, not whether your events are the right business events."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "property_id": {
+                "type": "string",
+                "description": "GA4 property: 'properties/123456789' or bare '123456789'. Defaults to the configured default.",
+            },
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def ga4_setup_audit(arguments, config, clients) -> dict[str, Any]:
+    client, error = require_client(clients, "ga4_admin", _SERVICE, remediation=_REMEDIATION)
+    if error:
+        return error
+    prop = normalize_property_id(arguments.get("property_id") or config.ga4_property_id)
+    if not prop:
+        return err(
+            ErrorCode.INVALID_INPUT,
+            _SERVICE,
+            "No GA4 property specified.",
+            remediation="Pass property_id (e.g. 'properties/123456789') or set SEO_MCP_GA4_PROPERTY_ID.",
+            docs_url=DOCS_BASE + "configuration",
+        )
+    try:
+        cfg = client.get_setup(prop)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    findings = _audit_setup(cfg)
+    by_severity: dict[str, int] = {}
+    for f in findings:
+        by_severity[f["severity"]] = by_severity.get(f["severity"], 0) + 1
+    if any(f["severity"] in ("critical", "high") for f in findings):
+        verdict = "issues"
+    elif findings:
+        verdict = "review"
+    else:
+        verdict = "clean"
+
+    return ok(
+        {
+            "property_id": prop,
+            "config": cfg,
+            "findings": findings,
+            "summary": {"by_severity": by_severity, "verdict": verdict},
+            "deferred_checks": [
+                "enhanced_measurement (GA4 Admin v1alpha)",
+                "site_search (part of enhanced measurement; v1alpha)",
+                "google_signals (v1alpha)",
+            ],
+            "notes": [
+                "Read-only: no configuration is changed.",
+                "Audits measurement hygiene for SEO. It cannot tell you whether "
+                "your key events are the RIGHT business events; that is your context.",
+            ],
+        }
+    )
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -329,6 +476,7 @@ TOOLS = [
     TOOL_TOP_LANDING_PAGES,
     TOOL_TRAFFIC_BY_CHANNEL,
     TOOL_ORGANIC_OVERVIEW,
+    TOOL_SETUP_AUDIT,
 ]
 
 HANDLERS = {
@@ -336,4 +484,5 @@ HANDLERS = {
     "ga4_top_landing_pages": ga4_top_landing_pages,
     "ga4_traffic_by_channel": ga4_traffic_by_channel,
     "ga4_organic_search_overview": ga4_organic_search_overview,
+    "ga4_setup_audit": ga4_setup_audit,
 }
