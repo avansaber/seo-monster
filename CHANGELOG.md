@@ -13,6 +13,56 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.1] - 2026-05-31
+
+Audit-coverage + content-pipeline release: 5 read-only tools and 6 workflow
+prompts. 52 tools / 13 prompts. No new dependency.
+
+### Added (tools)
+
+- **`psi_opportunities`** - the actionable Lighthouse "opportunity" audits (with
+  estimated savings) plus the SEO-category audits (severity-graded per the
+  Lighthouse SEO checklist), extracted from a PageSpeed Insights run. Read-only,
+  lab data only (no CrUX field data). It is an on-page-basics checklist, not a
+  ranking predictor.
+  **(validate)** Run on a real URL: `opportunities` sorted by savings, and
+  `seo_audits` with severities (is-crawlable / http-status / viewport critical;
+  title / meta-description / hreflang / canonical high).
+- **`crux_snapshot`** - current Chrome UX Report p75 Core Web Vitals (LCP, INP,
+  CLS, FCP, TTFB) for a URL or origin, distinct from `crux_history`.
+  **(validate)** A high-traffic origin returns p75 metrics + categories; a small
+  origin returns the `no_data` envelope.
+- **`cf_settings_audit`** - Cloudflare SEO-settings audit (SSL mode, Always-Use-
+  HTTPS, HSTS, Automatic HTTPS Rewrites, Brotli, browser cache TTL),
+  severity-graded with a "verify, not fail" discipline because Cloudflare cannot
+  see the origin; HSTS is never a hard failure.
+  **(validate)** On a real zone: findings + verdict; SSL=Flexible is flagged
+  "verify"; HSTS off is at most medium, never critical.
+- **`ga4_site_search`** - internal site-search query report (a direct content-gap
+  signal); returns an honest envelope when the property has no site-search data.
+- **`ga4_landing_page_conversions`** - organic landing pages ranked by conversions.
+
+### Added (workflow prompts)
+
+- **`content_brief`**, **`content_outline`**, **`content_article`** - the
+  data-grounded brief, outline, and article pipeline. Each carries its
+  validation rules as instructions; the host LLM writes the content, SEOMonster
+  supplies the rules. No ranking guarantees.
+- **`content_workflow`** - orchestrates opportunity, brief, outline, article,
+  pre-deploy check, indexing, then a scheduled performance check.
+- **`content_performance`** - Layer-5 measurement: compares periods 4 to 8 weeks
+  after publish to show ranking and click lift. Measures the outcome, does not
+  guarantee it.
+- **`seo_setup_audit`** - chains `ga4_setup_audit`, `cf_settings_audit`,
+  `psi_opportunities`, and `robots_txt_validate` into a consolidated, severity-
+  ranked "is your whole stack configured for SEO?" report.
+
+### Changed
+
+- Clarified the `content_opportunities` top-candidate expectation: usually a
+  striking-distance query, but sometimes a cannibalization-driven CTR-gap when a
+  query has several ranking pages (correct, given the scoring weights).
+
 ## [0.7.0] - 2026-05-31
 
 Content-intelligence + GA4-audit release. Adds the first content-workflow tool
