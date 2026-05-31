@@ -99,7 +99,7 @@ def _ask_secret(secret_fn: Callable[[str], str], label: str, current: str | None
     """Prompt for a secret without echoing. Enter keeps the existing value (if
     any), or skips. The current value is never displayed."""
     if current:
-        raw = secret_fn(f"{label} [keep existing — Enter to keep]: ").strip()
+        raw = secret_fn(f"{label} [keep existing, Enter to keep]: ").strip()
         return raw or current
     raw = secret_fn(f"{label} (Enter to skip): ").strip()
     return raw or None
@@ -117,7 +117,16 @@ def validate_cloudflare(token: str) -> tuple[str, str]:
         zones = CfClient(token).list_zones()
         return "ok", f"{len(zones)} zone(s) visible"
     except ApiError as exc:
-        rejected = {ErrorCode.AUTH_INVALID, ErrorCode.AUTH_MISSING, ErrorCode.SCOPE_INSUFFICIENT}
+        # /zones is a fixed endpoint with no user-supplied params, so a 400 ->
+        # INVALID_INPUT here can only mean the token / auth header is
+        # unparseable (CF code 6003). A typo'd short token returns 400, not
+        # 401/403, so INVALID_INPUT must reject too (tester FEEDBACK §12c.i).
+        rejected = {
+            ErrorCode.AUTH_INVALID,
+            ErrorCode.AUTH_MISSING,
+            ErrorCode.SCOPE_INSUFFICIENT,
+            ErrorCode.INVALID_INPUT,
+        }
         return ("rejected" if exc.code in rejected else "unreachable"), exc.message
     except Exception as exc:  # network boundary
         return "unreachable", str(exc)
@@ -125,15 +134,25 @@ def validate_cloudflare(token: str) -> tuple[str, str]:
 
 def validate_indexnow(key: str, key_location: str | None) -> tuple[str, str]:
     """Validate IndexNow by fetching the key-file URL and comparing its body to
-    the key. Skipped (status 'skipped') when no location is given — IndexNow's
+    the key. Skipped (status 'skipped') when no location is given; IndexNow's
     key file is per-host and the host may not be known at setup time."""
     if not key_location:
         return "skipped", "no key-file URL given; validated on first submit"
     import urllib.error
     import urllib.request
 
+    from . import __version__
+
+    # Send the project's branded User-Agent. Cloudflare's Browser Integrity
+    # Check 403s the default Python-urllib UA (CF error 1010), which would make
+    # every IndexNow key file hosted behind CF look unreachable on first setup
+    # (tester FEEDBACK §12c.ii). Branded UAs are not blocked.
+    req = urllib.request.Request(
+        key_location,
+        headers={"User-Agent": f"SEOMonster/{__version__} (+https://seomonster.avansaber.com)"},
+    )
     try:
-        with urllib.request.urlopen(key_location, timeout=15) as resp:  # noqa: S310 (trusted user URL)
+        with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 (trusted user URL)
             body = resp.read().decode("utf-8", "replace").strip()
     except Exception as exc:  # network boundary
         return "unreachable", f"could not fetch {key_location}: {exc}"
@@ -143,7 +162,7 @@ def validate_indexnow(key: str, key_location: str | None) -> tuple[str, str]:
 
 
 def _report(label: str, status: str, message: str) -> None:
-    glyph = {"ok": "OK", "rejected": "FAILED", "unreachable": "SKIPPED", "skipped": "SKIPPED"}.get(status, "?")
+    glyph = {"ok": "OK", "rejected": "FAILED", "warn": "WARN", "unreachable": "SKIPPED", "skipped": "SKIPPED"}.get(status, "?")
     print(f"  [{glyph}] {label}: {message}")
 
 
@@ -260,12 +279,12 @@ def _setup_run(
     print("Defaults (optional):")
     gsc_site = _ask_text(ask, "  Default GSC property (sc-domain:example.com or https URL)", gsc_e.get("default_site"))
     if gsc_site and not (gsc_site.startswith("sc-domain:") or gsc_site.startswith("http")):
-        _report("GSC property", "rejected", "should start with 'sc-domain:' or 'https://' — saved, but verify")
+        _report("GSC property", "warn", "should start with 'sc-domain:' or 'https://'; saved, but verify it")
     sections["gsc"]["default_site"] = gsc_site
 
     ga4_prop = _ask_text(ask, "  Default GA4 property (properties/123456789 or 123456789)", ga4_e.get("property_id"))
     if ga4_prop and not ga4_prop.replace("properties/", "").isdigit():
-        _report("GA4 property", "rejected", "expected a numeric id like 'properties/123456789' — saved, but verify")
+        _report("GA4 property", "warn", "expected a numeric id like 'properties/123456789'; saved, but verify it")
     sections["ga4"]["property_id"] = ga4_prop
 
     written = write_config_toml(config_path, sections)

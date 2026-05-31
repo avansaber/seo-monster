@@ -180,6 +180,65 @@ def test_setup_main_eof_exits_cleanly(tmp_path, monkeypatch, capsys):
     assert not cfg_path.exists()  # nothing written on abort
 
 
+def test_validate_cloudflare_classifies_400_as_rejected(monkeypatch):
+    # Regression for FEEDBACK §12c.i: a typo'd short token returns HTTP 400 ->
+    # INVALID_INPUT, which must reject (not fall through to 'unreachable' and
+    # get persisted).
+    from seo_mcp.clients.cloudflare import CfClient
+    from seo_mcp.clients.errors import ApiError
+    from seo_mcp.errors import ErrorCode
+
+    def boom(self):
+        raise ApiError(ErrorCode.INVALID_INPUT, "Cloudflare rejected the request as invalid (HTTP 400).")
+
+    monkeypatch.setattr(CfClient, "list_zones", boom)
+    status, _ = cli.validate_cloudflare("cfat_typo")
+    assert status == "rejected"
+
+
+def test_validate_cloudflare_upstream_error_stays_unreachable(monkeypatch):
+    # Guard: extending the reject set must NOT misclassify a genuine offline
+    # error as rejected (that would drop a valid token).
+    from seo_mcp.clients.cloudflare import CfClient
+    from seo_mcp.clients.errors import ApiError
+    from seo_mcp.errors import ErrorCode
+
+    def boom(self):
+        raise ApiError(ErrorCode.UPSTREAM_ERROR, "network down")
+
+    monkeypatch.setattr(CfClient, "list_zones", boom)
+    status, _ = cli.validate_cloudflare("cfat_real")
+    assert status == "unreachable"
+
+
+def test_validate_indexnow_sends_branded_user_agent(monkeypatch):
+    # Regression for FEEDBACK §12c.ii: the default Python-urllib UA is 403'd by
+    # Cloudflare's Browser Integrity Check, so the key-file fetch must send the
+    # project's branded UA.
+    import urllib.request
+
+    captured: dict[str, str] = {}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"mykey"
+
+    def fake_urlopen(req, timeout=None):
+        captured["ua"] = req.get_header("User-agent")
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    status, _ = cli.validate_indexnow("mykey", "https://example.com/mykey.txt")
+    assert status == "ok"
+    assert captured["ua"] and captured["ua"].startswith("SEOMonster/")
+
+
 def test_server_main_dispatches_setup_to_cli(monkeypatch):
     pytest.importorskip("mcp")
     from seo_mcp import server
