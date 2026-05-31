@@ -167,6 +167,18 @@ jobs:
       # release pipeline behaves exactly as before (manual `uv publish`).
       # The `id-token: write` permission is already declared in this job's
       # `permissions:` block, so OIDC works at runtime when activated.
+      - name: Keep only Python distributions in dist/ for PyPI
+        if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' }}
+        # PyPI accepts only sdists + wheels. The .mcpb bundle (and uv's
+        # dist/.gitignore) must not reach twine, or it fails the upload with
+        # "InvalidDistribution: Unknown distribution format". The .mcpb is
+        # already attached to the GitHub release by the step above, so it is
+        # safe to remove here. (Latent since v0.5.x; first surfaced when
+        # PYPI_PUBLISH_ENABLED was turned on for v0.6.0.)
+        run: |
+          find dist -type f ! -name '*.whl' ! -name '*.tar.gz' -delete
+          echo "dist/ now contains only Python distributions:"; ls -la dist/
+
       - name: Publish to PyPI (Trusted Publishing)
         if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' }}
         uses: pypa/gh-action-pypi-publish@release/v1
