@@ -94,6 +94,9 @@ def test_analyze_without_field_data(make_config):
     data = result["data"]
     assert data["field_data_available"] is False
     assert data["field_core_web_vitals"] is None
+    # Even without field data, the PSI-deprecation note points at the durable
+    # CrUX source (PLAN Part 6b A2 / FEEDBACK migration).
+    assert "crux_snapshot" in data["field_data_note"]
     # Missing categories surface as None rather than raising.
     assert data["lighthouse_scores"]["accessibility"] is None
     assert data["lighthouse_scores"]["performance"] == 50

@@ -534,7 +534,8 @@ def test_query_opportunities_filters_and_sorts(make_config, make_gsc_client, gsc
         ("d-below-rank",        2, 1000, 0.002, 25.0),   # rejected: position > 10
         ("e-low-volume",        1, 50,   0.02, 7.0),     # rejected: impressions < 100
     ])
-    responses = dict(gsc_payloads); responses["search"] = payload
+    responses = dict(gsc_payloads)
+    responses["search"] = payload
     client = make_gsc_client(responses)
     result = gsc_tools.gsc_query_opportunities({}, _cfg(make_config), {"gsc": client})
     assert result["ok"] is True
@@ -545,7 +546,8 @@ def test_query_opportunities_filters_and_sorts(make_config, make_gsc_client, gsc
 
 def test_query_opportunities_respects_custom_thresholds(make_config, make_gsc_client, gsc_payloads):
     payload = _qa_payload([("ok", 1, 200, 0.005, 8.0)])  # passes both default and custom
-    responses = dict(gsc_payloads); responses["search"] = payload
+    responses = dict(gsc_payloads)
+    responses["search"] = payload
     client = make_gsc_client(responses)
     # With ctr_max=0.001, the row is rejected.
     result = gsc_tools.gsc_query_opportunities({"ctr_max": 0.001}, _cfg(make_config), {"gsc": client})
@@ -559,7 +561,8 @@ def test_query_gaps_filters_and_sorts(make_config, make_gsc_client, gsc_payloads
         ("c-no-impressions",     0, 10,  0.0, 30.0),   # rejected: impressions < 50
         ("d-also-passes",        1, 100, 0.01, 8.0),   # passes; should sort below "a"
     ])
-    responses = dict(gsc_payloads); responses["search"] = payload
+    responses = dict(gsc_payloads)
+    responses["search"] = payload
     client = make_gsc_client(responses)
     result = gsc_tools.gsc_query_gaps({}, _cfg(make_config), {"gsc": client})
     assert [r["keys"][0] for r in result["data"]["rows"]] == ["a-many-impr-no-click", "d-also-passes"]
@@ -596,7 +599,8 @@ def test_top_pages_by_query_builds_query_filter(make_config, make_gsc_client, gs
         {"keys": ["https://x/blog/a"], "clicks": 5, "impressions": 100, "ctr": 0.05, "position": 4.0},
         {"keys": ["https://x/blog/b"], "clicks": 1, "impressions": 30, "ctr": 0.03, "position": 9.0},
     ]}
-    responses = dict(gsc_payloads); responses["search"] = payload
+    responses = dict(gsc_payloads)
+    responses["search"] = payload
     client = make_gsc_client(responses)
     result = gsc_tools.gsc_top_pages_by_query({"query": "seo monster", "days": 30}, _cfg(make_config), {"gsc": client})
     assert result["ok"] is True

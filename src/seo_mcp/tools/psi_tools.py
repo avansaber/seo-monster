@@ -29,6 +29,18 @@ _LAB_METRICS = (
     ("first-contentful-paint", "FCP"),
 )
 
+# Google is deprecating field (CrUX) data in the PSI API: `loadingExperience`
+# can return null even for high-traffic URLs. We surface it when present but do
+# not depend on it (field_data_available stays honest). The durable source of
+# field Core Web Vitals is the dedicated CrUX API, exposed by crux_snapshot
+# (current p75) and crux_history (trend). See PLAN Part 6b A2.
+_FIELD_DATA_NOTE = (
+    "Field (CrUX) data here comes from PageSpeed Insights' loadingExperience, "
+    "which Google is deprecating in the PSI API (it can be null even for "
+    "high-traffic URLs). For durable field Core Web Vitals use crux_snapshot "
+    "(current p75) or crux_history (trend)."
+)
+
 # CrUX field metric id -> (label, is_shift). Shift scores are unitless.
 _FIELD_METRICS = (
     ("LARGEST_CONTENTFUL_PAINT_MS", "LCP", False),
@@ -134,6 +146,7 @@ def psi_analyze(arguments, config, clients) -> dict[str, Any]:
             "lab_core_web_vitals": _lab_cwv(lighthouse),
             "field_core_web_vitals": field,
             "field_data_available": field is not None,
+            "field_data_note": _FIELD_DATA_NOTE,
         }
     )
 

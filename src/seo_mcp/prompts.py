@@ -79,10 +79,13 @@ PROMPTS: list[dict[str, Any]] = [
     {
         "name": "technical_seo_audit",
         "description": (
-            "Single-URL technical-SEO sweep. Chains inspect_meta, "
-            "check_canonical, redirect_chain_audit, mixed_content_check, and "
-            "robots_txt_validate for the URL, then sitemap_health for its host "
-            "root. Produces a triage list ranked by severity."
+            "Single-URL technical-SEO sweep (one page, deep). Chains "
+            "inspect_meta, check_canonical, redirect_chain_audit, "
+            "mixed_content_check, and robots_txt_validate for the URL, then "
+            "sitemap_health for its host root. Produces a triage list ranked "
+            "by severity. For a batch deploy gate use pre_deploy_check; for "
+            "Rich Results use structured_data_audit; for account/infra "
+            "configuration use seo_setup_audit."
         ),
         "arguments": [
             {"name": "url", "description": "Absolute URL to audit. Required.", "required": True},
@@ -91,11 +94,14 @@ PROMPTS: list[dict[str, Any]] = [
     {
         "name": "structured_data_audit",
         "description": (
-            "Structured-data + cross-site sweep. For each URL: inspect_schema "
-            "to see what JSON-LD is present, then validate_schema to verdict "
-            "the Rich Results required fields. If 2+ URLs are passed, also "
-            "run hreflang_consistency_check across the set. Produces a per-"
-            "URL findings list plus a global reciprocity-and-target report."
+            "Structured-data + cross-site sweep (the Rich Results lane). For "
+            "each URL: inspect_schema to see what JSON-LD is present, then "
+            "validate_schema to verdict the Rich Results required fields. If "
+            "2+ URLs are passed, also run hreflang_consistency_check across "
+            "the set. Produces a per-URL findings list plus a global "
+            "reciprocity-and-target report. For a full single-page technical "
+            "sweep use technical_seo_audit; for a deploy gate use "
+            "pre_deploy_check."
         ),
         "arguments": [
             {"name": "urls", "description": "JSON array of absolute URLs to audit. Required (at least 1).", "required": True},

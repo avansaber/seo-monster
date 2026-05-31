@@ -17,7 +17,6 @@ for the pure-logic unit tests.
 from __future__ import annotations
 
 import os
-import stat
 from pathlib import Path
 from typing import Any
 

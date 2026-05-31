@@ -8,10 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 
 from seo_mcp.clients.errors import ApiError
-from seo_mcp.clients.http import HttpClient, HttpResponse, RedirectHop
+from seo_mcp.clients.http import HttpResponse, RedirectHop
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import redirect_tools, robots_tools
 

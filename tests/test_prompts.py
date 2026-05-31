@@ -39,6 +39,22 @@ def test_every_prompt_has_required_metadata_fields():
             assert set(arg) >= {"name", "description", "required"}
 
 
+def test_audit_prompts_disambiguate_their_axis():
+    # The four audit-ish prompts (page / Rich-Results / deploy-gate /
+    # stack-config) must each name its lane so they do not read as overlapping
+    # (PLAN Part 6b A5). Each description points away from the others.
+    by_name = {p["name"]: p["description"] for p in prompts.PROMPTS}
+    assert "one page, deep" in by_name["technical_seo_audit"]
+    assert "Rich Results lane" in by_name["structured_data_audit"]
+    assert "Deploy-gate" in by_name["pre_deploy_check"]
+    assert "configuration" in by_name["seo_setup_audit"]
+    # technical_seo_audit cross-references the other three lanes by name.
+    tech = by_name["technical_seo_audit"]
+    assert "pre_deploy_check" in tech
+    assert "structured_data_audit" in tech
+    assert "seo_setup_audit" in tech
+
+
 def test_prompts_load_as_mcp_models():
     # Server uses Prompt.model_validate; pin that round-trip works for every
     # registered prompt so a malformed entry fails fast in CI.

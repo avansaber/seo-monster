@@ -28,7 +28,7 @@ sitting on top of the existing PSI client.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
@@ -169,7 +169,7 @@ def lighthouse_budget(arguments, config, clients) -> dict[str, Any]:
     # Shape via the same helpers psi_analyze would use. We re-import here to
     # avoid a circular dependency at module load - lazy import is fine because
     # lighthouse_budget is a callable, not a module-level expression.
-    from .psi_tools import _field_cwv, _lab_cwv, _lighthouse_scores
+    from .psi_tools import _FIELD_DATA_NOTE, _field_cwv, _lab_cwv, _lighthouse_scores
 
     lighthouse = raw.get("lighthouseResult", {})
     field = _field_cwv(raw.get("loadingExperience", {}))
@@ -177,6 +177,7 @@ def lighthouse_budget(arguments, config, clients) -> dict[str, Any]:
         "lighthouse_scores": _lighthouse_scores(lighthouse),
         "lab_core_web_vitals": _lab_cwv(lighthouse),
         "field_core_web_vitals": field,
+        "field_data_note": _FIELD_DATA_NOTE,
     }
 
     results: list[dict[str, Any]] = []

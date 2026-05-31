@@ -23,7 +23,6 @@ for.
 from __future__ import annotations
 
 import json
-import re
 from html.parser import HTMLParser
 from typing import Any, Mapping
 

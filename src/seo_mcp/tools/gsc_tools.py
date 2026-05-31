@@ -15,7 +15,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any, Mapping
 
-from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ..clients.errors import ApiError
 from ._helpers import annotations, missing_site_error, require_client, resolve_site

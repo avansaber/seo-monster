@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 
 from seo_mcp.clients.errors import ApiError
 from seo_mcp.clients.http import HttpResponse
@@ -148,7 +147,6 @@ def test_linkgraph_skips_external_links(make_config):
 
 
 def test_linkgraph_respects_max_pages(make_config):
-    pages = {f"https://example.com/p{i}": None for i in range(10)}
     # Each page links to the next.
     http_pages = {
         f"https://example.com/p{i}": _page(f"https://example.com/p{i}", [f"https://example.com/p{i+1}"])

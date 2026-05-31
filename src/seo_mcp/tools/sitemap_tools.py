@@ -234,7 +234,6 @@ def sitemap_health(arguments, config, clients) -> dict[str, Any]:
         urls = [e["loc"] for e in entries[:sample_size]]
     histogram: dict[str, int] = {}
     non_2xx: list[dict[str, Any]] = []
-    total_elapsed = 0
     checked = 0
     for url in urls:
         try:

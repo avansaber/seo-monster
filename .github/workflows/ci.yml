@@ -1,0 +1,44 @@
+name: CI
+
+# Lightweight push / PR gate: run the offline test suite and the ruff linter.
+# The tag-driven release workflow (release.yml) re-runs the tests before it
+# publishes, but this catches regressions and lint drift at PR/push time so
+# they never reach a tag. No secrets, no network: the suite is fully mocked.
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']   # release.yml owns tag pushes; don't double-run there
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Match release.yml: opt the pinned JS actions onto Node 24 ahead of the
+  # 2026-06-16 cutover that removes the deprecated Node 20 runtime.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11 + project deps (dev extras for pytest)
+        run: |
+          uv python install 3.11
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: uv run ruff check src/ tests/
+
+      - name: Test (offline suite)
+        run: uv run pytest -q

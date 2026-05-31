@@ -13,6 +13,36 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.6] - 2026-05-31
+
+Housekeeping batch: no new tools or prompts, no behavior change to existing
+tool outputs beyond two additive notes (52 tools / 13 prompts).
+
+### Changed
+
+- `psi_analyze` and `lighthouse_budget` responses now carry a `field_data_note`
+  documenting that PageSpeed Insights field (CrUX) data is being deprecated in
+  the PSI API and pointing to `crux_snapshot` / `crux_history` as the durable
+  source of field Core Web Vitals. `field_data_available` already degrades
+  honestly to `false` when PSI returns no `loadingExperience` (PLAN Part 6b A2).
+- Prompt-taxonomy coherence: `technical_seo_audit` (one page, deep) and
+  `structured_data_audit` (the Rich Results lane) descriptions now name their
+  axis and cross-reference the other audit prompts, so the four audit-ish
+  prompts (page / Rich-Results / deploy-gate / stack-config) no longer read as
+  overlapping.
+
+### Internal
+
+- New `ci.yml` workflow: runs the offline test suite + ruff on every push / PR
+  (there was previously no pre-tag gate; only the tag-driven release workflow).
+- Cleared the pre-existing ruff debt across `src/` and `tests/` (unused imports
+  and `;`-joined statements); `ruff check src/ tests/` is now clean. `ruff` is
+  pinned in the `dev` extra so local and CI lint match.
+- `release.yml`: opt the pinned JS actions onto Node 24
+  (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`) ahead of the 2026-06-16 runner cutover
+  that removes the deprecated Node 20 runtime; refreshed the stale header
+  comment (PyPI Trusted Publishing has been active since v0.6.0).
+
 ## [0.7.5] - 2026-05-31
 
 `content_opportunities` soft-fallback disambiguation. No new tools or prompts

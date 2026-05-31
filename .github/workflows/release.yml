@@ -8,10 +8,8 @@ name: Release
 #   4. Scan all three artifacts for credentials / PII / real local paths.
 #   5. Attach the three artifacts to the corresponding GitHub release (creating
 #      the release if it does not exist).
-#
-# PyPI upload is intentionally left as a separate manual step until Trusted
-# Publishing is configured on the PyPI side. See the commented-out step at the
-# bottom for the enablement recipe.
+#   6. Publish the wheel + sdist to PyPI via Trusted Publishing (OIDC) when the
+#      repo variable PYPI_PUBLISH_ENABLED is 'true' (active since v0.6.0).
 
 on:
   push:
@@ -21,6 +19,13 @@ on:
 permissions:
   contents: write     # create / update GitHub releases and upload assets
   id-token: write     # for PyPI Trusted Publishing (when enabled below)
+
+env:
+  # Force GitHub's pinned JS actions (checkout, setup-node, setup-uv,
+  # action-gh-release) onto the runner's Node 24 ahead of the 2026-06-16 hard
+  # cutover that removes the deprecated Node 20 runtime. Documented opt-in;
+  # drop this once those actions default to Node 24 on their own.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   release:

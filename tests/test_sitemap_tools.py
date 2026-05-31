@@ -6,9 +6,7 @@ import gzip
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 
-from seo_mcp.clients.errors import ApiError
 from seo_mcp.clients.http import HttpResponse
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import sitemap_tools
