@@ -88,7 +88,8 @@ def test_happy_path_ranks_and_shapes(make_gsc_client, make_config):
     # Every candidate exposes its score components (transparency, SIM-4).
     for c in d["candidates"]:
         assert set(c["components"]) == {
-            "ctr_gap_upside_norm", "striking_distance", "demand_norm", "momentum", "effort_multiplier",
+            "ctr_gap_upside_norm", "striking_distance", "demand_norm", "momentum",
+            "effort_multiplier", "value_multiplier",
         }
     assert d["weights"]["ctr_gap"] == 0.40
     assert d["notes"]
@@ -134,6 +135,39 @@ def test_auth_missing_when_no_gsc_client(make_config):
     res = content_tools.content_opportunities({}, cfg, {})  # no "gsc" client
     assert res["ok"] is False
     assert res["error"]["code"] == "AUTH_MISSING"
+
+
+def test_ga4_value_weighting_reranks(make_gsc_client, make_ga4_client, ga4_response, make_config):
+    # Two queries with identical SEO signals; the only differentiator is the GA4
+    # conversions of their top ranking page, so value weighting must break the tie.
+    cur = {"rows": [
+        _q("alpha", clicks=50, impressions=5000, ctr=0.01, position=5.0),
+        _q("beta", clicks=50, impressions=5000, ctr=0.01, position=5.0),
+    ]}
+    prior = {"rows": [
+        _q("alpha", clicks=50, impressions=5000, ctr=0.01, position=5.0),
+        _q("beta", clicks=50, impressions=5000, ctr=0.01, position=5.0),
+    ]}
+    qp = {"rows": [
+        _qp("alpha", "https://example.com/alpha", 5000),
+        _qp("beta", "https://example.com/beta", 5000),
+    ]}
+    gsc = make_gsc_client({"search": [cur, prior, qp]})
+    ga4 = make_ga4_client(ga4_response(["landingPage"], ["conversions"], [(["/alpha"], ["100"]), (["/beta"], ["0"])]))
+    cfg = make_config(SEO_MCP_GSC_DEFAULT_SITE="sc-domain:example.com", SEO_MCP_GA4_PROPERTY_ID="properties/1")
+    d = content_tools.content_opportunities({"impressions_min": 100}, cfg, {"gsc": gsc, "ga4": ga4})["data"]
+    assert d["filters_applied"]["ga4_value_weighted"] is True
+    by_q = {c["target_query"]: c for c in d["candidates"]}
+    assert by_q["alpha"]["components"]["value_multiplier"] == 1.5  # 1.0 + 0.5*(100/100)
+    assert by_q["beta"]["components"]["value_multiplier"] == 1.0   # 0 conversions
+    assert d["candidates"][0]["target_query"] == "alpha"          # weighting broke the tie
+
+
+def test_no_ga4_property_means_no_value_weighting(make_gsc_client, make_config):
+    # GSC-only (no GA4 property) -> value weighting skipped, all multipliers 1.0.
+    d = _run(make_gsc_client, make_config, impressions_min=100)["data"]
+    assert d["filters_applied"]["ga4_value_weighted"] is False
+    assert all(c["components"]["value_multiplier"] == 1.0 for c in d["candidates"])
 
 
 def test_missing_site_returns_invalid_input(make_gsc_client, make_config):

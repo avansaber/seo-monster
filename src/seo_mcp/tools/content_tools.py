@@ -29,6 +29,7 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 from typing import Any, Mapping
+from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
 from ..errors import ok
@@ -51,6 +52,10 @@ _W_MOMENTUM = 0.15
 # highest-ROI action; consolidating cannibalizing pages is slightly more work.
 _EFFORT_OPTIMIZE = 1.2
 _EFFORT_CONSOLIDATE = 1.1
+
+# Optional GA4 value weighting (RULESETS §1.3): a topic whose top ranking page
+# converts best gets at most a +50% multiplier. Default 1.0 (no GA4 / no match).
+_VALUE_MULTIPLIER_CAP = 0.5
 
 # Position band considered actionable (striking distance). Beyond ~20 the lift
 # needed is too large for a CTR/refresh play; top-2 is effectively already won.
@@ -161,6 +166,49 @@ def _query_of(row: dict[str, Any]) -> str:
     return keys[0] if keys else ""
 
 
+def _ga4_landing_value(clients: Mapping[str, Any], config: Any, days: int) -> dict[str, float] | None:
+    """Optional GA4 weighting (RULESETS §1.3): map landing-page PATH to organic
+    conversions over the window. Returns None when GA4 is not configured or not
+    reachable, in which case value weighting is skipped (every multiplier 1.0)."""
+    prop = getattr(config, "ga4_property_id", None)
+    if not prop:
+        return None
+    try:
+        ga4 = clients.get("ga4")
+    except Exception:
+        return None
+    if ga4 is None:
+        return None
+    from ..clients.ga4 import normalize_property_id
+
+    try:
+        report = ga4.run_report(
+            normalize_property_id(prop),
+            dimensions=["landingPage"],
+            metrics=["conversions"],
+            start_date=f"{days}daysAgo",
+            end_date="today",
+            row_limit=10000,
+            dimension_filter={
+                "field": "sessionDefaultChannelGroup",
+                "value": "Organic Search",
+                "match_type": "EXACT",
+            },
+        )
+    except Exception:
+        return None
+    out: dict[str, float] = {}
+    for row in report.get("rows", []):
+        dims = row.get("dimensions") or []
+        if not dims:
+            continue
+        mets = row.get("metrics") or []
+        conv = (mets[0] if mets else 0) or 0
+        path = str(dims[0]).split("?")[0].rstrip("/") or "/"
+        out[path] = out.get(path, 0.0) + float(conv)
+    return out or None
+
+
 def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Mapping[str, Any]) -> dict[str, Any]:
     client, error = require_client(clients, "gsc", _SERVICE, remediation=_REMEDIATION)
     if error:
@@ -195,13 +243,27 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
     for r in prior.get("rows", []):
         prior_impressions[_query_of(r)] = r.get("impressions", 0) or 0
 
-    # Distinct ranking pages per query (impressions > 0) = cannibalization signal.
+    # From query x page rows: count distinct ranking pages (cannibalization
+    # signal) and remember the top ranking page per query (by impressions, for
+    # GA4 value weighting).
     pages_per_query: dict[str, int] = {}
+    top_page_per_query: dict[str, str] = {}
+    _top_page_impr: dict[str, float] = {}
     for r in query_page.get("rows", []):
-        if (r.get("impressions", 0) or 0) <= 0:
+        impr = r.get("impressions", 0) or 0
+        if impr <= 0:
             continue
-        q = _query_of(r)
+        keys = r.get("keys") or []
+        q = keys[0] if keys else ""
+        page = keys[1] if len(keys) > 1 else ""
         pages_per_query[q] = pages_per_query.get(q, 0) + 1
+        if page and impr > _top_page_impr.get(q, -1.0):
+            _top_page_impr[q] = impr
+            top_page_per_query[q] = page
+
+    # Optional GA4 value weighting (RULESETS §1.3): path -> organic conversions.
+    value_map = _ga4_landing_value(clients, config, days)
+    max_conv = max(value_map.values(), default=0.0) if value_map else 0.0
 
     # First pass: compute raw signals for each in-band candidate.
     raw: list[dict[str, Any]] = []
@@ -222,6 +284,13 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
         n_pages = pages_per_query.get(query, 1)
         action = "consolidate" if n_pages >= 2 else "optimize"
         effort = _EFFORT_CONSOLIDATE if action == "consolidate" else _EFFORT_OPTIMIZE
+        value_multiplier = 1.0
+        if value_map and max_conv > 0:
+            page = top_page_per_query.get(query)
+            if page:
+                conv = value_map.get(urlparse(page).path.rstrip("/") or "/")
+                if conv:
+                    value_multiplier = 1.0 + _VALUE_MULTIPLIER_CAP * (conv / max_conv)
         raw.append(
             {
                 "query": query,
@@ -237,6 +306,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
                 "n_pages": n_pages,
                 "action": action,
                 "effort": effort,
+                "value_multiplier": value_multiplier,
             }
         )
 
@@ -255,7 +325,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             + _W_DEMAND * demand_norm
             + _W_MOMENTUM * c["momentum"]
         )
-        score = round(base * c["effort"], 4)  # value_multiplier = 1.0 in v1
+        score = round(base * c["effort"] * c["value_multiplier"], 4)
         candidates.append(
             {
                 "topic": c["query"],
@@ -276,6 +346,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
                     "demand_norm": round(demand_norm, 4),
                     "momentum": round(c["momentum"], 3),
                     "effort_multiplier": c["effort"],
+                    "value_multiplier": round(c["value_multiplier"], 3),
                 },
             }
         )
@@ -301,16 +372,20 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             "filters_applied": {
                 "impressions_min": impressions_min,
                 "position_ceiling": _POSITION_CEILING,
-                "value_multiplier": 1.0,
+                "ga4_value_weighted": bool(value_map),
             },
             "notes": [
                 "Scored from your own Search Console data; ranks by expected "
                 "return on effort, not by guaranteed position.",
                 "The expected-CTR curve is self-calibrated from your buckets "
                 "with at least 5 queries; a reference curve fills sparse buckets.",
-                "v1 scope: GA4 conversion-value weighting and new-vs-refresh "
-                "page-intent analysis are not yet applied. Cannibalization is "
-                "flagged via the count of ranking pages per query.",
+                (
+                    "GA4 value weighting applied: each candidate is boosted up to "
+                    "+50% by the organic conversions of its top ranking page."
+                    if value_map else
+                    "GA4 value weighting not applied (no GA4 property configured, "
+                    "or no organic conversion data); all value multipliers are 1.0."
+                ),
             ],
         }
     )
