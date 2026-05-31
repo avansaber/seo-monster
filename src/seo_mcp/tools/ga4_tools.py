@@ -392,6 +392,31 @@ def _audit_setup(cfg: Mapping[str, Any]) -> list[dict[str, Any]]:
             "Optional; many sites do fine without it.",
         ))
 
+    # v1alpha checks. Each fires only when the data was actually read (a None
+    # value means v1alpha was unavailable, so the check is skipped, not failed).
+    if cfg.get("enhanced_measurement") is False:
+        findings.append(_finding(
+            "ga4.enhanced_measurement", "medium",
+            "enhanced measurement off on all web streams", "enhanced measurement on",
+            "Enhanced measurement auto-captures scrolls, outbound clicks, site search, and file downloads without manual tagging.",
+            "Deliberately off for a privacy or consent-management reason.",
+        ))
+    if cfg.get("enhanced_measurement") and cfg.get("site_search_enabled") is False:
+        findings.append(_finding(
+            "ga4.site_search", "medium",
+            "site-search measurement off", "site-search measurement on (if the site has search)",
+            "Internal site-search terms are a direct content-gap signal and feed ga4_site_search.",
+            "The site has no on-site search box.",
+        ))
+    gs_state = cfg.get("google_signals_state")
+    if gs_state:
+        findings.append(_finding(
+            "ga4.google_signals", "info",
+            str(gs_state), "reported, not prescribed",
+            "Google Signals affects demographics and cross-device reporting and has privacy / consent implications.",
+            "Enable or disable per your privacy posture; this check is informational.",
+        ))
+
     return findings
 
 
@@ -401,8 +426,9 @@ TOOL_SETUP_AUDIT = {
         "Audit a GA4 property's configuration for SEO-measurement readiness "
         "(read-only): is a web data stream present, are key events / "
         "conversions defined, is data retention long enough for year-over-year "
-        "analysis, and are content-group custom dimensions set. Findings are "
-        "severity-graded with the reason and the benign exception for each. "
+        "analysis, are content-group custom dimensions set, and (via v1alpha) "
+        "is enhanced measurement on and what the Google Signals state is. "
+        "Findings are severity-graded with the reason and the benign exception for each. "
         "Answers 'can this property actually measure my organic outcomes?' It "
         "checks hygiene, not whether your events are the right business events."
     ),
@@ -455,15 +481,14 @@ def ga4_setup_audit(arguments, config, clients) -> dict[str, Any]:
             "config": cfg,
             "findings": findings,
             "summary": {"by_severity": by_severity, "verdict": verdict},
-            "deferred_checks": [
-                "enhanced_measurement (GA4 Admin v1alpha)",
-                "site_search (part of enhanced measurement; v1alpha)",
-                "google_signals (v1alpha)",
-            ],
+            "deferred_checks": [],
             "notes": [
                 "Read-only: no configuration is changed.",
                 "Audits measurement hygiene for SEO. It cannot tell you whether "
                 "your key events are the RIGHT business events; that is your context.",
+                "Enhanced-measurement, site-search, and Google Signals checks use "
+                "the GA4 Admin v1alpha API; they are skipped silently when v1alpha "
+                "is unreachable.",
             ],
         }
     )

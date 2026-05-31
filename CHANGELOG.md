@@ -13,6 +13,24 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.4] - 2026-05-31
+
+Completes `ga4_setup_audit` with its v1alpha checks. No new tools or prompts
+(52 tools / 13 prompts).
+
+### Added
+
+- `ga4_setup_audit` now runs the three GA4 Admin v1alpha checks that were
+  previously deferred (RULESETS §2): enhanced measurement on/off (medium),
+  site-search measurement when enhanced measurement is on (medium), and the
+  Google Signals state (info). They use the GA4 Admin v1alpha API and are
+  skipped silently when v1alpha is unreachable, so the audit never fails on
+  them; `deferred_checks` is now empty.
+  **(validate)** On a real property: a web stream with enhanced measurement off
+  is flagged medium; site search off (with enhanced measurement on) is flagged
+  medium; the Google Signals state appears as an info finding. When v1alpha is
+  unreachable those checks simply do not appear.
+
 ## [0.7.3] - 2026-05-31
 
 `content_opportunities` GA4 value-weighting. No new tools or prompts

@@ -21,10 +21,12 @@ from .errors import ApiError, map_google_exception
 
 
 class Ga4AdminClient:
-    """Thin wrapper over the analyticsadmin v1beta discovery service."""
+    """Thin wrapper over the analyticsadmin discovery services: v1beta (primary)
+    plus an optional v1alpha service for enhanced-measurement / Google Signals."""
 
-    def __init__(self, service: Any) -> None:
+    def __init__(self, service: Any, alpha_service: Any | None = None) -> None:
         self._svc = service
+        self._alpha = alpha_service
 
     @staticmethod
     def _execute(request: Any) -> Any:
@@ -53,6 +55,40 @@ class Ga4AdminClient:
         ).get("customDimensions", [])
 
         web_streams = [s for s in streams if s.get("type") == "WEB_DATA_STREAM"]
+
+        # v1alpha (best-effort): enhanced measurement + Google Signals (RULESETS
+        # §2). Skipped silently when there is no v1alpha service or it errors,
+        # leaving the fields None so the audit omits those checks rather than
+        # guessing.
+        enhanced_measurement: bool | None = None
+        site_search_enabled: bool | None = None
+        google_signals_state: str | None = None
+        if self._alpha is not None:
+            try:
+                alpha = self._alpha.properties()
+                em_flags: list[bool] = []
+                ss_flags: list[bool] = []
+                for s in web_streams:
+                    name = s.get("name")
+                    if not name:
+                        continue
+                    em = self._execute(
+                        alpha.dataStreams().getEnhancedMeasurementSettings(
+                            name=f"{name}/enhancedMeasurementSettings"
+                        )
+                    )
+                    em_flags.append(bool(em.get("streamEnabled")))
+                    ss_flags.append(bool(em.get("siteSearchEnabled")))
+                if em_flags:
+                    enhanced_measurement = any(em_flags)
+                    site_search_enabled = any(ss_flags)
+                gs = self._execute(
+                    alpha.getGoogleSignalsSettings(name=f"{property_id}/googleSignalsSettings")
+                )
+                google_signals_state = gs.get("state")
+            except ApiError:
+                pass  # v1alpha is best-effort; leave the fields None
+
         return {
             "property_id": property_id,
             "stream_count": len(streams),
@@ -78,6 +114,9 @@ class Ga4AdminClient:
                 }
                 for d in custom_dims
             ],
+            "enhanced_measurement": enhanced_measurement,
+            "site_search_enabled": site_search_enabled,
+            "google_signals_state": google_signals_state,
         }
 
 
@@ -92,4 +131,8 @@ def build_ga4_admin_client(config: Config) -> Ga4AdminClient:
 
     creds = build_google_credentials(config, required_scopes(config))
     service = build("analyticsadmin", "v1beta", credentials=creds, cache_discovery=False)
-    return Ga4AdminClient(service)
+    try:
+        alpha = build("analyticsadmin", "v1alpha", credentials=creds, cache_discovery=False)
+    except Exception:
+        alpha = None  # v1alpha checks degrade gracefully if discovery is unavailable
+    return Ga4AdminClient(service, alpha)

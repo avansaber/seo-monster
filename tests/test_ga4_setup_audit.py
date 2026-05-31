@@ -147,7 +147,7 @@ def test_handler_happy_path_verdict_issues(make_config):
     d = res["data"]
     assert d["property_id"] == "properties/123"
     assert d["summary"]["verdict"] == "issues"  # missing key events = high
-    assert d["deferred_checks"]
+    assert d["deferred_checks"] == []  # v1alpha checks are now implemented
 
 
 def test_handler_clean_verdict(make_config):
@@ -171,3 +171,87 @@ def test_handler_missing_property(make_config):
     res = ga4_tools.ga4_setup_audit({}, cfg, clients)
     assert res["ok"] is False
     assert res["error"]["code"] == "INVALID_INPUT"
+
+
+# --- v1alpha checks (enhanced measurement / site search / Google Signals) ---
+
+
+def test_audit_enhanced_measurement_off_is_medium():
+    f = ga4_tools._audit_setup(_good_cfg(enhanced_measurement=False))
+    assert any(x["rule_id"] == "ga4.enhanced_measurement" and x["severity"] == "medium" for x in f)
+
+
+def test_audit_site_search_off_when_em_on_is_medium():
+    f = ga4_tools._audit_setup(_good_cfg(enhanced_measurement=True, site_search_enabled=False))
+    assert any(x["rule_id"] == "ga4.site_search" and x["severity"] == "medium" for x in f)
+
+
+def test_audit_site_search_skipped_when_em_off():
+    # EM-off is already flagged; don't also nag about site search.
+    f = ga4_tools._audit_setup(_good_cfg(enhanced_measurement=False, site_search_enabled=False))
+    assert all(x["rule_id"] != "ga4.site_search" for x in f)
+
+
+def test_audit_google_signals_reported_as_info():
+    f = ga4_tools._audit_setup(_good_cfg(google_signals_state="GOOGLE_SIGNALS_ENABLED"))
+    assert any(x["rule_id"] == "ga4.google_signals" and x["severity"] == "info" for x in f)
+
+
+def test_audit_v1alpha_fields_none_means_skip():
+    # None (v1alpha unavailable) -> those checks are skipped, not failed.
+    ids = {x["rule_id"] for x in ga4_tools._audit_setup(_good_cfg())}
+    assert not ({"ga4.enhanced_measurement", "ga4.site_search", "ga4.google_signals"} & ids)
+
+
+class _AlphaProps:
+    def __init__(self, em, gs):
+        self._em, self._gs = em, gs
+
+    def dataStreams(self):
+        em = self._em
+
+        class _DS:
+            def getEnhancedMeasurementSettings(self, name=None):
+                return _Req(em)
+
+        return _DS()
+
+    def getGoogleSignalsSettings(self, name=None):
+        return _Req(self._gs)
+
+
+class _AlphaSvc:
+    def __init__(self, em, gs):
+        self._em, self._gs = em, gs
+
+    def properties(self):
+        return _AlphaProps(self._em, self._gs)
+
+
+def test_get_setup_reads_v1alpha_when_available():
+    data = {
+        "dataStreams": {"dataStreams": [
+            {"name": "properties/1/dataStreams/1", "displayName": "Web", "type": "WEB_DATA_STREAM", "webStreamData": {"measurementId": "G-ABC"}},
+        ]},
+        "keyEvents": {"keyEvents": [{"eventName": "purchase"}]},
+        "retention": {"eventDataRetention": "FOURTEEN_MONTHS"},
+        "customDimensions": {"customDimensions": []},
+    }
+    alpha = _AlphaSvc(em={"streamEnabled": True, "siteSearchEnabled": False}, gs={"state": "GOOGLE_SIGNALS_ENABLED"})
+    cfg = Ga4AdminClient(_Svc(data), alpha).get_setup("properties/1")
+    assert cfg["enhanced_measurement"] is True
+    assert cfg["site_search_enabled"] is False
+    assert cfg["google_signals_state"] == "GOOGLE_SIGNALS_ENABLED"
+
+
+def test_get_setup_without_alpha_leaves_v1alpha_none():
+    data = {
+        "dataStreams": {"dataStreams": [{"name": "p/1/dataStreams/1", "type": "WEB_DATA_STREAM"}]},
+        "keyEvents": {"keyEvents": []},
+        "retention": {"eventDataRetention": "FOURTEEN_MONTHS"},
+        "customDimensions": {"customDimensions": []},
+    }
+    cfg = Ga4AdminClient(_Svc(data)).get_setup("properties/1")  # no alpha service
+    assert cfg["enhanced_measurement"] is None
+    assert cfg["site_search_enabled"] is None
+    assert cfg["google_signals_state"] is None
