@@ -1,4 +1,19 @@
-# SEOMonster
+<p align="center">
+  <img src="assets/logo.svg" alt="SEOMonster" width="120" height="120">
+</p>
+
+<h1 align="center">SEOMonster</h1>
+
+<p align="center">
+  <em>Turn the AI assistant you already use into an SEO analyst that works from your own data.</em>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/v/seo-monster?color=2BD9A8" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/pyversions/seo-monster" alt="Python versions"></a>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
+  <a href="https://seomonster.avansaber.com"><img src="https://img.shields.io/badge/website-seomonster.avansaber.com-2BD9A8" alt="Website"></a>
+</p>
 
 **SEOMonster turns the AI assistant you already use into an SEO analyst that
 works from your own data.** Ask it what to write next and it surfaces the topics
