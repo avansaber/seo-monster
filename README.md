@@ -94,13 +94,17 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 
 <a name="content"></a>
 **Content intelligence (1, v0.7.0)**
-- `content_opportunities(site_url?, days?, count?)` - ranks data-grounded
-  content topics from your own Search Console data: fuses CTR-vs-expected gap
-  (curve self-calibrated from your own per-position CTR), striking-distance
-  position, demand, and momentum into a transparent opportunity score; flags
-  cannibalization. Prioritizes demand you already have; does not do cold-start
-  keyword research or write the content. Pairs with the content workflow
-  prompts below.
+- `content_opportunities(site_url?, days?, count?, impressions_min?)` - ranks
+  data-grounded content topics from your own Search Console data: fuses
+  CTR-vs-expected gap (curve self-calibrated from your own per-position CTR),
+  striking-distance position, demand, and momentum into a transparent
+  opportunity score; flags cannibalization. If a GA4 property is configured, it
+  also weights each topic by the organic conversions its top page already drives
+  (up to +50%), so topics that convert rank higher; `filters_applied.ga4_value_status`
+  reports whether that ran and why (`applied` / `no_ga4_property` /
+  `ga4_unreachable` / `no_conversions`). Prioritizes demand you already have;
+  does not do cold-start keyword research or write the content. Pairs with the
+  content workflow prompts below. (GA4 weighting v0.7.3)
 
 <a name="ga4"></a>
 **Google Analytics 4 (7)**
@@ -109,9 +113,10 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 - `ga4_top_landing_pages` - top landing pages, organic-only by default.
 - `ga4_traffic_by_channel` - sessions/engagement/conversions by channel group.
 - `ga4_organic_search_overview` - organic totals plus a day-by-day trend.
-- `ga4_setup_audit(property_id?)` - read-only SEO-measurement-readiness audit
-  (web data stream, key events, data retention, content-group dimensions),
-  severity-graded with a benign exception per finding. Uses the GA4 Admin API
+- `ga4_setup_audit(property_id?)` - read-only SEO-measurement-readiness audit:
+  web data stream, key events, data retention, content-group dimensions, and
+  (v0.7.4) enhanced measurement, internal site search, and Google Signals.
+  Severity-graded with a benign exception per finding. Uses the GA4 Admin API
   over REST (analytics.readonly; no extra dependency). (v0.7.0)
 - `ga4_site_search(days?, limit?)` - internal site-search query report (a
   direct content-gap signal); honest envelope when no real search terms. (v0.7.1)
@@ -121,7 +126,9 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 <a name="psi"></a>
 **PageSpeed Insights (2)**
 - `psi_analyze` - Lighthouse scores, lab Core Web Vitals, and field (CrUX) Core
-  Web Vitals for a URL. Defaults to the mobile strategy.
+  Web Vitals for a URL. Defaults to the mobile strategy. Field data carries a
+  `field_data_note`: Google is deprecating PSI field data, so use `crux_snapshot`
+  / `crux_history` for durable field metrics.
 - `psi_opportunities(url, strategy?)` - the actionable Lighthouse "opportunity"
   audits (with estimated savings) plus the SEO-category audits, severity-graded.
   Lab data only. An on-page-basics checklist, not a ranking predictor. (v0.7.1)
