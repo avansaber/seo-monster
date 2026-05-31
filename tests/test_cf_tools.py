@@ -4,8 +4,6 @@ writes and makes zero calls when off) and the confirm-token logic."""
 
 from __future__ import annotations
 
-import pytest
-
 from seo_mcp.tools import cf_tools
 
 
@@ -224,3 +222,105 @@ def test_build_cf_client_returns_none_without_token(make_config):
 
     assert build_cf_client(make_config()) is None
     assert build_cf_client(_cfg(make_config)) is not None
+
+
+# --- cf_settings_audit ----------------------------------------------------
+#
+# conftest's FakeCfTransport has no label for the /settings path, so we build a
+# small local fake: a real CfClient whose _raw_request returns a canned settings
+# envelope for the settings call and the zone envelope for the name-filtered
+# resolve. We do NOT edit conftest.
+
+
+def _zone_envelope():
+    return {
+        "success": True,
+        "errors": [],
+        "result": [{"id": "zone123", "name": "example.com"}],
+    }
+
+
+def _settings_envelope(settings):
+    return {"success": True, "errors": [], "result": settings}
+
+
+def _make_settings_client(settings):
+    from seo_mcp.clients.cloudflare import CfClient
+
+    client = CfClient(token="testtoken")
+
+    def _raw(method, path, body=None):
+        if "/settings" in path:
+            return _settings_envelope(settings)
+        return _zone_envelope()  # the name-filtered zone resolve
+
+    client._raw_request = _raw
+    return client
+
+
+_BAD_SETTINGS = [
+    {"id": "ssl", "value": "flexible"},
+    {"id": "always_use_https", "value": "off"},
+    {"id": "security_header", "value": {"strict_transport_security": {"enabled": False}}},
+    {"id": "automatic_https_rewrites", "value": "off"},
+    {"id": "brotli", "value": "off"},
+    {"id": "browser_cache_ttl", "value": 0},
+]
+
+_GOOD_SETTINGS = [
+    {"id": "ssl", "value": "strict"},
+    {"id": "always_use_https", "value": "on"},
+    {"id": "security_header", "value": {"strict_transport_security": {"enabled": True, "max_age": 31536000}}},
+    {"id": "automatic_https_rewrites", "value": "on"},
+    {"id": "brotli", "value": "on"},
+    {"id": "browser_cache_ttl", "value": 14400},
+]
+
+
+def test_settings_audit_bad_zone_flags_issues(make_config):
+    client = _make_settings_client(_BAD_SETTINGS)
+    result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["zone"] == "example.com"
+    assert data["summary"]["verdict"] == "issues"  # ssl + always_https are high
+    rule_ids = {f["rule_id"] for f in data["findings"]}
+    assert {"cf.ssl_mode", "cf.always_https", "cf.hsts"} <= rule_ids
+    # snapshot carries the observed raw values.
+    assert data["settings_snapshot"]["ssl"] == "flexible"
+
+
+def test_settings_audit_hsts_never_critical_when_off(make_config):
+    client = _make_settings_client(_BAD_SETTINGS)
+    result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
+    hsts = next(f for f in result["data"]["findings"] if f["rule_id"] == "cf.hsts")
+    # NEVER hard-fail HSTS: it is graded medium, never critical/high.
+    assert hsts["severity"] == "medium"
+    assert hsts["severity"] not in ("critical", "high")
+    assert all(
+        f["severity"] != "critical" for f in result["data"]["findings"] if f["rule_id"] == "cf.hsts"
+    )
+
+
+def test_settings_audit_good_zone_is_clean(make_config):
+    client = _make_settings_client(_GOOD_SETTINGS)
+    result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
+    assert result["ok"] is True
+    assert result["data"]["findings"] == []
+    assert result["data"]["summary"]["verdict"] == "clean"
+
+
+def test_settings_audit_short_hsts_flagged_medium(make_config):
+    settings = list(_GOOD_SETTINGS)
+    settings[2] = {"id": "security_header", "value": {"strict_transport_security": {"enabled": True, "max_age": 3600}}}
+    client = _make_settings_client(settings)
+    result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
+    hsts = next(f for f in result["data"]["findings"] if f["rule_id"] == "cf.hsts")
+    assert hsts["severity"] == "medium"
+    # A short-max-age HSTS does not escalate the verdict to issues by itself.
+    assert result["data"]["summary"]["verdict"] == "review"
+
+
+def test_settings_audit_auth_missing_without_client(make_config):
+    result = cf_tools.cf_settings_audit({}, make_config(), {})
+    assert result["error"]["code"] == "AUTH_MISSING"

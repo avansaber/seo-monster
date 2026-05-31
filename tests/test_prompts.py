@@ -20,6 +20,12 @@ def test_v05_prompts_registered():
         "technical_seo_audit",
         "structured_data_audit",
         "pre_deploy_check",
+        "content_brief",
+        "content_outline",
+        "content_article",
+        "content_workflow",
+        "content_performance",
+        "seo_setup_audit",
     }
     assert set(names) == expected
     assert len(names) == len(expected)
@@ -143,3 +149,108 @@ def test_system_status_surfaces_prompt_names(make_config):
 
     data = handle({}, make_config(), {}, ["system_status"], ["a", "b"])["data"]
     assert data["prompts"] == ["a", "b"]
+
+
+# --- v0.7 content-pipeline + audit-orchestration prompts ------------------
+
+
+def test_content_brief_registered_and_renders():
+    assert "content_brief" in prompts.prompt_names()
+    body = prompts.render(
+        "content_brief",
+        {"topic": "best running shoes", "target_query": "best running shoes 2026", "site_url": "sc-domain:example.com"},
+    )
+    assert body
+    # Evidence-gathering tools
+    assert "gsc_top_pages_by_query" in body
+    assert "inspect_meta" in body
+    assert "inspect_schema" in body
+    # Arguments echoed
+    assert "best running shoes 2026" in body
+    assert "sc-domain:example.com" in body
+    # Required brief sections
+    for section in ("word count", "Heading structure", "Schema type", "Internal-link", "Competitor gaps", "Target queries"):
+        assert section in body
+    # Honest framing
+    assert "does not guarantee" in body
+
+
+def test_content_outline_registered_and_renders():
+    assert "content_outline" in prompts.prompt_names()
+    body = prompts.render("content_outline", {"brief": "BRIEF-TEXT-HERE"})
+    assert body
+    assert "BRIEF-TEXT-HERE" in body
+    # Validation rules stated
+    assert "5 H2" in body
+    assert "70%" in body
+    assert "primary keyword" in body
+    assert "HowTo" in body
+    assert "conclusion" in body
+
+
+def test_content_article_registered_and_renders():
+    assert "content_article" in prompts.prompt_names()
+    body = prompts.render("content_article", {"outline": "OUTLINE-TEXT", "brief": "BRIEF-TEXT"})
+    assert body
+    assert "OUTLINE-TEXT" in body
+    assert "BRIEF-TEXT" in body
+    # Validation rules
+    assert "15%" in body
+    assert "density" in body
+    assert "JSON-LD" in body
+    assert "em-dash" in body
+    assert "filler" in body
+    # And the prompt body itself must contain no em-dash characters
+    assert "—" not in body
+
+
+def test_content_workflow_registered_and_references_chain():
+    assert "content_workflow" in prompts.prompt_names()
+    body = prompts.render("content_workflow", {"site_url": "sc-domain:example.com", "days": 14})
+    assert body
+    # References the exact prompt/tool names in the chain
+    for name in (
+        "content_opportunities",
+        "content_brief",
+        "content_outline",
+        "content_article",
+        "pre_deploy_check",
+        "gsc_request_indexing",
+        "indexnow_submit",
+        "content_performance",
+    ):
+        assert name in body
+    assert '"days": 14' in body
+    assert "sc-domain:example.com" in body
+
+
+def test_content_performance_registered_and_renders():
+    assert "content_performance" in prompts.prompt_names()
+    body = prompts.render(
+        "content_performance",
+        {"url": "https://example.com/post", "target_queries": ["q1", "q2"], "site_url": "sc-domain:example.com"},
+    )
+    assert body
+    assert "gsc_compare_periods" in body
+    assert "gsc_search_analytics" in body
+    assert "https://example.com/post" in body
+    # Before/after framing + honest bound
+    assert "before/after" in body or "before" in body and "after" in body
+    assert "does not guarantee" in body
+    assert "4 to 8 weeks" in body
+
+
+def test_seo_setup_audit_registered_and_references_audits():
+    assert "seo_setup_audit" in prompts.prompt_names()
+    body = prompts.render("seo_setup_audit", {"site_url": "sc-domain:example.com", "property_id": "12345"})
+    assert body
+    # The exact audit tool names it chains
+    for name in ("ga4_setup_audit", "cf_settings_audit", "psi_opportunities", "robots_txt_validate"):
+        assert name in body
+    # Severity-ranked consolidated report
+    assert "critical" in body
+    assert "severity" in body.lower()
+    # Honest bound: configuration, not ranking prediction
+    assert "does not predict" in body or "does not predict or guarantee" in body
+    # property_id propagated
+    assert "12345" in body

@@ -271,3 +271,69 @@ def test_probe_without_property_raises(make_ga4_client, ga4_response):
     client = make_ga4_client(ga4_response([], ["sessions"], []), default_property=None)
     with pytest.raises(ApiError):
         client.probe()
+
+
+# --- ga4_site_search ------------------------------------------------------
+
+
+def test_site_search_returns_terms(make_config, make_ga4_client, ga4_response):
+    resp = ga4_response(
+        ["searchTerm"],
+        ["eventCount", "sessions"],
+        [(["pricing"], ["40", "33"]), (["refund policy"], ["12", "11"])],
+    )
+    client = make_ga4_client(resp)
+    result = ga4_tools.ga4_site_search({"days": 14, "limit": 25}, _cfg(make_config), {"ga4": client})
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["has_site_search_data"] is True
+    assert data["days"] == 14
+    assert data["rows"][0] == {"dimensions": ["pricing"], "metrics": [40, 33]}
+    req = client._analytics.requests[0]
+    assert [d.name for d in req.dimensions] == ["searchTerm"]
+    assert [m.name for m in req.metrics] == ["eventCount", "sessions"]
+    assert req.date_ranges[0].start_date == "14daysAgo"
+    assert req.limit == 25
+    assert req.order_bys[0].metric.metric_name == "eventCount"
+
+
+def test_site_search_empty_is_honest(make_config, make_ga4_client, ga4_response):
+    client = make_ga4_client(ga4_response(["searchTerm"], ["eventCount", "sessions"], []))
+    result = ga4_tools.ga4_site_search({}, _cfg(make_config), {"ga4": client})
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["has_site_search_data"] is False
+    assert "note" in data
+    assert data["rows"] == []
+
+
+# --- ga4_landing_page_conversions -----------------------------------------
+
+
+def test_landing_page_conversions_organic_default(make_config, make_ga4_client, ga4_response):
+    resp = ga4_response(
+        ["landingPage", "sessionDefaultChannelGroup"],
+        ["sessions", "conversions"],
+        [(["/buy", "Organic Search"], ["200", "18"]), (["/blog", "Organic Search"], ["500", "4"])],
+    )
+    client = make_ga4_client(resp)
+    result = ga4_tools.ga4_landing_page_conversions({"days": 30}, _cfg(make_config), {"ga4": client})
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["organic_only"] is True
+    assert data["days"] == 30
+    assert data["rows"][0] == {"dimensions": ["/buy", "Organic Search"], "metrics": [200, 18]}
+    req = client._analytics.requests[0]
+    assert [d.name for d in req.dimensions] == ["landingPage", "sessionDefaultChannelGroup"]
+    assert [m.name for m in req.metrics] == ["sessions", "conversions"]
+    assert req.dimension_filter.filter.string_filter.value == "Organic Search"
+    assert req.order_bys[0].metric.metric_name == "conversions"
+    assert req.order_bys[0].desc is True
+
+
+def test_landing_page_conversions_organic_off_drops_filter(make_config, make_ga4_client, ga4_response):
+    resp = ga4_response(["landingPage", "sessionDefaultChannelGroup"], ["sessions", "conversions"], [])
+    client = make_ga4_client(resp)
+    ga4_tools.ga4_landing_page_conversions({"organic_only": False}, _cfg(make_config), {"ga4": client})
+    req = client._analytics.requests[0]
+    assert not req.dimension_filter.filter.field_name

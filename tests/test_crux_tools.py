@@ -143,3 +143,120 @@ def test_crux_400_insufficient_data_returns_no_data():
     assert CruxHistoryClient._is_no_data(400, '{"error":{"message":"insufficient data"}}')
     assert CruxHistoryClient._is_no_data(404, "anything") is True
     assert CruxHistoryClient._is_no_data(500, "x") is False
+
+
+# --- crux_snapshot --------------------------------------------------------
+
+
+def _client_current_with(canned: Any) -> CruxHistoryClient:
+    """Fake the queryRecord (current) seam, mirroring _client_with."""
+    client = CruxHistoryClient(api_key="testkey")
+
+    def fake(body):
+        if isinstance(canned, Exception):
+            raise canned
+        client._last_body = body
+        return canned
+
+    client._http_post_current = fake
+    return client
+
+
+_CURRENT_RECORD = {
+    "record": {
+        "key": {"url": "https://example.com/page"},
+        "metrics": {
+            "largest_contentful_paint": {"percentiles": {"p75": "2300"}},
+            "interaction_to_next_paint": {"percentiles": {"p75": "260"}},
+            "cumulative_layout_shift": {"percentiles": {"p75": "0.05"}},
+            "first_contentful_paint": {"percentiles": {"p75": "1700"}},
+            "experimental_time_to_first_byte": {"percentiles": {"p75": "2000"}},
+        },
+    }
+}
+
+
+def test_crux_snapshot_parses_p75_and_categories(make_config):
+    client = _client_current_with(_CURRENT_RECORD)
+    result = crux_tools.crux_snapshot(
+        {"url": "https://example.com/page", "form_factor": "PHONE"},
+        make_config(),
+        {"crux": client},
+    )
+    assert result["ok"] is True
+    d = result["data"]
+    assert d["key"] == "https://example.com/page"
+    assert d["form_factor"] == "PHONE"
+    assert d["no_data"] is False
+    m = d["metrics"]
+    # LCP 2300ms <= 2500 -> GOOD
+    assert m["LCP"] == {"p75_ms": 2300.0, "category": "GOOD"}
+    # INP 260ms between 200 and 500 -> NEEDS_IMPROVEMENT
+    assert m["INP"] == {"p75_ms": 260.0, "category": "NEEDS_IMPROVEMENT"}
+    # CLS 0.05 <= 0.1 -> GOOD, exposed unitless
+    assert m["CLS"] == {"p75": 0.05, "category": "GOOD"}
+    # TTFB 2000ms >= 1800 -> POOR
+    assert m["TTFB"] == {"p75_ms": 2000.0, "category": "POOR"}
+    # Overall = worst of the three core vitals (LCP/INP/CLS) -> NEEDS_IMPROVEMENT
+    assert d["overall_category"] == "NEEDS_IMPROVEMENT"
+    # Snapshot uses the queryRecord seam with the requested metric list.
+    assert "largest_contentful_paint" in client._last_body["metrics"]
+
+
+def test_crux_snapshot_origin_branch(make_config):
+    client = _client_current_with(_CURRENT_RECORD)
+    result = crux_tools.crux_snapshot(
+        {"origin": "https://example.com"},
+        make_config(),
+        {"crux": client},
+    )
+    assert result["data"]["key"] == "https://example.com"
+    assert client._last_body["origin"] == "https://example.com"
+
+
+def test_crux_snapshot_no_data(make_config):
+    client = _client_current_with({"record": None, "no_data": True})
+    result = crux_tools.crux_snapshot({"url": "https://obscure.example/"}, make_config(), {"crux": client})
+    d = result["data"]
+    assert d["no_data"] is True
+    assert d["metrics"] == {}
+    assert d["overall_category"] is None
+
+
+def test_crux_snapshot_requires_url_or_origin(make_config):
+    client = _client_current_with({"record": None})
+    result = crux_tools.crux_snapshot({}, make_config(), {"crux": client})
+    assert result["ok"] is False
+    assert result["error"]["code"] == ErrorCode.INVALID_INPUT
+
+
+def test_crux_snapshot_rejects_both(make_config):
+    client = _client_current_with({"record": None})
+    result = crux_tools.crux_snapshot(
+        {"url": "https://example.com/p", "origin": "https://example.com"},
+        make_config(),
+        {"crux": client},
+    )
+    assert result["ok"] is False
+    assert "OR" in result["error"]["message"]
+
+
+def test_crux_snapshot_surfaces_upstream_error(make_config):
+    client = _client_current_with(ApiError(ErrorCode.UPSTREAM_ERROR, "crux 503"))
+    result = crux_tools.crux_snapshot({"url": "https://example.com/"}, make_config(), {"crux": client})
+    assert result["ok"] is False
+    assert result["error"]["code"] == ErrorCode.UPSTREAM_ERROR
+
+
+def test_query_current_builds_origin_body():
+    client = _client_current_with({"record": None})
+    client.query_current(origin="https://example.com", form_factor="phone")
+    assert client._last_body["origin"] == "https://example.com"
+    assert client._last_body["formFactor"] == "PHONE"
+
+
+def test_query_current_requires_url_or_origin():
+    client = _client_current_with({"record": None})
+    with pytest.raises(ApiError) as ei:
+        client.query_current()
+    assert ei.value.code == ErrorCode.INVALID_INPUT

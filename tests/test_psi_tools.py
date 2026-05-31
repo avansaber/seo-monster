@@ -191,3 +191,106 @@ def test_cf_429_keeps_generic_remediation():
     # generic retry hint.
     error = map_http_status(429, "Rate limited", service="Cloudflare")
     assert error.remediation == "Retry after a short delay."
+
+
+# --- psi_opportunities -----------------------------------------------------
+
+
+PSI_OPPORTUNITIES = {
+    "lighthouseResult": {
+        "categories": {
+            "performance": {"score": 0.6},
+            "seo": {
+                "score": 0.85,
+                "auditRefs": [
+                    {"id": "is-crawlable", "weight": 1},
+                    {"id": "viewport", "weight": 1},
+                    {"id": "document-title", "weight": 1},
+                    {"id": "meta-description", "weight": 1},
+                    {"id": "image-alt", "weight": 0},
+                    {"id": "font-size", "weight": 1},
+                    {"id": "unknown-future-audit", "weight": 0},
+                    {"id": "structured-data", "weight": 0},  # manual -> dropped
+                ],
+            },
+        },
+        "audits": {
+            "is-crawlable": {"title": "Page isn't blocked from indexing", "score": 1},
+            "viewport": {"title": "Has a <meta name=viewport>", "score": 0},
+            "document-title": {"title": "Document has a <title>", "score": 1},
+            "meta-description": {"title": "Document has a meta description", "score": 0},
+            "image-alt": {"title": "Image elements have [alt]", "score": 1},
+            "font-size": {"title": "Legible font sizes", "score": 1},
+            "unknown-future-audit": {"title": "Some new SEO audit", "score": 0},
+            "structured-data": {"title": "Structured data is valid", "score": None, "scoreDisplayMode": "manual"},
+            "render-blocking-resources": {
+                "title": "Eliminate render-blocking resources",
+                "displayValue": "Potential savings of 450 ms",
+                "details": {"type": "opportunity", "overallSavingsMs": 450},
+            },
+            "unused-javascript": {
+                "title": "Reduce unused JavaScript",
+                "displayValue": "Potential savings of 1,200 ms",
+                "details": {"type": "opportunity", "overallSavingsMs": 1200},
+            },
+            "uses-long-cache-ttl": {
+                "title": "Serve static assets with an efficient cache policy",
+                "details": {"type": "table"},  # not an opportunity
+            },
+        },
+    },
+}
+
+
+def _sev(audits, audit_id):
+    return next(a for a in audits if a["id"] == audit_id)
+
+
+def test_opportunities_extracts_perf_and_seo(make_config):
+    client = _client_returning(PSI_OPPORTUNITIES)
+    result = psi_tools.psi_opportunities({"url": "https://www.example.com/"}, make_config(), {"psi": client})
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["strategy"] == "mobile"
+
+    # Opportunities: only details.type == "opportunity", sorted by savings desc.
+    opp_ids = [o["id"] for o in data["opportunities"]]
+    assert opp_ids == ["unused-javascript", "render-blocking-resources"]
+    assert data["opportunities"][0]["overall_savings_ms"] == 1200
+    assert data["opportunities"][0]["display_value"] == "Potential savings of 1,200 ms"
+    assert "uses-long-cache-ttl" not in opp_ids  # table type excluded
+
+    # SEO audits graded by RULESETS §4 severity.
+    seo = data["seo_audits"]
+    seo_ids = {a["id"] for a in seo}
+    assert "structured-data" not in seo_ids  # manual audit dropped
+    assert _sev(seo, "is-crawlable")["severity"] == "critical"
+    assert _sev(seo, "viewport")["severity"] == "critical"
+    assert _sev(seo, "document-title")["severity"] == "high"
+    assert _sev(seo, "meta-description")["severity"] == "high"
+    assert _sev(seo, "image-alt")["severity"] == "medium"
+    assert _sev(seo, "font-size")["severity"] == "low"
+    # Unmapped audit still surfaces, graded info (not dropped).
+    assert _sev(seo, "unknown-future-audit")["severity"] == "info"
+
+    # passed reflects score == 1.
+    assert _sev(seo, "is-crawlable")["passed"] is True
+    assert _sev(seo, "viewport")["passed"] is False
+
+    # Honest-bound note present.
+    assert data["notes"]
+    assert "ranking predictor" in data["notes"][0]
+
+
+def test_opportunities_requires_url(make_config):
+    client = _client_returning(PSI_OPPORTUNITIES)
+    result = psi_tools.psi_opportunities({}, make_config(), {"psi": client})
+    assert result["ok"] is False
+    assert result["error"]["code"] == "INVALID_INPUT"
+
+
+def test_opportunities_maps_upstream_error(make_config):
+    client = _client_raising(ApiError(ErrorCode.RATE_LIMITED, "rate"))
+    result = psi_tools.psi_opportunities({"url": "https://x.com"}, make_config(), {"psi": client})
+    assert result["ok"] is False
+    assert result["error"]["code"] == "RATE_LIMITED"

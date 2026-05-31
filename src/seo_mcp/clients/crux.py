@@ -35,6 +35,8 @@ from .errors import ApiError, map_http_status
 
 
 _ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryHistoryRecord"
+# Current single-window record (vs the 25-week history time series above).
+_RECORD_ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryRecord"
 _TIMEOUT_SECONDS = 30
 
 
@@ -65,11 +67,44 @@ class CruxHistoryClient:
             body["metrics"] = list(metrics)
         return self._http_post(body)
 
+    def query_current(
+        self,
+        *,
+        url: str | None = None,
+        origin: str | None = None,
+        form_factor: str | None = None,
+        metrics: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch the CURRENT single-window record (queryRecord) for a url or
+        origin, vs the 25-week time series ``query`` returns."""
+        if not (url or origin):
+            raise ApiError(ErrorCode.INVALID_INPUT, "crux_snapshot needs either url or origin.")
+        if url and origin:
+            raise ApiError(ErrorCode.INVALID_INPUT, "crux_snapshot accepts url OR origin, not both.")
+        body: dict[str, Any] = {}
+        if url:
+            body["url"] = url
+        else:
+            body["origin"] = origin
+        if form_factor:
+            body["formFactor"] = form_factor.upper()
+        if metrics:
+            body["metrics"] = list(metrics)
+        return self._http_post_current(body)
+
     def _http_post(self, body: dict[str, Any]) -> dict[str, Any]:
         """Perform the POST and return parsed JSON. Raises ApiError except
         when the failure means "no data" (404 / 400 insufficient data), which
         is mapped to an empty success body. Single seam tests monkeypatch."""
-        endpoint = _ENDPOINT + (f"?key={urllib.parse.quote(self._key)}" if self._key else "")
+        return self._post(_ENDPOINT, body, service="CrUX History")
+
+    def _http_post_current(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Same as ``_http_post`` but against the queryRecord (current) endpoint.
+        Separate seam so tests can monkeypatch the two windows independently."""
+        return self._post(_RECORD_ENDPOINT, body, service="CrUX")
+
+    def _post(self, base_endpoint: str, body: dict[str, Any], *, service: str) -> dict[str, Any]:
+        endpoint = base_endpoint + (f"?key={urllib.parse.quote(self._key)}" if self._key else "")
         data = json.dumps(body).encode("utf-8")
         request = urllib.request.Request(endpoint, data=data, method="POST")
         request.add_header("Content-Type", "application/json; charset=utf-8")
@@ -80,9 +115,9 @@ class CruxHistoryClient:
             body_text = exc.read().decode("utf-8", errors="replace")
             if self._is_no_data(exc.code, body_text):
                 return {"record": None, "no_data": True}
-            raise map_http_status(exc.code, body_text, service="CrUX History") from exc
+            raise map_http_status(exc.code, body_text, service=service) from exc
         except urllib.error.URLError as exc:
-            raise ApiError(ErrorCode.UPSTREAM_ERROR, f"CrUX History request failed: {exc.reason}") from exc
+            raise ApiError(ErrorCode.UPSTREAM_ERROR, f"{service} request failed: {exc.reason}") from exc
 
     @staticmethod
     def _is_no_data(status: int, body: str) -> bool:

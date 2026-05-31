@@ -138,5 +138,140 @@ def psi_analyze(arguments, config, clients) -> dict[str, Any]:
     )
 
 
-TOOLS = [TOOL_ANALYZE]
-HANDLERS = {"psi_analyze": psi_analyze}
+# --- psi_opportunities -----------------------------------------------------
+
+# Lighthouse SEO-category audit id -> severity, per RULESETS-content-and-audit
+# §4 (PSI-SEO audit ruleset). Audits not listed here fall back to "info" so a
+# newly-added Lighthouse SEO audit still surfaces rather than being dropped.
+_SEO_AUDIT_SEVERITY = {
+    "is-crawlable": "critical",
+    "http-status-code": "critical",
+    "viewport": "critical",
+    "document-title": "high",
+    "meta-description": "high",
+    "hreflang": "high",
+    "canonical": "high",
+    "image-alt": "medium",
+    "link-text": "medium",
+    "crawlable-anchors": "medium",
+    "font-size": "low",
+    "tap-targets": "low",
+}
+
+_SEO_AUDIT_NOTE = (
+    "The Lighthouse SEO category is an on-page-basics checklist, not a ranking "
+    "predictor. Passing these removes blockers; it does not cause ranking. For "
+    "page-level depth prefer the dedicated inspect_meta / check_canonical / "
+    "robots_txt_validate tools; use this for the at-a-glance category cross-check."
+)
+
+
+TOOL_OPPORTUNITIES = {
+    "name": "psi_opportunities",
+    "description": (
+        "Run PageSpeed Insights and return the actionable Lighthouse opportunity "
+        "audits (estimated load-time savings) plus the Lighthouse SEO-category "
+        "audits graded by severity (critical/high/medium/low). Lab data only; "
+        "does not use field/CrUX data (use crux_snapshot / crux_history for "
+        "real-user metrics). Defaults to the mobile strategy."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "Page URL to analyze. Required."},
+            "strategy": {"type": "string", "enum": ["mobile", "desktop"], "description": "Defaults to mobile."},
+        },
+        "required": ["url"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def _opportunity_audits(lighthouse: dict[str, Any]) -> list[dict[str, Any]]:
+    """Pull the actionable perf opportunities (details.type == 'opportunity')."""
+    audits = lighthouse.get("audits", {})
+    out: list[dict[str, Any]] = []
+    for audit_id, audit in audits.items():
+        if not isinstance(audit, dict):
+            continue
+        details = audit.get("details") or {}
+        if details.get("type") != "opportunity":
+            continue
+        out.append(
+            {
+                "id": audit_id,
+                "title": audit.get("title"),
+                "display_value": audit.get("displayValue"),
+                "overall_savings_ms": details.get("overallSavingsMs"),
+            }
+        )
+    # Heaviest savings first; missing savings sort last.
+    out.sort(key=lambda a: a.get("overall_savings_ms") or 0, reverse=True)
+    return out
+
+
+def _seo_audits(lighthouse: dict[str, Any]) -> list[dict[str, Any]]:
+    """Walk the SEO category's auditRefs, resolve each to its audit, and grade."""
+    categories = lighthouse.get("categories", {})
+    audits = lighthouse.get("audits", {})
+    refs = (categories.get("seo") or {}).get("auditRefs") or []
+    out: list[dict[str, Any]] = []
+    for ref in refs:
+        audit_id = ref.get("id")
+        if not audit_id:
+            continue
+        audit = audits.get(audit_id) or {}
+        # Manual / informative audits have no numeric score; skip the pure
+        # group headers but keep anything Lighthouse actually scored.
+        score = audit.get("score")
+        score_mode = audit.get("scoreDisplayMode")
+        if score is None and score_mode in ("manual", "notApplicable", "informative"):
+            continue
+        out.append(
+            {
+                "id": audit_id,
+                "title": audit.get("title"),
+                "score": score,
+                "passed": score == 1 if score is not None else None,
+                "severity": _SEO_AUDIT_SEVERITY.get(audit_id, "info"),
+            }
+        )
+    return out
+
+
+def psi_opportunities(arguments, config, clients) -> dict[str, Any]:
+    client, error = require_client(
+        clients,
+        "psi",
+        _SERVICE,
+        remediation="PageSpeed Insights needs no key to work, but a PSI_API_KEY relaxes rate limits.",
+    )
+    if error:
+        return error
+
+    url = arguments.get("url")
+    if not url:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "url is required.", docs_url=DOCS_BASE + "psi")
+    strategy = arguments.get("strategy", "mobile")
+
+    try:
+        data = client.analyze(url, strategy=strategy, categories=["performance", "seo"])
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    lighthouse = data.get("lighthouseResult", {})
+
+    return ok(
+        {
+            "url": url,
+            "strategy": strategy,
+            "opportunities": _opportunity_audits(lighthouse),
+            "seo_audits": _seo_audits(lighthouse),
+            "notes": [_SEO_AUDIT_NOTE],
+        }
+    )
+
+
+TOOLS = [TOOL_ANALYZE, TOOL_OPPORTUNITIES]
+HANDLERS = {"psi_analyze": psi_analyze, "psi_opportunities": psi_opportunities}

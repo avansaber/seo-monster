@@ -107,6 +107,12 @@ class CfClient:
         # The name-filtered lookup already returns the full zone object.
         return self.resolve_zone(hostname)
 
+    def get_zone_settings(self, zone_id: str) -> list[dict[str, Any]]:
+        """Read all zone settings (read-only). CF returns a list of
+        ``{id, value, editable, modified_on, ...}`` entries; the caller indexes
+        by ``id`` (e.g. 'ssl', 'always_use_https', 'security_header')."""
+        return self._http_request("GET", f"/zones/{zone_id}/settings").get("result", [])
+
     # --- dns --------------------------------------------------------------
 
     def list_dns(self, zone_id: str, record_type: str | None = None) -> list[dict[str, Any]]:

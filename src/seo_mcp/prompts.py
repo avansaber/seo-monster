@@ -116,6 +116,96 @@ PROMPTS: list[dict[str, Any]] = [
             {"name": "urls", "description": "JSON array of absolute URLs to gate before deploy. Required (at least 1).", "required": True},
         ],
     },
+    {
+        "name": "content_brief",
+        "description": (
+            "Build an evidence-based content brief for a topic. Pulls the "
+            "current top rankers from GSC, inspects their meta + schema (and "
+            "your existing page if any), then synthesizes a brief with a "
+            "calibrated word-count target, heading structure, schema type, "
+            "internal-link targets, competitor gaps, and target queries. "
+            "SEOMonster brings the rules and the competitor evidence; the LLM "
+            "brings the writing. No ranking guarantee: this structures the work."
+        ),
+        "arguments": [
+            {"name": "topic", "description": "The topic / working title to brief. Required.", "required": True},
+            {"name": "target_query", "description": "The primary search query the content should win. Required.", "required": True},
+            {"name": "site_url", "description": "GSC property override. Defaults to the configured SEO_MCP_GSC_DEFAULT_SITE.", "required": False},
+        ],
+    },
+    {
+        "name": "content_outline",
+        "description": (
+            "Turn a content brief into a validated H2/H3 outline. States the "
+            "structural rules the outline must pass (>= 5 H2 sections, >= 70% "
+            "of the brief's target queries referenced, H1 carries the primary "
+            "keyword, intro -> body -> conclusion flow, HowTo schema requires "
+            "structured steps). SEOMonster supplies the structure rules; the "
+            "LLM writes the outline."
+        ),
+        "arguments": [
+            {"name": "brief", "description": "The content brief (from content_brief, or pasted) to outline. Required.", "required": True},
+        ],
+    },
+    {
+        "name": "content_article",
+        "description": (
+            "Draft the full article from an outline + brief, then self-validate "
+            "against the brief's rules: word count within +/-15% of target, "
+            "per-section minimum length, sensible keyword density, internal-link "
+            "suggestions, an inline JSON-LD schema hint, no em-dashes, no filler. "
+            "The LLM writes the prose; SEOMonster supplies the validation checklist."
+        ),
+        "arguments": [
+            {"name": "outline", "description": "The H2/H3 outline (from content_outline). Required.", "required": True},
+            {"name": "brief", "description": "The content brief (from content_brief) with the targets to validate against. Required.", "required": True},
+        ],
+    },
+    {
+        "name": "content_workflow",
+        "description": (
+            "End-to-end content pipeline orchestration: surface an opportunity "
+            "with content_opportunities, then chain content_brief -> "
+            "content_outline -> content_article, gate the draft URL with "
+            "pre_deploy_check, notify search engines via gsc_request_indexing + "
+            "indexnow_submit, and schedule a content_performance check. "
+            "SEOMonster sequences the chain; the LLM does the writing at each step."
+        ),
+        "arguments": [
+            {"name": "site_url", "description": "GSC property override. Defaults to the configured SEO_MCP_GSC_DEFAULT_SITE.", "required": False},
+            {"name": "days", "description": "Lookback window for the opportunity scan. Defaults to 28.", "required": False},
+        ],
+    },
+    {
+        "name": "content_performance",
+        "description": (
+            "Layer-5 measurement of published content. Compares the URL's "
+            "ranking + clicks before and after publish (gsc_compare_periods + "
+            "gsc_search_analytics filtered to the URL/queries) ~4 to 8 weeks "
+            "post-publish and outputs a before/after table. Honest framing: it "
+            "measures the outcome, it does not guarantee it."
+        ),
+        "arguments": [
+            {"name": "url", "description": "Absolute URL of the published page to measure. Required.", "required": True},
+            {"name": "target_queries", "description": "JSON array of the queries the page targeted, to filter the analytics. Optional.", "required": False},
+            {"name": "site_url", "description": "GSC property override. Defaults to the configured SEO_MCP_GSC_DEFAULT_SITE.", "required": False},
+        ],
+    },
+    {
+        "name": "seo_setup_audit",
+        "description": (
+            "Whole-stack configuration audit: is your stack set up so SEO can "
+            "even work? Chains ga4_setup_audit (measurement), cf_settings_audit "
+            "(CDN/TLS), psi_opportunities (Lighthouse SEO basics on a "
+            "representative URL), and robots_txt_validate (crawl access), then "
+            "produces one severity-ranked report. Audits configuration hygiene "
+            "and removes known blockers; it does not predict ranking."
+        ),
+        "arguments": [
+            {"name": "site_url", "description": "GSC property / site override. Defaults to the configured SEO_MCP_GSC_DEFAULT_SITE.", "required": False},
+            {"name": "property_id", "description": "GA4 property id override. Defaults to the configured GA4 property.", "required": False},
+        ],
+    },
 ]
 
 
@@ -371,6 +461,282 @@ def _render_pre_deploy_check(args: dict[str, Any]) -> str:
     )
 
 
+def _render_content_brief(args: dict[str, Any]) -> str:
+    topic = args.get("topic") or "(none provided)"
+    target_query = args.get("target_query") or "(none provided)"
+    site_arg = args.get("site_url")
+    site_param = f', "site_url": "{site_arg}"' if site_arg else ""
+    site_phrase = f"`{site_arg}`" if site_arg else "the configured default property"
+    return (
+        "# Content brief\n\n"
+        "Honest framing: SEOMonster brings the rules and the competitor "
+        "evidence, the LLM brings the writing. This brief structures and "
+        "validates the work; it does not guarantee a ranking.\n\n"
+        "## Arguments\n"
+        f"- topic: {topic}\n"
+        f"- target_query: {target_query}\n"
+        f"- site_url: {site_phrase}\n\n"
+        "## Workflow\n"
+        "Execute in order; one envelope per tool invocation.\n\n"
+        f"  1. Call `gsc_top_pages_by_query` with `{{ \"query\": \"{target_query}\", \"days\": 28, \"limit\": 5{site_param} }}` "
+        "to identify who currently ranks for the target query. Treat the top "
+        "3 ranking URLs as the competitor set. If one of the returned pages "
+        "belongs to this site, treat it as the user's existing page.\n"
+        "  2. For each of the top 3 ranking URLs, call `inspect_meta` with "
+        "`{ \"url\": <the_url> }` to capture their title, meta description, "
+        "H1, and heading shape, then call `inspect_schema` with "
+        "`{ \"url\": <the_url> }` to see what schema.org @types they declare.\n"
+        "  3. If the user already has a page ranking for this topic, run "
+        "`inspect_meta` and `inspect_schema` on it too, so the brief can say "
+        "refresh-vs-net-new and reuse the existing schema type.\n"
+        "  4. Estimate each competitor's body word count from its heading "
+        "structure and visible content, and compute the top-ranker average. "
+        "This calibrates the target word count (do not invent a round number, "
+        "anchor it to the competitor average).\n\n"
+        "## Output: the brief (all sections REQUIRED)\n"
+        "- **Target word count**: the top-ranker average (state the per-"
+        "competitor numbers you derived it from).\n"
+        "- **Heading structure**: a proposed H1 plus the H2/H3 skeleton, "
+        "informed by the competitors' heading shapes.\n"
+        "- **Schema type**: the single most appropriate schema.org @type "
+        "(reuse the existing page's type if refreshing; match the dominant "
+        "competitor type otherwise).\n"
+        "- **Internal-link targets**: concrete on-site pages the new content "
+        "should link to.\n"
+        "- **Competitor gaps**: subtopics the top rankers miss or cover "
+        "thinly, framed as the angle this content can win on.\n"
+        "- **Target queries to cover**: the primary query plus the related "
+        "queries and entities the content must address.\n\n"
+        "## Validation rules the brief must pass\n"
+        "- Word-count target is anchored to the top-ranker average, not a "
+        "guess.\n"
+        "- Heading structure has a single H1 containing the primary keyword.\n"
+        "- Exactly one schema type is named.\n"
+        "- At least one internal-link target and at least one competitor gap "
+        "are listed.\n"
+        "- The target-queries list is non-empty and includes the primary "
+        "query."
+    )
+
+
+def _render_content_outline(args: dict[str, Any]) -> str:
+    brief = args.get("brief") or "(none provided)"
+    return (
+        "# Content outline\n\n"
+        "Honest framing: SEOMonster supplies the structure rules, the LLM "
+        "writes the outline. The rules below remove known structural blockers; "
+        "they do not guarantee a ranking.\n\n"
+        "## Arguments\n"
+        f"- brief:\n{brief}\n\n"
+        "## Task\n"
+        "Produce an H2/H3 outline for the article described by the brief "
+        "above. Use the brief's heading structure as the starting point and "
+        "expand it into a full section-by-section outline with one-line notes "
+        "on what each section covers and which target queries it serves.\n\n"
+        "## Validation rules the outline MUST pass\n"
+        "- At least 5 H2 sections.\n"
+        "- References at least 70% of the brief's target queries across the "
+        "section notes (list which query maps to which section).\n"
+        "- The H1 includes the primary keyword from the brief.\n"
+        "- Logical flow: an intro section, then the body sections, then a "
+        "conclusion / wrap-up.\n"
+        "- If the brief's schema type is `HowTo`, the body must be expressed "
+        "as ordered, structured steps (one H2 or H3 per step) so the steps "
+        "map cleanly to HowTo schema.\n\n"
+        "## Output\n"
+        "Emit the outline as nested markdown headings, then a short "
+        "self-check confirming each validation rule above is satisfied "
+        "(H2 count, query-coverage percentage, H1 keyword present, flow, "
+        "HowTo steps if applicable)."
+    )
+
+
+def _render_content_article(args: dict[str, Any]) -> str:
+    outline = args.get("outline") or "(none provided)"
+    brief = args.get("brief") or "(none provided)"
+    return (
+        "# Content article draft\n\n"
+        "Honest framing: the LLM writes the prose, SEOMonster supplies the "
+        "validation checklist. Passing these checks removes known on-page "
+        "blockers; it does not guarantee a ranking.\n\n"
+        "## Arguments\n"
+        f"- outline:\n{outline}\n\n"
+        f"- brief:\n{brief}\n\n"
+        "## Task\n"
+        "Write the full article following the outline section by section, "
+        "honoring the brief's target queries, schema type, and internal-link "
+        "targets.\n\n"
+        "## Validation rules the draft MUST pass\n"
+        "- **Word count**: within +/-15% of the brief's target word count.\n"
+        "- **Per-section length**: each H2 section meets a sensible minimum "
+        "(roughly 150 words or more) so no section is a stub.\n"
+        "- **Keyword presence + density**: the primary query and the brief's "
+        "target queries appear at a natural density (avoid stuffing; aim "
+        "roughly 0.5 to 2% for the primary term).\n"
+        "- **Internal links**: include the brief's internal-link targets as "
+        "inline link suggestions (anchor text plus the target URL).\n"
+        "- **Schema hint**: end with an inline JSON-LD block matching the "
+        "brief's schema type, populated from the article (a hint for the "
+        "publisher, clearly marked as a suggestion).\n"
+        "- **No em-dashes** anywhere in the prose; use commas, colons, or "
+        "periods instead.\n"
+        "- **No filler**: no throat-clearing intros, no padding sentences "
+        "written only to hit word count.\n\n"
+        "## Output\n"
+        "Emit the article in markdown, then the JSON-LD schema hint, then a "
+        "validation summary: measured word count vs target (and the +/-15% "
+        "verdict), shortest section length, primary-keyword density, list of "
+        "internal links included, and a confirmation that no em-dashes are "
+        "present."
+    )
+
+
+def _render_content_workflow(args: dict[str, Any]) -> str:
+    site_arg = args.get("site_url")
+    days = args.get("days") or 28
+    site_param = f', "site_url": "{site_arg}"' if site_arg else ""
+    site_phrase = f"`{site_arg}`" if site_arg else "the configured default property"
+    return (
+        "# Content workflow (end to end)\n\n"
+        "Honest framing: SEOMonster sequences the chain and supplies the rules "
+        "at each step, the LLM does the writing. The pipeline maximizes return "
+        "on effort and removes known blockers; it does not guarantee a ranking.\n\n"
+        "## Arguments\n"
+        f"- site_url: {site_phrase}\n"
+        f"- days: {days}\n\n"
+        "## Workflow\n"
+        "Run these steps in order. Pause for the user to confirm the chosen "
+        "topic and to review each draft before moving on.\n\n"
+        f"  1. Call the `content_opportunities` tool with `{{ \"days\": {days}{site_param} }}` "
+        "to surface scored topic candidates from the site's own GSC data. "
+        "Present the top candidates with their click-upside and action flag "
+        "(refresh / consolidate / new) and pick one topic + its target query.\n"
+        "  2. Run the `content_brief` prompt with the chosen `topic` and "
+        "`target_query` (and `site_url` if set) to build the evidence-based "
+        "brief.\n"
+        "  3. Run the `content_outline` prompt with that `brief` to produce a "
+        "validated H2/H3 outline.\n"
+        "  4. Run the `content_article` prompt with that `outline` and `brief` "
+        "to draft the article. Hand the draft to the user to publish.\n"
+        "  5. Once published, run the `pre_deploy_check` prompt on the draft "
+        "URL to gate it (robots, canonical, schema, redirects, mixed content) "
+        "before it goes live.\n"
+        "  6. After it is live, call `gsc_request_indexing` with "
+        "`{ \"urls\": [<the published URL>] }` to notify Google, then call "
+        "`indexnow_submit` with `{ \"url\": <the published URL> }` to notify "
+        "Bing, Yandex, and the other IndexNow engines.\n"
+        "  7. Schedule a follow-up: in 4 to 8 weeks, run the "
+        "`content_performance` prompt on the published URL with its target "
+        "queries to measure the ranking and click lift.\n\n"
+        "## Output\n"
+        "After each step, report the envelope / result so a failure mid-chain "
+        "leaves the user with a clear partial-success picture. End with the "
+        "scheduled content_performance check date so the loop closes."
+    )
+
+
+def _render_content_performance(args: dict[str, Any]) -> str:
+    url = args.get("url") or "(none provided)"
+    target_queries = args.get("target_queries") or "(none provided; measure the URL as a whole)"
+    site_arg = args.get("site_url")
+    site_param = f', "site_url": "{site_arg}"' if site_arg else ""
+    site_phrase = f"`{site_arg}`" if site_arg else "the configured default property"
+    return (
+        "# Content performance (Layer-5 measurement)\n\n"
+        "Honest framing: this measures the outcome, it does not guarantee it. "
+        "We own the controllable inputs, not Google's ranking algorithm, so "
+        "this prompt reports the lift, it does not claim to have caused it.\n\n"
+        "## Arguments\n"
+        f"- url: {url}\n"
+        f"- target_queries: {target_queries}\n"
+        f"- site_url: {site_phrase}\n\n"
+        "## Workflow\n"
+        "Run ~4 to 8 weeks after publish so Google has had time to crawl, "
+        "index, and settle rankings. Execute in order.\n\n"
+        f"  1. Call `gsc_compare_periods` with `{{ \"days\": 28, \"sort_by\": \"delta_clicks\", \"sort_dir\": \"desc\", \"top\": 50{site_param} }}` "
+        "and locate the rows for this URL to read its clicks / impressions / "
+        "position delta between the prior and current windows.\n"
+        f"  2. Call `gsc_search_analytics` filtered to this page with "
+        f"`{{ \"dimensions\": [\"query\"], \"page\": \"{url}\", \"days\": 28{site_param} }}` "
+        "to get the per-query clicks, impressions, CTR, and average position "
+        "for the page now. If `target_queries` was supplied, restrict the "
+        "report / your reading to those queries so the table stays focused.\n"
+        "  3. If the host supports a date range, pull the equivalent "
+        "pre-publish window for the same page/queries so you have a true "
+        "before snapshot; otherwise use the prior-window figures from the "
+        "compare_periods call in step 1.\n\n"
+        "## Output\n"
+        "Produce a before/after table with one row per target query (plus a "
+        "page total row), columns: clicks before, clicks after, impressions "
+        "before, impressions after, avg position before, avg position after, "
+        "CTR before, CTR after. Follow it with a short read of the ranking and "
+        "click lift, and restate the honest bound: this is the measured "
+        "outcome, not a guarantee, and other factors (seasonality, SERP "
+        "features, competitor moves) can affect it."
+    )
+
+
+def _render_seo_setup_audit(args: dict[str, Any]) -> str:
+    site_arg = args.get("site_url")
+    property_arg = args.get("property_id")
+    site_phrase = f"`{site_arg}`" if site_arg else "the configured default property"
+    property_phrase = f"`{property_arg}`" if property_arg else "the configured GA4 property"
+    property_param = f' with `{{ "property_id": "{property_arg}" }}`' if property_arg else ""
+    from urllib.parse import urlparse
+    host_root = "(derive the site root from the site_url)"
+    if site_arg:
+        cleaned = site_arg.replace("sc-domain:", "https://") if site_arg.startswith("sc-domain:") else site_arg
+        p = urlparse(cleaned)
+        if p.scheme and p.netloc:
+            host_root = f"{p.scheme}://{p.netloc}/"
+        elif site_arg.startswith("sc-domain:"):
+            host_root = f"https://{site_arg.split(':', 1)[1]}/"
+    return (
+        "# SEO setup audit (whole-stack configuration)\n\n"
+        "Honest framing: this audits configuration hygiene, that is, whether "
+        "your stack is set up so SEO can even work. It removes known blockers "
+        "and flags misconfigurations; it does not predict or guarantee "
+        "ranking.\n\n"
+        "## Arguments\n"
+        f"- site_url: {site_phrase}\n"
+        f"- property_id: {property_phrase}\n\n"
+        "## Workflow\n"
+        "Execute in order; one envelope per tool invocation so each layer's "
+        "findings stay attributable.\n\n"
+        f"  1. **Measurement layer.** Call `ga4_setup_audit`{property_param} to "
+        "check the GA4 property is configured to measure organic outcomes "
+        "(web stream present, key events defined, 14-month data retention, "
+        "enhanced measurement, site-search, content grouping, Google Signals "
+        "state). Without this you cannot measure SEO outcomes at all.\n"
+        "  2. **CDN / TLS layer.** Call `cf_settings_audit` to check "
+        "Cloudflare is not silently sabotaging crawl/index (SSL/TLS mode, "
+        "Always Use HTTPS, HSTS, Automatic HTTPS Rewrites, Brotli, browser "
+        "cache TTL). Note: CF cannot see the origin, so several of these are "
+        "`verify`, not `fail`.\n"
+        f"  3. **On-page basics.** Pick a representative URL for the site "
+        f"(e.g. `{host_root}` or an important content page) and call "
+        "`psi_opportunities` on it for the Lighthouse SEO category gates "
+        "(is-crawlable, http-status, viewport, document-title, "
+        "meta-description, hreflang, canonical, image-alt). This is the "
+        "at-a-glance cross-check.\n"
+        f"  4. **Crawl access.** Call `robots_txt_validate` with "
+        f"`{{ \"site_url\": \"{host_root}\", \"probes\": [{{ "
+        f"\"user_agent\": \"Googlebot\", \"url\": \"{host_root}\" }}] }}` to "
+        "confirm robots.txt does not block Googlebot from the site.\n\n"
+        "## Output\n"
+        "Produce one consolidated, severity-ranked report (critical -> high "
+        "-> medium -> low -> info) across all four layers. For each finding "
+        "show: which layer, the rule, observed vs expected, a one-line why, "
+        "and the benign exception when the flagged value can be legitimate. "
+        "Reconcile overlaps: prefer the dedicated page-level signals "
+        "(robots_txt_validate, canonical/meta checks) over the Lighthouse "
+        "SEO cross-check when they disagree, and say so. Lead the summary "
+        "with the question this answers: is the whole stack configured for "
+        "SEO? List the critical blockers first, then the verify items that "
+        "need the user to confirm origin reality."
+    )
+
+
 _RENDERERS = {
     "post_deploy_verify": _render_post_deploy_verify,
     "weekly_review": _render_weekly_review,
@@ -379,6 +745,12 @@ _RENDERERS = {
     "technical_seo_audit": _render_technical_seo_audit,
     "structured_data_audit": _render_structured_data_audit,
     "pre_deploy_check": _render_pre_deploy_check,
+    "content_brief": _render_content_brief,
+    "content_outline": _render_content_outline,
+    "content_article": _render_content_article,
+    "content_workflow": _render_content_workflow,
+    "content_performance": _render_content_performance,
+    "seo_setup_audit": _render_seo_setup_audit,
 }
 
 

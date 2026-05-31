@@ -469,6 +469,115 @@ def ga4_setup_audit(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- ga4_site_search ------------------------------------------------------
+
+TOOL_SITE_SEARCH = {
+    "name": "ga4_site_search",
+    "description": (
+        "Internal site-search terms over the last N days: what visitors typed "
+        "into the on-site search box (GA4 'searchTerm'), by event count and "
+        "sessions. A direct content-gap signal. If the property has no "
+        "site-search data (no search box, or enhanced-measurement site search "
+        "is off), the tool says so honestly rather than implying zero demand. "
+        "Convenience wrapper over ga4_run_report."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "property_id": {"type": "string", "description": "Defaults to the configured property."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Lookback window. Defaults to 28."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "Max rows. Defaults to 50."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def ga4_site_search(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    prop = _resolve_property(arguments, config)
+    if not prop:
+        return _missing_property_error()
+    start_date, end_date, days = _days_window(arguments)
+    limit = int(arguments.get("limit", 50))
+
+    try:
+        data = _report(
+            client, prop,
+            dimensions=["searchTerm"],
+            metrics=["eventCount", "sessions"],
+            start_date=start_date, end_date=end_date, row_limit=limit,
+            order_by={"metric": "eventCount", "desc": True},
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    data["days"] = days
+    has_data = bool(data.get("rows"))
+    data["has_site_search_data"] = has_data
+    if not has_data:
+        data["note"] = (
+            "No site-search data for this window. The site may have no search box, "
+            "or enhanced-measurement site search may be off. This is not the same "
+            "as zero search demand."
+        )
+    return ok(data)
+
+
+# --- ga4_landing_page_conversions -----------------------------------------
+
+TOOL_LANDING_CONVERSIONS = {
+    "name": "ga4_landing_page_conversions",
+    "description": (
+        "Landing pages with their conversions / key events over the last N "
+        "days, broken down by channel group and sorted by conversions "
+        "descending. Filtered to organic search by default (the SEO view) so "
+        "you see which entry pages actually drive organic outcomes. Convenience "
+        "wrapper over ga4_run_report."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "property_id": {"type": "string", "description": "Defaults to the configured property."},
+            "days": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Lookback window. Defaults to 28."},
+            "organic_only": {"type": "boolean", "description": "Limit to Organic Search traffic. Defaults to true."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100000, "description": "Max rows. Defaults to 50."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def ga4_landing_page_conversions(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    prop = _resolve_property(arguments, config)
+    if not prop:
+        return _missing_property_error()
+    start_date, end_date, days = _days_window(arguments)
+    limit = int(arguments.get("limit", 50))
+    organic_only = arguments.get("organic_only", True)
+
+    try:
+        data = _report(
+            client, prop,
+            dimensions=["landingPage", "sessionDefaultChannelGroup"],
+            metrics=["sessions", "conversions"],
+            start_date=start_date, end_date=end_date, row_limit=limit,
+            dimension_filter=_organic_filter() if organic_only else None,
+            order_by={"metric": "conversions", "desc": True},
+        )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    data["days"] = days
+    data["organic_only"] = bool(organic_only)
+    return ok(data)
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -477,6 +586,8 @@ TOOLS = [
     TOOL_TRAFFIC_BY_CHANNEL,
     TOOL_ORGANIC_OVERVIEW,
     TOOL_SETUP_AUDIT,
+    TOOL_SITE_SEARCH,
+    TOOL_LANDING_CONVERSIONS,
 ]
 
 HANDLERS = {
@@ -485,4 +596,6 @@ HANDLERS = {
     "ga4_traffic_by_channel": ga4_traffic_by_channel,
     "ga4_organic_search_overview": ga4_organic_search_overview,
     "ga4_setup_audit": ga4_setup_audit,
+    "ga4_site_search": ga4_site_search,
+    "ga4_landing_page_conversions": ga4_landing_page_conversions,
 }

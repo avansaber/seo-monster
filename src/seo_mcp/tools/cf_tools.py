@@ -334,6 +334,195 @@ def cf_purge_cache_all(arguments, config, clients) -> dict[str, Any]:
     return ok({"zone": zone_name, "purged": True})
 
 
+# --- cf_settings_audit (read-only; RULESETS section 3) --------------------
+#
+# CF cannot see the origin, so the security-relevant checks (SSL mode, Always
+# Use HTTPS) are phrased as "verify," not "fail." HSTS is graded medium and is
+# NEVER hard-failed: premature HSTS during or just after a migration is
+# dangerous and hard to undo. The rules are a pure function over the settings
+# map so they test without any client.
+
+# HSTS is intentionally absent here: it can never reach critical (RULESETS section 3).
+_SETTINGS_HSTS_MAX_SEVERITY = "medium"
+_HSTS_MIN_MAX_AGE = 60 * 60 * 24 * 180  # 6 months, in seconds
+
+
+def _cf_finding(rule_id: str, severity: str, observed: str, expected: str, why: str, benign: str) -> dict[str, Any]:
+    return {
+        "rule_id": rule_id,
+        "severity": severity,
+        "observed": observed,
+        "expected": expected,
+        "why": why,
+        "benign_exception": benign,
+    }
+
+
+def _settings_map(settings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Index the CF settings list by ``id`` -> ``value``."""
+    out: dict[str, Any] = {}
+    for entry in settings:
+        if isinstance(entry, dict) and entry.get("id") is not None:
+            out[entry["id"]] = entry.get("value")
+    return out
+
+
+def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Apply RULESETS section 3 to the indexed settings map. Pure: no client, no
+    I/O. Every non-info finding carries why + benign_exception. CF cannot see the
+    origin, so several checks are graded as 'verify' rather than a hard failure,
+    and HSTS is never raised above medium."""
+    findings: list[dict[str, Any]] = []
+
+    # cf.ssl_mode: want "strict" (Full Strict). "off"/"flexible"/"full" are
+    # weaker, but CF cannot see origin TLS, so this is "verify," not "fail."
+    ssl_mode = by_id.get("ssl")
+    if ssl_mode is not None and ssl_mode != "strict":
+        findings.append(_cf_finding(
+            "cf.ssl_mode", "high",
+            f"ssl={ssl_mode}", "strict (Full (Strict))",
+            "Verify: Flexible/Full SSL lets CF reach the origin over weak or unauthenticated TLS, "
+            "risking redirect loops, mixed content, and insecure origin hops.",
+            "Legacy origin that genuinely cannot do TLS; CF cannot see origin TLS, so confirm before changing.",
+        ))
+
+    # cf.always_https: want "on". CF cannot see whether http->https is handled
+    # at the origin or another layer, so "verify."
+    always_https = by_id.get("always_use_https")
+    if always_https is not None and always_https != "on":
+        findings.append(_cf_finding(
+            "cf.always_https", "high",
+            f"always_use_https={always_https}", "on",
+            "Verify: without an edge http->https 301, the http variant may be crawled and indexed, "
+            "splitting canonical signals.",
+            "http->https is already enforced at the origin or another layer; confirm before changing.",
+        ))
+
+    # cf.hsts: present with max-age >= 6 months. NEVER hard-fail; premature HSTS
+    # is dangerous and hard to undo. Capped at medium.
+    sh = by_id.get("security_header")
+    hsts = sh.get("strict_transport_security") if isinstance(sh, dict) else None
+    hsts_enabled = bool(hsts.get("enabled")) if isinstance(hsts, dict) else False
+    hsts_max_age = hsts.get("max_age") if isinstance(hsts, dict) else None
+    if not hsts_enabled:
+        findings.append(_cf_finding(
+            "cf.hsts", _SETTINGS_HSTS_MAX_SEVERITY,
+            "HSTS off", f"HSTS on with max-age >= {_HSTS_MIN_MAX_AGE}s (6 months)",
+            "HSTS enforces HTTPS and blocks protocol downgrade. Recommended, but with a strong caveat.",
+            "Premature HSTS is dangerous and hard to undo; do NOT enable during or just after an HTTPS "
+            "migration until HTTPS is fully stable. Never a hard failure.",
+        ))
+    elif isinstance(hsts_max_age, int) and hsts_max_age < _HSTS_MIN_MAX_AGE:
+        findings.append(_cf_finding(
+            "cf.hsts", _SETTINGS_HSTS_MAX_SEVERITY,
+            f"HSTS on, max-age={hsts_max_age}s", f"max-age >= {_HSTS_MIN_MAX_AGE}s (6 months)",
+            "A short HSTS max-age weakens the downgrade protection HSTS is meant to provide.",
+            "Intentionally short while ramping up HSTS confidence after a migration; raise it gradually.",
+        ))
+
+    # cf.auto_https_rewrites: want "on". Low-medium; pure mixed-content hygiene.
+    auto_rewrites = by_id.get("automatic_https_rewrites")
+    if auto_rewrites is not None and auto_rewrites != "on":
+        findings.append(_cf_finding(
+            "cf.auto_https_rewrites", "low",
+            f"automatic_https_rewrites={auto_rewrites}", "on",
+            "Rewriting http sub-resource links to https avoids mixed-content warnings.",
+            "All content is already served over https, so there is nothing to rewrite (low value).",
+        ))
+
+    # cf.brotli: want "on". Pure upside; low.
+    brotli = by_id.get("brotli")
+    if brotli is not None and brotli != "on":
+        findings.append(_cf_finding(
+            "cf.brotli", "low",
+            f"brotli={brotli}", "on",
+            "Brotli compresses better than gzip, improving load time and Core Web Vitals.",
+            "Pure upside; no real downside to leaving it off other than missed performance.",
+        ))
+
+    # cf.browser_cache_ttl: informational only. "Respect existing headers"
+    # (value 0, origin-controlled) is a legitimate, often preferred choice.
+    bct = by_id.get("browser_cache_ttl")
+    if bct == 0:
+        findings.append(_cf_finding(
+            "cf.browser_cache_ttl", "info",
+            "browser_cache_ttl=0 (respect existing headers)", "a sane browser cache TTL",
+            "Browser caching helps performance, but respecting origin Cache-Control headers is a valid strategy.",
+            "Origin sends its own Cache-Control headers, so 'respect existing headers' is intentional, not a fault.",
+        ))
+
+    return findings
+
+
+TOOL_SETTINGS_AUDIT = {
+    "name": "cf_settings_audit",
+    "description": (
+        "Audit a Cloudflare zone's settings for SEO and crawl/index safety "
+        "(read-only): SSL/TLS mode, Always Use HTTPS, HSTS, Automatic HTTPS "
+        "Rewrites, Brotli, and browser cache TTL. Findings are severity-graded "
+        "with the reason and a benign exception each. Cloudflare cannot see the "
+        "origin, so the SSL and Always-HTTPS checks are phrased as 'verify,' not "
+        "'fail,' and HSTS is never hard-failed (premature HSTS is dangerous and "
+        "hard to undo). Answers 'are my edge settings silently sabotaging "
+        "crawl/index?' It grades the edge layer only, not origin behavior."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "zone": {"type": "string", "description": "Zone hostname, e.g. 'example.com'. Defaults to the configured CF_ZONE."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def cf_settings_audit(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        settings = client.get_zone_settings(zone_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    by_id = _settings_map(settings)
+    findings = _audit_settings(by_id)
+    by_severity: dict[str, int] = {}
+    for f in findings:
+        by_severity[f["severity"]] = by_severity.get(f["severity"], 0) + 1
+    if any(f["severity"] in ("critical", "high") for f in findings):
+        verdict = "issues"
+    elif findings:
+        verdict = "review"
+    else:
+        verdict = "clean"
+
+    snapshot_keys = (
+        "ssl", "always_use_https", "security_header", "automatic_https_rewrites",
+        "brotli", "browser_cache_ttl",
+    )
+    settings_snapshot = {k: by_id.get(k) for k in snapshot_keys if k in by_id}
+
+    return ok(
+        {
+            "zone": zone_name,
+            "settings_snapshot": settings_snapshot,
+            "findings": findings,
+            "summary": {"by_severity": by_severity, "verdict": verdict},
+            "notes": [
+                "Read-only: no settings are changed.",
+                "Cloudflare cannot see the origin, so SSL and Always-HTTPS findings are 'verify,' not failures.",
+                "HSTS is never hard-failed: premature HSTS is dangerous and hard to undo.",
+            ],
+        }
+    )
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -343,6 +532,7 @@ TOOLS = [
     TOOL_WEB_ANALYTICS,
     TOOL_PURGE_CACHE,
     TOOL_PURGE_CACHE_ALL,
+    TOOL_SETTINGS_AUDIT,
 ]
 
 HANDLERS = {
@@ -352,4 +542,5 @@ HANDLERS = {
     "cf_web_analytics": cf_web_analytics,
     "cf_purge_cache": cf_purge_cache,
     "cf_purge_cache_all": cf_purge_cache_all,
+    "cf_settings_audit": cf_settings_audit,
 }
