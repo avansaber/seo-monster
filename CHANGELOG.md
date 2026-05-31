@@ -13,6 +13,43 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.0] - 2026-05-31
+
+Content-intelligence + GA4-audit release. Adds the first content-workflow tool
+and a GA4 measurement-readiness audit. 47 tools / 7 prompts. No new dependency.
+
+### Added
+
+- **`content_opportunities`** - ranks data-grounded content/blog topics from
+  your own Search Console data. Fuses CTR-vs-expected gap, striking-distance
+  position, demand, and momentum into a transparent opportunity score, flags
+  cannibalization, and reports click upside plus the score's components. The
+  expected-CTR curve self-calibrates from your own per-position CTR (GSC has no
+  position dimension, so it buckets query rows by rounded average position;
+  a reference curve fills sparse buckets). It prioritizes demand you already
+  have: it does not do cold-start keyword research, and it does not write the
+  content or guarantee a ranking.
+  **(validate)** Run against a property with real impressions: the top
+  candidate is a high-impression, low-CTR, striking-distance query; each
+  candidate shows expected vs actual CTR, click upside, and its component
+  scores; the calibrated CTR curve is echoed in the response.
+- **`ga4_setup_audit`** - read-only audit of a GA4 property's SEO-measurement
+  readiness: is a web data stream present, are key events / conversions
+  defined, is data retention long enough for year-over-year analysis, are
+  content-group custom dimensions set. Severity-graded findings, each with the
+  reason and a benign exception. Reuses the existing `google-api-python-client`
+  over REST (analyticsadmin v1beta), so there is no new dependency. v1alpha
+  checks (enhanced measurement, site search, Google Signals) are deferred and
+  listed in the response.
+  **(validate)** Run against a real GA4 property: one missing key events
+  returns verdict "issues"; a 2-month data-retention setting is flagged; a
+  well-configured property returns verdict "clean".
+
+### Internal
+
+- New `tools/content_tools.py` and `clients/ga4_admin.py` (REST discovery); a
+  `ga4_admin` client builder registered in the lazy client provider.
+
 ## [0.6.0] - 2026-05-30
 
 Setup-CLI release. Adds an interactive `seo-monster setup` so MCP host configs

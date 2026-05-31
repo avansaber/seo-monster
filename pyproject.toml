@@ -3,7 +3,7 @@
 # "seo_mcp". The earlier "seo-monster-mcp 0.1.0" release was renamed to drop
 # the redundant -mcp suffix in favor of the cleaner brand name.
 name = "seo-monster"
-version = "0.6.0"
+version = "0.7.0"
 description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
 license = { text = "MIT" }
