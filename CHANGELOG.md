@@ -13,6 +13,26 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.3] - 2026-05-31
+
+`content_opportunities` GA4 value-weighting. No new tools or prompts
+(52 tools / 13 prompts).
+
+### Added
+
+- `content_opportunities` now applies an optional GA4 value multiplier
+  (RULESETS §1.3): when a GA4 property is configured, each candidate is boosted
+  by up to +50% by the organic conversions of its top ranking page (the GSC
+  page path is matched to GA4's `landingPage`). Each candidate's `components`
+  gains a `value_multiplier`, and `filters_applied.ga4_value_weighted` reports
+  whether weighting ran. Soft: no GA4 property, or no organic conversion data,
+  leaves every multiplier at 1.0 (the tool stays GSC-only and never fails on a
+  missing or unreachable GA4).
+  **(validate)** With GA4 configured + organic conversions, the candidate whose
+  top page converts best is boosted (`value_multiplier` > 1.0) and can outrank
+  an otherwise-equal candidate. GSC-only returns `ga4_value_weighted: false`
+  and all multipliers at 1.0.
+
 ## [0.7.2] - 2026-05-31
 
 Documentation + polish patch. No new tools or prompts (52 tools / 13 prompts).
