@@ -13,6 +13,25 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.2] - 2026-05-31
+
+Documentation + polish patch. No new tools or prompts (52 tools / 13 prompts).
+
+### Changed
+
+- README "Tools" and "Workflow prompts" sections now list the full v0.7.x
+  surface and correct the stale tool counts (was showing 45 / 41 / 22).
+- `ga4_site_search` treats rows whose `searchTerm` is empty or "(not set)" as
+  no-data and emits a configuration-specific note (search events firing without
+  the term parameter captured), instead of reporting `has_site_search_data:
+  true` on empty terms (FEEDBACK Round 11 §15e.1).
+
+### Docs
+
+- Documented the `crux_snapshot` response shape: `overall_category` for the
+  rolled-up rating; `p75_ms` for time metrics and `p75` for the unitless CLS
+  (FEEDBACK Round 11 §15e.2).
+
 ## [0.7.1] - 2026-05-31
 
 Audit-coverage + content-pipeline release: 5 read-only tools and 6 workflow

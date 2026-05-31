@@ -35,9 +35,9 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-45 tools, grouped by service. All return the same result envelope (see
+52 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
-is configured. The server also publishes seven named [workflow prompts](#workflow-prompts).
+is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
 **Cross-service**
 - `system_status` - which services are configured/reachable, the Google auth
@@ -92,21 +92,42 @@ is configured. The server also publishes seven named [workflow prompts](#workflo
   each, then rolls up verdicts (PASS / PARTIAL / FAIL) and coverage_state
   frequencies.
 
+<a name="content"></a>
+**Content intelligence (1, v0.7.0)**
+- `content_opportunities(site_url?, days?, count?)` - ranks data-grounded
+  content topics from your own Search Console data: fuses CTR-vs-expected gap
+  (curve self-calibrated from your own per-position CTR), striking-distance
+  position, demand, and momentum into a transparent opportunity score; flags
+  cannibalization. Prioritizes demand you already have; does not do cold-start
+  keyword research or write the content. Pairs with the content workflow
+  prompts below.
+
 <a name="ga4"></a>
-**Google Analytics 4 (4)**
+**Google Analytics 4 (7)**
 - `ga4_run_report` - the workhorse: arbitrary dimensions/metrics/date range,
   optional dimension filter and ordering.
 - `ga4_top_landing_pages` - top landing pages, organic-only by default.
 - `ga4_traffic_by_channel` - sessions/engagement/conversions by channel group.
 - `ga4_organic_search_overview` - organic totals plus a day-by-day trend.
+- `ga4_setup_audit(property_id?)` - read-only SEO-measurement-readiness audit
+  (web data stream, key events, data retention, content-group dimensions),
+  severity-graded with a benign exception per finding. Uses the GA4 Admin API
+  over REST (analytics.readonly; no extra dependency). (v0.7.0)
+- `ga4_site_search(days?, limit?)` - internal site-search query report (a
+  direct content-gap signal); honest envelope when no real search terms. (v0.7.1)
+- `ga4_landing_page_conversions(days?, organic_only?, limit?)` - organic
+  landing pages ranked by conversions. (v0.7.1)
 
 <a name="psi"></a>
-**PageSpeed Insights (1)**
+**PageSpeed Insights (2)**
 - `psi_analyze` - Lighthouse scores, lab Core Web Vitals, and field (CrUX) Core
   Web Vitals for a URL. Defaults to the mobile strategy.
+- `psi_opportunities(url, strategy?)` - the actionable Lighthouse "opportunity"
+  audits (with estimated savings) plus the SEO-category audits, severity-graded.
+  Lab data only. An on-page-basics checklist, not a ranking predictor. (v0.7.1)
 
 <a name="cf"></a>
-**Cloudflare (6)**
+**Cloudflare (7)**
 - `cf_list_zones` - zones the token can see.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
@@ -116,6 +137,11 @@ is configured. The server also publishes seven named [workflow prompts](#workflo
   look those up explicitly.
 - `cf_purge_cache` - purge specific URLs (gated).
 - `cf_purge_cache_all` - purge an entire zone (gated + confirm token).
+- `cf_settings_audit(zone?)` - read-only audit of SEO-relevant Cloudflare zone
+  settings (SSL mode, Always-Use-HTTPS, HSTS, Automatic HTTPS Rewrites, Brotli,
+  cache TTL). Severity-graded with a "verify, not fail" discipline because CF
+  cannot see the origin; HSTS is never a hard failure. Needs Zone Settings Read
+  on the token. (v0.7.1)
 
 <a name="indexnow"></a>
 **IndexNow (2, v0.2.0)**
@@ -151,10 +177,15 @@ is configured. The server also publishes seven named [workflow prompts](#workflo
   histogram + first non-2xx examples.
 
 <a name="crux"></a>
-**Chrome UX Report (1, v0.3.0)**
+**Chrome UX Report (2)**
 - `crux_history(url? | origin?, form_factor?, metrics?)` - 25 weeks of p75
   Core Web Vitals via the CrUX History API. Reuses `PSI_API_KEY`; works
   anonymously at a tighter rate limit when no key is configured.
+- `crux_snapshot(url? | origin?, form_factor?)` - the current p75 Core Web
+  Vitals (point-in-time, vs the history). Each metric reports a category
+  (GOOD / NEEDS_IMPROVEMENT / POOR); the rolled-up rating is `overall_category`.
+  Time metrics use `p75_ms`; the unitless CLS uses `p75`. Small origins return
+  a `no_data` envelope. (v0.7.1)
 
 **Structured data + cross-site (5, v0.4.0)** - no new credentials.
 - `inspect_schema(url)` - extract every JSON-LD block from a page; report
@@ -184,7 +215,7 @@ hosts can decide what to auto-approve and what to confirm.
 
 ## Workflow prompts
 
-The server publishes seven named MCP prompts (via `prompts/list` /
+The server publishes thirteen named MCP prompts (via `prompts/list` /
 `prompts/get`) that chain the granular tools into common SEO workflows. Hosts
 that surface prompts (Claude Desktop's slash menu, Cursor's command palette,
 Cline's prompt picker) advertise them automatically.
@@ -198,6 +229,12 @@ Cline's prompt picker) advertise them automatically.
 | `technical_seo_audit` | `url` | `inspect_meta` -> `check_canonical` -> `redirect_chain_audit` -> `mixed_content_check` -> `robots_txt_validate` -> `sitemap_health` -> severity-ranked triage list |
 | `structured_data_audit` | `urls` | per-URL `inspect_schema` -> `validate_schema` -> (if 2+ URLs) `hreflang_consistency_check` -> per-URL + cross-URL report |
 | `pre_deploy_check` | `urls` | `robots_txt_validate` -> per-URL `inspect_meta` -> `check_canonical` -> `validate_schema` -> `redirect_chain_audit` -> `mixed_content_check` -> deploy-gate verdict (block on critical issues, approve otherwise) |
+| `content_brief` (v0.7.1) | `topic`, `target_query`, `site_url?` | `gsc_top_pages_by_query` -> `inspect_meta` / `inspect_schema` on top rankers -> brief with required sections + validation rules |
+| `content_outline` (v0.7.1) | `brief` | outline with rules: >=5 H2, >=70% target-query coverage, H1 has the primary keyword |
+| `content_article` (v0.7.1) | `outline`, `brief` | article with rules: word count within +/-15%, per-section minimum, internal links, inline JSON-LD hint, no em-dashes |
+| `content_workflow` (v0.7.1) | `site_url?`, `days?` | `content_opportunities` -> brief -> outline -> article -> `pre_deploy_check` -> `gsc_request_indexing` + `indexnow_submit` -> scheduled `content_performance` |
+| `content_performance` (v0.7.1) | `url`, `target_queries?`, `site_url?` | `gsc_compare_periods` + `gsc_search_analytics` before / after the publish window |
+| `seo_setup_audit` (v0.7.1) | `site_url?`, `property_id?` | `ga4_setup_audit` -> `cf_settings_audit` -> `psi_opportunities` -> `robots_txt_validate` -> consolidated stack-config report |
 
 Why prompts and not megatools: composability. A failed step inside a megatool
 poisons the megatool's envelope and the host loses the ability to retry just
@@ -215,7 +252,7 @@ SEOMonster ships **two install paths**, both fully local:
   to hand-edit MCP config files.
 
 Both paths run the same Python package (`seo_mcp`) and expose the same
-41-tool surface. The difference is only how the host launches the server
+52-tool surface. The difference is only how the host launches the server
 and how it collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
@@ -259,7 +296,7 @@ with `0600` permissions, then exits. This step is the recommended pattern; it
 sidesteps the timeout that Claude Desktop imposes on every tool call.
 
 **3. Start a new chat in Claude Desktop and use the tools.** Click the 🔧
-tools icon in the input box; you should see 22 SEOMonster tools. Try
+tools icon in the input box; you should see 52 SEOMonster tools. Try
 `system_status` first to verify everything is configured.
 
 #### Why pre-flight auth?

@@ -307,6 +307,22 @@ def test_site_search_empty_is_honest(make_config, make_ga4_client, ga4_response)
     assert data["rows"] == []
 
 
+def test_site_search_empty_terms_treated_as_no_data(make_config, make_ga4_client, ga4_response):
+    # FEEDBACK §15e.1: rows present but searchTerm empty / "(not set)" is not real
+    # search demand; filter them and emit the config-specific note.
+    resp = ga4_response(
+        ["searchTerm"],
+        ["eventCount", "sessions"],
+        [(["(not set)"], ["120", "80"]), ([""], ["5", "4"])],
+    )
+    client = make_ga4_client(resp)
+    data = ga4_tools.ga4_site_search({}, _cfg(make_config), {"ga4": client})["data"]
+    assert data["has_site_search_data"] is False
+    assert data["empty_term_event_count"] == 2
+    assert data["rows"] == []
+    assert "searchTerm" in data["note"]  # the tailored enhanced-measurement note
+
+
 # --- ga4_landing_page_conversions -----------------------------------------
 
 

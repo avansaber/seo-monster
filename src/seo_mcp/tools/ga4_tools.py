@@ -515,14 +515,37 @@ def ga4_site_search(arguments, config, clients) -> dict[str, Any]:
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
     data["days"] = days
-    has_data = bool(data.get("rows"))
+    # Polish (FEEDBACK §15e.1): a property can return rows whose searchTerm is
+    # empty or "(not set)" when search events fire but the term parameter is not
+    # captured. Those are not real search demand, so filter them, and when only
+    # empty-term events remain emit a configuration-specific note.
+    all_rows = data.get("rows", [])
+
+    def _term(row: dict[str, Any]) -> str:
+        dims = row.get("dimensions") or []
+        return str(dims[0]).strip() if dims else ""
+
+    real_rows = [r for r in all_rows if _term(r) and _term(r).lower() != "(not set)"]
+    empty_term_events = len(all_rows) - len(real_rows)
+    data["rows"] = real_rows
+    data["row_count"] = len(real_rows)
+    data["empty_term_event_count"] = empty_term_events
+    has_data = bool(real_rows)
     data["has_site_search_data"] = has_data
     if not has_data:
-        data["note"] = (
-            "No site-search data for this window. The site may have no search box, "
-            "or enhanced-measurement site search may be off. This is not the same "
-            "as zero search demand."
-        )
+        if empty_term_events:
+            data["note"] = (
+                "Search events are firing but without a searchTerm value (empty or "
+                "'(not set)'). Check the enhanced-measurement site-search config so "
+                "the query parameter is captured. This is not the same as zero "
+                "search demand."
+            )
+        else:
+            data["note"] = (
+                "No site-search data for this window. The site may have no search "
+                "box, or enhanced-measurement site search may be off. Not the same "
+                "as zero search demand."
+            )
     return ok(data)
 
 
