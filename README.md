@@ -1,5 +1,18 @@
 # SEOMonster
 
+**SEOMonster turns the AI assistant you already use into an SEO analyst that
+works from your own data.** Ask it what to write next and it surfaces the topics
+your site is *almost* ranking for; ask whether a page is ready and it checks the
+technical SEO before you publish; then it nudges Google and Bing to index the
+page and measures whether rankings actually moved. It works from your own Google
+Search Console, Analytics 4, and PageSpeed data, which stays on your machine -
+there's no new dashboard to learn, you just chat with Claude (or Cursor, Cline,
+or Codex).
+
+<sub>The rest of this README is the technical reference for installing and
+configuring the server. If you just want the product overview, see
+[seomonster.avansaber.com](https://seomonster.avansaber.com).</sub>
+
 SEOMonster is an MCP server for SEO workflows. It exposes strictly SEO-focused
 tools over **Google Search Console**, **Google Analytics 4**, **PageSpeed
 Insights (PSI)**, **Cloudflare**, **IndexNow**, the **Chrome UX Report (CrUX)
