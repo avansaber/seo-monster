@@ -17,7 +17,7 @@ from typing import Any, Mapping
 
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ..clients.errors import ApiError
-from ._helpers import annotations, missing_site_error, require_client, resolve_site
+from ._helpers import annotations, missing_site_error, preflight_get, require_client, resolve_site
 
 
 _SERVICE = "gsc"
@@ -681,6 +681,7 @@ TOOL_SUBMIT_SITEMAP = {
             "sitemap_url": {"type": "string", "description": "Full sitemap URL, e.g. https://www.example.com/sitemap.xml. Preferred."},
             "feedpath": {"type": "string", "description": "Alias for sitemap_url (the raw Google API field name). Either works; sitemap_url wins when both are set."},
             "site_url": {"type": "string", "description": "Owning property. Defaults to the configured default site."},
+            "skip_preflight": {"type": "boolean", "description": "Bypass the reachability pre-flight on the sitemap URL (default false). Use only when the sitemap is valid but unreachable from this machine."},
         },
         "additionalProperties": False,
     },
@@ -703,6 +704,28 @@ def gsc_submit_sitemap(arguments, config, clients) -> dict[str, Any]:
     site = resolve_site(arguments, config)
     if not site:
         return missing_site_error()
+    # Pre-flight: Google's submit API accepts any URL without fetching it, so a
+    # 404 or unreachable sitemap silently persists as a broken entry in the
+    # property (tester FEEDBACK §20 §1b). Verify it returns 2xx first.
+    if not arguments.get("skip_preflight"):
+        pf = preflight_get(clients, sitemap_url)
+        if pf is not None:
+            status, _body, reason = pf
+            if status is None or not (200 <= status < 300):
+                detail = f"returned HTTP {status}" if status is not None else f"was unreachable ({reason})"
+                return err(
+                    ErrorCode.INVALID_INPUT,
+                    _SERVICE,
+                    f"The sitemap URL {detail}. Google's submit API accepts any URL "
+                    "without checking it, so this would silently persist as a broken "
+                    "sitemap entry. Submission blocked.",
+                    remediation=(
+                        "Publish the sitemap so it returns HTTP 200, then resubmit. "
+                        "If it is valid but unreachable from here, pass skip_preflight=true."
+                    ),
+                    docs_url=DOCS_BASE + "gsc",
+                    details={"sitemap_url": sitemap_url, "preflight_status": status},
+                )
     try:
         client.submit_sitemap(site, sitemap_url)
     except ApiError as exc:

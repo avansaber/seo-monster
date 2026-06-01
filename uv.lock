@@ -1074,7 +1074,7 @@ wheels = [
 
 [[package]]
 name = "seo-monster"
-version = "0.7.6"
+version = "0.7.7"
 source = { editable = "." }
 dependencies = [
     { name = "google-analytics-data" },

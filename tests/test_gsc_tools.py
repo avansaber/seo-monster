@@ -409,6 +409,65 @@ def test_submit_sitemap_requires_one_of(make_config, make_gsc_client, gsc_payloa
     assert "sitemap_url" in result["error"]["message"]
 
 
+# --- sitemap pre-flight (FEEDBACK §20 §1b) --------------------------------
+
+
+class _FakeHttp:
+    """One canned status for any fetch; records URLs hit. Stands in for the
+    shared HttpClient used by the sitemap pre-flight."""
+
+    def __init__(self, status: int) -> None:
+        self._status = status
+        self.calls: list[str] = []
+
+    def fetch(self, url: str, **_):
+        from seo_mcp.clients.http import HttpResponse
+
+        self.calls.append(url)
+        return HttpResponse(status=self._status, headers={}, body_bytes=b"<urlset/>", final_url=url)
+
+
+def test_submit_sitemap_blocks_unreachable_sitemap(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    http = _FakeHttp(404)
+    result = gsc_tools.gsc_submit_sitemap(
+        {"sitemap_url": "https://www.example.com/missing.xml"},
+        _cfg(make_config),
+        {"gsc": client, "http": http},
+    )
+    assert result["ok"] is False
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["details"]["preflight_status"] == 404
+    assert http.calls == ["https://www.example.com/missing.xml"]
+    assert client._service.calls == []  # never forwarded to Google
+
+
+def test_submit_sitemap_proceeds_when_reachable(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    http = _FakeHttp(200)
+    result = gsc_tools.gsc_submit_sitemap(
+        {"sitemap_url": "https://www.example.com/sitemap.xml"},
+        _cfg(make_config),
+        {"gsc": client, "http": http},
+    )
+    assert result["ok"] is True
+    assert http.calls == ["https://www.example.com/sitemap.xml"]
+    assert client._service.calls  # forwarded
+
+
+def test_submit_sitemap_skip_preflight_bypasses(make_config, make_gsc_client, gsc_payloads):
+    client = make_gsc_client(gsc_payloads)
+    http = _FakeHttp(404)
+    result = gsc_tools.gsc_submit_sitemap(
+        {"sitemap_url": "https://www.example.com/missing.xml", "skip_preflight": True},
+        _cfg(make_config),
+        {"gsc": client, "http": http},
+    )
+    assert result["ok"] is True
+    assert http.calls == []  # pre-flight skipped
+    assert client._service.calls
+
+
 # --- request_indexing -----------------------------------------------------
 
 

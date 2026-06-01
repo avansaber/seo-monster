@@ -7,9 +7,38 @@ from __future__ import annotations
 import pytest
 
 from seo_mcp.clients.errors import ApiError
+from seo_mcp.clients.http import HttpResponse
 from seo_mcp.clients.indexnow import IndexNowClient, _host_of, build_indexnow_client
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import indexnow_tools
+
+
+class _FakeHttp:
+    """Maps any fetch to one canned (status, body), recording the URLs hit.
+    Stands in for the shared HttpClient used by the key-file pre-flight."""
+
+    def __init__(self, status: int, body: str) -> None:
+        self._status = status
+        self._body = body
+        self.calls: list[str] = []
+
+    def fetch(self, url: str, **_):
+        self.calls.append(url)
+        return HttpResponse(
+            status=self._status,
+            headers={"content-type": "text/plain"},
+            body_bytes=self._body.encode("utf-8"),
+            final_url=url,
+        )
+
+
+class _FakeHttpUnreachable:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def fetch(self, url: str, **_):
+        self.calls.append(url)
+        raise ApiError(ErrorCode.UPSTREAM_ERROR, "host unreachable")
 
 
 def _client_with_recorder():
@@ -155,6 +184,109 @@ def test_bulk_submit_omits_key_location_when_not_configured(make_config):
     )
     _, _, body = calls[0]
     assert "keyLocation" not in body
+
+
+# --- key-file pre-flight (FEEDBACK §20 §3c/§3d) ---------------------------
+
+_KEY = "testkey1234"
+_LOC = "https://example.com/testkey1234.txt"
+
+
+def _cfg_with_key(make_config, location=_LOC):
+    kw = {"SEO_MCP_INDEXNOW_KEY": _KEY}
+    if location is not None:
+        kw["SEO_MCP_INDEXNOW_KEY_LOCATION"] = location
+    return make_config(**kw)
+
+
+def test_submit_blocks_when_key_file_unreachable(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttpUnreachable()
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config), {"indexnow": client, "http": http}
+    )
+    assert result["ok"] is False
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert http.calls == [_LOC]
+    assert client._calls == []  # never forwarded to IndexNow
+
+
+def test_submit_blocks_when_key_file_body_mismatch(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttp(200, "someothervalue")  # 200 but wrong body
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config), {"indexnow": client, "http": http}
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "does not contain your key" in result["error"]["message"]
+    assert client._calls == []
+
+
+def test_submit_blocks_when_key_file_404(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttp(404, "Not Found")
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config), {"indexnow": client, "http": http}
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["details"]["preflight_status"] == 404
+    assert client._calls == []
+
+
+def test_submit_proceeds_when_key_file_valid(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttp(200, _KEY + "\n")  # trailing newline tolerated
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config), {"indexnow": client, "http": http}
+    )
+    assert result["ok"] is True
+    assert http.calls == [_LOC]
+    assert client._calls  # forwarded to IndexNow
+
+
+def test_submit_skip_preflight_bypasses_key_file_check(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttp(404, "")  # would block, but skipped
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a", "skip_preflight": True},
+        _cfg_with_key(make_config),
+        {"indexnow": client, "http": http},
+    )
+    assert result["ok"] is True
+    assert http.calls == []  # pre-flight entirely skipped
+    assert client._calls
+
+
+def test_submit_uses_default_key_file_url_when_no_location(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttp(200, _KEY)
+    indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config, location=None), {"indexnow": client, "http": http}
+    )
+    # No SEO_MCP_INDEXNOW_KEY_LOCATION -> default https://<host>/<key>.txt
+    assert http.calls == ["https://www.example.com/testkey1234.txt"]
+
+
+def test_submit_skips_preflight_when_no_http_client(make_config):
+    # Minimal call (no "http" wired) must still work: pre-flight degrades to skip.
+    client = _client_with_recorder()
+    result = indexnow_tools.indexnow_submit(
+        {"url": "https://www.example.com/a"}, _cfg_with_key(make_config), {"indexnow": client}
+    )
+    assert result["ok"] is True
+    assert client._calls
+
+
+def test_bulk_submit_blocks_when_key_file_unreachable(make_config):
+    client = _client_with_recorder()
+    http = _FakeHttpUnreachable()
+    result = indexnow_tools.indexnow_bulk_submit(
+        {"urls": ["https://www.example.com/a", "https://www.example.com/b"]},
+        _cfg_with_key(make_config),
+        {"indexnow": client, "http": http},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert client._calls == []
 
 
 # --- raw client error mapping ---------------------------------------------

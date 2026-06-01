@@ -13,6 +13,34 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.7] - 2026-06-01
+
+Pre-flight validation for the routine writes. No new tools or prompts
+(52 tools / 13 prompts).
+
+### Changed
+
+- `gsc_submit_sitemap` now pre-flights the sitemap URL with an HTTP GET before
+  submitting. Google's submit API accepts any URL without checking it, so a 404
+  or unreachable sitemap used to persist silently as a broken entry in the
+  property (`{"submitted": true}`). A non-2xx or unreachable URL now returns an
+  `INVALID_INPUT` envelope with remediation instead of a false success. Pass
+  `skip_preflight: true` to override (FEEDBACK §20 §1b).
+- `indexnow_submit` / `indexnow_bulk_submit` now pre-flight the IndexNow key
+  file (`SEO_MCP_INDEXNOW_KEY_LOCATION`, or the default
+  `https://<host>/<key>.txt`) before notifying. `api.indexnow.org` returns
+  200/202 for well-formed submissions without verifying the key file, so a
+  missing key file or a key/body mismatch used to report `{"accepted": true}`
+  while the engines silently dropped the URL. Both cases now return an
+  `INVALID_INPUT` envelope with remediation. Pass `skip_preflight: true` to
+  override (FEEDBACK §20 §3c/§3d).
+- The pre-flight uses the branded SEOMonster User-Agent, so a Cloudflare-fronted
+  sitemap or key file is not 403'd by the Browser Integrity Check (FEEDBACK
+  §12c.ii). It degrades to a no-op only when no HTTP client is available.
+  **(validate)** Re-run the §20 §1b / §3c / §3d cases: a 404 sitemap, a bad
+  `KEY_LOCATION`, and a wrong key value each now return `INVALID_INPUT` (not a
+  false success); the happy paths and `skip_preflight: true` still submit.
+
 ## [0.7.6] - 2026-05-31
 
 Housekeeping batch: no new tools or prompts, no behavior change to existing
