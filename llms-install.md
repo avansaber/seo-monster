@@ -6,21 +6,26 @@ For human-readable install + auth instructions, see [README.md](README.md).
 
 ## What this MCP server gives you
 
-45 tools across **Google Search Console, Google Analytics 4, PageSpeed
-Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX) History,
-plus stdlib HTTP tools for technical-SEO checks** (`inspect_meta`,
-`check_canonical`, `redirect_chain_audit`, `mixed_content_check`,
-`robots_txt_validate`, `sitemap_validate`, `sitemap_health`,
-`inspect_schema`, `validate_schema`, `hreflang_consistency_check`,
-`internal_link_graph`, `lighthouse_budget`).
+57 tools across **Google Search Console, Google Analytics 4, PageSpeed
+Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), content-
+opportunity intelligence, plus stdlib HTTP tools for technical-SEO checks**
+(`inspect_meta`, `check_canonical`, `redirect_chain_audit`,
+`mixed_content_check`, `robots_txt_validate`, `sitemap_validate`,
+`sitemap_health`, `inspect_schema`, `validate_schema`,
+`hreflang_consistency_check`, `internal_link_graph`, `lighthouse_budget`).
+Cloudflare includes redirect management (single + bulk, for migrations) and a
+zone SEO-settings audit with remediation.
 
-7 named workflow prompts: `post_deploy_verify`, `weekly_review`,
-`content_audit`, `migration_check`, `technical_seo_audit`,
-`structured_data_audit`, `pre_deploy_check`.
+13 workflow prompts: `content_workflow`, `content_brief`, `content_outline`,
+`content_article`, `content_performance`, `seo_setup_audit`, `weekly_review`,
+`technical_seo_audit`, `pre_deploy_check`, `structured_data_audit`,
+`content_audit`, `post_deploy_verify`, `migration_check`.
 
 Every tool carries MCP standard annotations (`readOnlyHint`,
-`destructiveHint`, `idempotentHint`, `openWorldHint`). Only the two
-Cloudflare cache-purge tools are destructive, and they are gated behind
+`destructiveHint`, `idempotentHint`, `openWorldHint`). Reads are always
+available; the routine writes (sitemap submit, indexing request, IndexNow) are
+on by default; the higher-risk Cloudflare writes (cache purge, redirect
+create/delete/bulk, settings update) are gated behind
 `SEO_MCP_ALLOW_DESTRUCTIVE=true`.
 
 ## Install
