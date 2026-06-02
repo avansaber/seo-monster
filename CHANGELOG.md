@@ -13,6 +13,49 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.10] - 2026-06-02
+
+Cloudflare zone-settings write tool (closes the audit -> remediate loop), plus
+the queued CF low-severity polish. Adds 1 tool (56 -> 57 tools); 13 prompts
+unchanged.
+
+### Added
+
+- **`cf_settings_update(settings, zone?, confirm?, acknowledge_hsts_risk?, dry_run?)`**
+  - write the SEO/crawl/security zone settings `cf_settings_audit` grades: SSL
+  mode, Always-Use-HTTPS, Automatic HTTPS Rewrites, Brotli, browser cache TTL,
+  and HSTS. **Gated** behind `SEO_MCP_ALLOW_DESTRUCTIVE`. HSTS is treated as the
+  highest-risk setting: any change that *raises* protection needs both
+  `confirm=<zone>` and `acknowledge_hsts_risk=true`; an `ssl_mode` change needs
+  `confirm=<zone>`. Validates locally first (rejects the whole request on bad
+  input; `preload` requires `include_subdomains` + `max_age >= 1y`), supports
+  `dry_run` (before/after preview), and re-runs the audit so the caller sees the
+  finding clear. Needs the **Zone Settings:Edit** token scope (the audit only
+  needs Read).
+  **(validate)** Destructive off -> `DESTRUCTIVE_DISABLED`, zero calls. An HSTS
+  raise without confirm/ack -> `CONFIRM_REQUIRED`; `preload` without
+  `include_subdomains`/1y -> `INVALID_INPUT`. `dry_run` writes nothing. Happy
+  path: set HSTS `max_age=31536000` -> the `cf.hsts` finding clears in
+  `post_update_findings`.
+
+### Changed
+
+- `cf_settings_audit` findings now carry a machine-readable `fix` hint (the exact
+  `cf_settings_update` setting + recommended value, e.g.
+  `{"setting":"hsts","recommended":{...}}`), so a host can chain audit -> fix
+  (FEEDBACK §23g companion).
+- A CF `9109` (valid token, no access to this zone/account resource) now returns
+  a scope-specific remediation ("set the token's Zone Resources to 'All zones
+  from an account', or add this zone") instead of the generic "check the API key"
+  (FEEDBACK R19-FIND-2 #1).
+- `cf_create_redirect` success envelope now returns the new `rule_id` (no need to
+  re-list to delete; FEEDBACK §22 A-FIND-3).
+- `cf_bulk_redirect_upsert` reject reasons are now per-field (FEEDBACK §22 B-FIND-4).
+- Fixed the gated-write `DESTRUCTIVE_DISABLED` remediation (was hard-coded to
+  "cache purge"; now names the full gated-write set) and the `cf_list_redirects`
+  description (was "Bulk Redirects not yet exposed"; they are, since 0.7.9)
+  (FEEDBACK §22 A-FIND-2 / DOC-5).
+
 ## [0.7.9] - 2026-06-01
 
 Cloudflare Bulk Redirects (account-level). Adds 1 tool (55 -> 56 tools); 13

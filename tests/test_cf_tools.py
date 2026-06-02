@@ -622,3 +622,156 @@ def test_list_redirects_includes_bulk_lists(make_config, make_cf_client, cf_payl
     assert result["ok"] is True
     assert result["data"]["bulk_redirect_lists"][0]["name"] == "mylist"
     assert result["data"]["bulk_redirect_lists"][0]["num_items"] == 42
+
+
+# --- cf_settings_update (close the audit -> remediate loop) ---------------
+
+_HSTS_OFF = [
+    {"id": "ssl", "value": "flexible"},
+    {"id": "security_header", "value": {"strict_transport_security": {"enabled": False, "max_age": 0}}},
+]
+_HSTS_ON = [
+    {"id": "ssl", "value": "flexible"},
+    {"id": "security_header", "value": {"strict_transport_security": {"enabled": True, "max_age": 31536000, "include_subdomains": True}}},
+]
+
+
+def _make_settings_update_client(before, after):
+    from seo_mcp.clients.cloudflare import CfClient
+
+    client = CfClient(token="testtoken")
+    state = {"patched": False}
+    calls = []
+
+    def _raw(method, path, body=None):
+        calls.append((method, path, body))
+        if "/settings/" in path and method == "PATCH":
+            state["patched"] = True
+            return {"success": True, "errors": [], "result": {"id": path.rsplit("/", 1)[1], "value": (body or {}).get("value")}}
+        if "/settings" in path:
+            return _settings_envelope(after if state["patched"] else before)
+        return _zone_envelope()
+
+    client._raw_request = _raw
+    client._calls = calls
+    return client
+
+
+def test_settings_update_blocked_when_destructive_off(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update({"settings": {"brotli": "on"}}, _cfg(make_config), {"cf": client})
+    assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
+    assert client._calls == []
+
+
+def test_settings_update_unknown_key_rejected(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"nope": "x"}}, _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"), {"cf": client}
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "Unknown setting" in result["error"]["message"]
+
+
+def test_settings_update_hsts_raise_requires_confirm(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"hsts": {"enabled": True, "max_age": 31536000, "include_subdomains": True}}},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "CONFIRM_REQUIRED"
+    assert not any(c[0] == "PATCH" for c in client._calls)
+
+
+def test_settings_update_hsts_raise_requires_ack(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"hsts": {"enabled": True, "max_age": 31536000, "include_subdomains": True}}, "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "CONFIRM_REQUIRED"
+    assert "acknowledge_hsts_risk" in result["error"]["remediation"]
+    assert not any(c[0] == "PATCH" for c in client._calls)
+
+
+def test_settings_update_preload_requires_subdomains_and_year(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"hsts": {"enabled": True, "max_age": 86400, "preload": True, "include_subdomains": False}}},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "preload" in result["error"]["message"]
+    assert client._calls == []  # rejected before any CF call
+
+
+def test_settings_update_dry_run_writes_nothing(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"brotli": "on"}, "dry_run": True},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["dry_run"] is True
+    assert "before" in result["data"] and "after" in result["data"]
+    assert not any(c[0] == "PATCH" for c in client._calls)
+
+
+def test_settings_update_low_risk_no_confirm_needed(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"brotli": "on"}}, _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"), {"cf": client}
+    )
+    assert result["ok"] is True
+    assert "brotli" in result["data"]["updated"]
+    assert any(c[0] == "PATCH" and c[1].endswith("/settings/brotli") for c in client._calls)
+
+
+def test_settings_update_ssl_mode_requires_confirm(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {"settings": {"ssl_mode": "strict"}}, _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"), {"cf": client}
+    )
+    assert result["error"]["code"] == "CONFIRM_REQUIRED"
+
+
+def test_settings_update_hsts_happy_path_clears_finding(make_config):
+    client = _make_settings_update_client(_HSTS_OFF, _HSTS_ON)
+    result = cf_tools.cf_settings_update(
+        {
+            "settings": {"hsts": {"enabled": True, "max_age": 31536000, "include_subdomains": True}},
+            "confirm": "example.com",
+            "acknowledge_hsts_risk": True,
+        },
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert "security_header" in result["data"]["updated"]
+    # After the write, the audit no longer flags HSTS -> finding cleared.
+    assert all(f["rule_id"] != "cf.hsts" for f in result["data"]["post_update_findings"])
+    assert any(c[0] == "PATCH" and c[1].endswith("/settings/security_header") for c in client._calls)
+
+
+def test_audit_findings_carry_machine_readable_fix_hint(make_config):
+    client = _make_settings_client(_BAD_SETTINGS)
+    result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
+    by_rule = {f["rule_id"]: f for f in result["data"]["findings"]}
+    assert by_rule["cf.ssl_mode"]["fix"] == {"setting": "ssl_mode", "recommended": "strict"}
+    assert by_rule["cf.hsts"]["fix"]["setting"] == "hsts"
+    assert by_rule["cf.hsts"]["fix"]["recommended"]["max_age"] == 31536000
+
+
+def test_cf_9109_remediation_is_scope_specific():
+    # FEEDBACK R19-FIND-2 #1: a CF 9109 (valid token, no access to this zone)
+    # gets a scope-specific remediation, not the generic "check the API key".
+    from seo_mcp.clients.cloudflare import CfClient
+
+    body = '{"success": false, "errors": [{"code": 9109, "message": "Unauthorized to access requested resource"}]}'
+    err = CfClient._error_from_http(403, body)
+    assert str(err.code) == "AUTH_INVALID"
+    assert "Zone Resources" in (err.remediation or "")

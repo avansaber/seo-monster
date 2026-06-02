@@ -63,7 +63,7 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-56 tools, grouped by service. All return the same result envelope (see
+57 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
 is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
@@ -162,7 +162,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   Lab data only. An on-page-basics checklist, not a ranking predictor. (v0.7.1)
 
 <a name="cf"></a>
-**Cloudflare (11)**
+**Cloudflare (12)**
 - `cf_list_zones` - zones the token can see.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
@@ -176,7 +176,15 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   settings (SSL mode, Always-Use-HTTPS, HSTS, Automatic HTTPS Rewrites, Brotli,
   cache TTL). Severity-graded with a "verify, not fail" discipline because CF
   cannot see the origin; HSTS is never a hard failure. Needs Zone Settings Read
-  on the token. (v0.7.1)
+  on the token. Each finding carries a machine-readable `fix` hint (the exact
+  `cf_settings_update` setting + recommended value) to chain audit -> fix. (v0.7.1)
+- `cf_settings_update(settings, zone?, confirm?, acknowledge_hsts_risk?, dry_run?)`
+  - write the SEO/crawl/security settings the audit grades (SSL mode, Always-Use-
+  HTTPS, Automatic HTTPS Rewrites, Brotli, browser cache TTL, HSTS), closing the
+  audit -> remediate loop. Gated. ssl_mode or any HSTS-raise needs `confirm=<zone>`
+  (HSTS-raise also needs `acknowledge_hsts_risk=true`); validates locally, supports
+  `dry_run`, and re-runs the audit so you see the finding clear. Needs Zone
+  Settings:Edit (vs the audit's Read). (v0.7.10)
 - `cf_list_redirects(zone?)` - list a zone's single (dynamic) redirect rules
   plus the account's Bulk Redirect lists (read-only). Call before any redirect
   write so nothing is clobbered. (v0.7.8; bulk lists added v0.7.9)
@@ -552,6 +560,7 @@ the permissions you need:
 | Account: `Account Analytics:Read` | `cf_web_analytics`        |
 | Zone: `Cache Purge:Purge` | `cf_purge_cache`, `cf_purge_cache_all` (only if you enable destructive mode) |
 | Zone: `Single Redirect:Edit` | `cf_create_redirect`, `cf_delete_redirect` (only if you enable destructive mode); `cf_list_redirects` reads with it |
+| Zone: `Zone Settings:Edit` | `cf_settings_update` (only if you enable destructive mode); `cf_settings_audit` only needs Zone Settings Read |
 | Account: `Account Rulesets:Edit` + `Account Filter Lists:Edit` | `cf_bulk_redirect_upsert` (only if you enable destructive mode) |
 
 ### IndexNow

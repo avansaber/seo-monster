@@ -1,15 +1,18 @@
-"""Cloudflare tools (11).
+"""Cloudflare tools (12).
 
 Reads: cf_list_zones, cf_zone_info, cf_list_dns, cf_web_analytics,
 cf_settings_audit, cf_list_redirects (read-only).
 Writes (gated): cf_purge_cache, cf_purge_cache_all, cf_create_redirect,
-cf_delete_redirect, and cf_bulk_redirect_upsert sit behind
-SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge and the bulk upsert additionally
-require a confirm token. The destructive gate is checked before any client
-call, so a blocked write makes zero network requests. Single-redirect creates
-pre-flight the target (shared preflight_get) and refuse loops/duplicates; bulk
-upsert pre-validates every item locally and rejects the whole batch on any bad
-item (never half-applies).
+cf_delete_redirect, cf_bulk_redirect_upsert, and cf_settings_update sit behind
+SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge, bulk upsert, and high-risk settings
+changes (ssl_mode / HSTS-raise) additionally require a confirm token (HSTS-raise
+also needs acknowledge_hsts_risk). The destructive gate is checked before any
+client call, so a blocked write makes zero network requests. Single-redirect
+creates pre-flight the target and refuse loops/duplicates; bulk upsert
+pre-validates every item locally and rejects the whole batch on any bad item;
+cf_settings_update validates locally, classifies HSTS-raise risk, and re-runs
+the audit so the caller sees the finding clear. cf_settings_audit findings carry
+a machine-readable `fix` hint to chain audit -> cf_settings_update.
 """
 
 from __future__ import annotations
@@ -55,7 +58,7 @@ def _destructive_disabled(tool: str) -> dict[str, Any]:
         ErrorCode.DESTRUCTIVE_DISABLED,
         _SERVICE,
         f"{tool} is disabled because destructive mode is off.",
-        remediation="Set SEO_MCP_ALLOW_DESTRUCTIVE=true to enable Cloudflare cache purge.",
+        remediation="Set SEO_MCP_ALLOW_DESTRUCTIVE=true to enable the gated Cloudflare write tools (cache purge, redirect management, settings update).",
         docs_url=DOCS_BASE + "destructive-mode",
     )
 
@@ -355,8 +358,8 @@ _SETTINGS_HSTS_MAX_SEVERITY = "medium"
 _HSTS_MIN_MAX_AGE = 60 * 60 * 24 * 180  # 6 months, in seconds
 
 
-def _cf_finding(rule_id: str, severity: str, observed: str, expected: str, why: str, benign: str) -> dict[str, Any]:
-    return {
+def _cf_finding(rule_id: str, severity: str, observed: str, expected: str, why: str, benign: str, fix: dict[str, Any] | None = None) -> dict[str, Any]:
+    finding = {
         "rule_id": rule_id,
         "severity": severity,
         "observed": observed,
@@ -364,6 +367,11 @@ def _cf_finding(rule_id: str, severity: str, observed: str, expected: str, why: 
         "why": why,
         "benign_exception": benign,
     }
+    # Machine-readable fix hint: the exact cf_settings_update `settings` key +
+    # recommended value, so a host can chain audit -> cf_settings_update.
+    if fix is not None:
+        finding["fix"] = fix
+    return finding
 
 
 def _settings_map(settings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -392,6 +400,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             "Verify: Flexible/Full SSL lets CF reach the origin over weak or unauthenticated TLS, "
             "risking redirect loops, mixed content, and insecure origin hops.",
             "Legacy origin that genuinely cannot do TLS; CF cannot see origin TLS, so confirm before changing.",
+            fix={"setting": "ssl_mode", "recommended": "strict"},
         ))
 
     # cf.always_https: want "on". CF cannot see whether http->https is handled
@@ -404,6 +413,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             "Verify: without an edge http->https 301, the http variant may be crawled and indexed, "
             "splitting canonical signals.",
             "http->https is already enforced at the origin or another layer; confirm before changing.",
+            fix={"setting": "always_use_https", "recommended": "on"},
         ))
 
     # cf.hsts: present with max-age >= 6 months. NEVER hard-fail; premature HSTS
@@ -419,6 +429,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             "HSTS enforces HTTPS and blocks protocol downgrade. Recommended, but with a strong caveat.",
             "Premature HSTS is dangerous and hard to undo; do NOT enable during or just after an HTTPS "
             "migration until HTTPS is fully stable. Never a hard failure.",
+            fix={"setting": "hsts", "recommended": {"enabled": True, "max_age": 31536000, "include_subdomains": True}},
         ))
     elif isinstance(hsts_max_age, int) and hsts_max_age < _HSTS_MIN_MAX_AGE:
         findings.append(_cf_finding(
@@ -426,6 +437,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             f"HSTS on, max-age={hsts_max_age}s", f"max-age >= {_HSTS_MIN_MAX_AGE}s (6 months)",
             "A short HSTS max-age weakens the downgrade protection HSTS is meant to provide.",
             "Intentionally short while ramping up HSTS confidence after a migration; raise it gradually.",
+            fix={"setting": "hsts", "recommended": {"enabled": True, "max_age": 31536000, "include_subdomains": True}},
         ))
 
     # cf.auto_https_rewrites: want "on". Low-medium; pure mixed-content hygiene.
@@ -436,6 +448,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             f"automatic_https_rewrites={auto_rewrites}", "on",
             "Rewriting http sub-resource links to https avoids mixed-content warnings.",
             "All content is already served over https, so there is nothing to rewrite (low value).",
+            fix={"setting": "automatic_https_rewrites", "recommended": "on"},
         ))
 
     # cf.brotli: want "on". Pure upside; low.
@@ -446,6 +459,7 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             f"brotli={brotli}", "on",
             "Brotli compresses better than gzip, improving load time and Core Web Vitals.",
             "Pure upside; no real downside to leaving it off other than missed performance.",
+            fix={"setting": "brotli", "recommended": "on"},
         ))
 
     # cf.browser_cache_ttl: informational only. "Respect existing headers"
@@ -584,11 +598,11 @@ def _build_redirect_rule(source: str, target: str, status_code: int, preserve_qs
 TOOL_LIST_REDIRECTS = {
     "name": "cf_list_redirects",
     "description": (
-        "List a zone's single (dynamic) redirect rules: source, target, status "
-        "code, and rule id (read-only). Call this before cf_create_redirect / "
-        "cf_delete_redirect so writes never clobber existing rules. Pairs with "
-        "redirect_chain_audit and the migration_check prompt. (Account-level "
-        "Bulk Redirects are not yet exposed.)"
+        "List a zone's single (dynamic) redirect rules (source, target, status "
+        "code, rule id) plus the account's Bulk Redirect lists (read-only). Call "
+        "this before cf_create_redirect / cf_delete_redirect / "
+        "cf_bulk_redirect_upsert so writes never clobber existing rules. Pairs "
+        "with redirect_chain_audit and the migration_check prompt."
     ),
     "inputSchema": {
         "type": "object",
@@ -722,9 +736,13 @@ def cf_create_redirect(arguments, config, clients) -> dict[str, Any]:
         return ok({"zone": zone_name, "dry_run": True, "would_create": _shape_redirect_rule(rule), "advisories": advisories, "notes": ["dry_run: nothing was written."]})
     try:
         client.add_dynamic_redirect(zone_id, rule)
+        # Re-read to surface the new rule's id so the caller can delete it
+        # without a separate cf_list_redirects (FEEDBACK §22 A-FIND-3).
+        _rsid, after = client.get_dynamic_redirects(zone_id)
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
-    return ok({"zone": zone_name, "created": True, "source": source, "target": target, "status_code": status_code, "advisories": advisories})
+    new_id = next((r.get("id") for r in after if _redirect_source_of(r) == source), None)
+    return ok({"zone": zone_name, "created": True, "rule_id": new_id, "source": source, "target": target, "status_code": status_code, "advisories": advisories})
 
 
 TOOL_DELETE_REDIRECT = {
@@ -871,8 +889,11 @@ def cf_bulk_redirect_upsert(arguments, config, clients) -> dict[str, Any]:
     for i, it in enumerate(items):
         src = it.get("source")
         tgt = it.get("target")
-        if not src or not _valid_abs_url(tgt):
-            rejects.append({"index": i, "reason": "source required; target must be an absolute http(s) URL"})
+        if not src:
+            rejects.append({"index": i, "reason": "source is required"})
+            continue
+        if not _valid_abs_url(tgt):
+            rejects.append({"index": i, "reason": "target must be an absolute http(s) URL"})
             continue
         sc = int(it.get("status_code", 301))
         if sc not in _VALID_REDIRECT_STATUS:
@@ -953,6 +974,225 @@ def cf_bulk_redirect_upsert(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- zone settings update (gated; closes the audit -> remediate loop) -----
+#
+# Writes only the SEO/crawl/security settings cf_settings_audit grades. HSTS is
+# the footgun: any change that RAISES protection needs confirm==zone AND
+# acknowledge_hsts_risk; an ssl_mode change needs confirm==zone. Validates
+# locally before any CF call (reject the whole request on bad input). dry_run
+# returns before/after. Needs the Zone Settings:Edit token scope (audit=Read).
+
+_SETTING_IDS = {
+    "ssl_mode": "ssl",
+    "always_use_https": "always_use_https",
+    "automatic_https_rewrites": "automatic_https_rewrites",
+    "brotli": "brotli",
+    "browser_cache_ttl": "browser_cache_ttl",
+}
+_RULE_FOR_SETTING = {
+    "ssl_mode": "cf.ssl_mode",
+    "always_use_https": "cf.always_https",
+    "automatic_https_rewrites": "cf.auto_https_rewrites",
+    "brotli": "cf.brotli",
+    "browser_cache_ttl": "cf.browser_cache_ttl",
+    "hsts": "cf.hsts",
+}
+_SSL_MODES = {"off", "flexible", "full", "strict"}
+_ONOFF = {"on", "off"}
+# Distinct names from the audit's _HSTS_MIN_MAX_AGE (6-month grading threshold) —
+# these bound what cf_settings_update will WRITE.
+_HSTS_VALID_MIN = 300
+_HSTS_VALID_MAX = 63072000        # 2 years
+_HSTS_PRELOAD_MIN = 31536000      # 1 year (HSTS preload-list requirement)
+_HSTS_WEAK_MAX_AGE = 3600
+
+
+def _settings_snapshot(by_id: Mapping[str, Any]) -> dict[str, Any]:
+    keys = ("ssl", "always_use_https", "automatic_https_rewrites", "brotli", "browser_cache_ttl", "security_header")
+    return {k: by_id.get(k) for k in keys if k in by_id}
+
+
+def _current_hsts(by_id: Mapping[str, Any]) -> dict[str, Any]:
+    sh = by_id.get("security_header")
+    hsts = sh.get("strict_transport_security") if isinstance(sh, dict) else None
+    return hsts if isinstance(hsts, dict) else {}
+
+
+TOOL_SETTINGS_UPDATE = {
+    "name": "cf_settings_update",
+    "description": (
+        "Write the SEO/crawl/security Cloudflare zone settings that "
+        "cf_settings_audit grades, to close the audit -> remediate loop. Gated: "
+        "requires SEO_MCP_ALLOW_DESTRUCTIVE=true. Changing ssl_mode, or any HSTS "
+        "change that raises protection, additionally requires confirm=<zone> (HSTS "
+        "also requires acknowledge_hsts_risk=true). Validates locally first and "
+        "supports dry_run (before/after preview). Needs the Zone Settings:Edit "
+        "token scope (the audit only needs Read)."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "zone": {"type": "string", "description": "Zone hostname. Defaults to the configured CF_ZONE."},
+            "settings": {
+                "type": "object",
+                "description": "Only the provided keys are changed.",
+                "properties": {
+                    "ssl_mode": {"type": "string", "enum": ["off", "flexible", "full", "strict"]},
+                    "always_use_https": {"type": "string", "enum": ["on", "off"]},
+                    "automatic_https_rewrites": {"type": "string", "enum": ["on", "off"]},
+                    "brotli": {"type": "string", "enum": ["on", "off"]},
+                    "browser_cache_ttl": {"type": "integer", "description": "Seconds (0 = respect origin headers)."},
+                    "hsts": {
+                        "type": "object",
+                        "properties": {
+                            "enabled": {"type": "boolean"},
+                            "max_age": {"type": "integer", "description": "Seconds; 0 disables. >= 31536000 (1y) recommended."},
+                            "include_subdomains": {"type": "boolean"},
+                            "preload": {"type": "boolean"},
+                            "nosniff": {"type": "boolean"},
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            "confirm": {"type": "string", "description": "Must equal the resolved zone for ssl_mode or HSTS-raise changes."},
+            "acknowledge_hsts_risk": {"type": "boolean", "description": "Required true for any HSTS change that raises protection (HSTS is hard to undo)."},
+            "dry_run": {"type": "boolean", "description": "Preview before/after without writing (default false)."},
+        },
+        "required": ["settings"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=False, destructive=True),
+}
+
+
+def cf_settings_update(arguments, config, clients) -> dict[str, Any]:
+    if not config.allow_destructive:
+        return _destructive_disabled("cf_settings_update")
+    client, error = _require(clients)
+    if error:
+        return error
+    settings = arguments.get("settings")
+    if not isinstance(settings, dict) or not settings:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "settings must be a non-empty object.", docs_url=DOCS_BASE + "cf")
+    allowed = set(_SETTING_IDS) | {"hsts"}
+    unknown = [k for k in settings if k not in allowed]
+    if unknown:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"Unknown setting key(s): {unknown}. Allowed: {sorted(allowed)}.", docs_url=DOCS_BASE + "cf")
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+
+    advisories: list[str] = []
+
+    # Local validation (reject the whole request on any bad input).
+    if "ssl_mode" in settings and settings["ssl_mode"] not in _SSL_MODES:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"ssl_mode must be one of {sorted(_SSL_MODES)}.", docs_url=DOCS_BASE + "cf")
+    for k in ("always_use_https", "automatic_https_rewrites", "brotli"):
+        if k in settings and settings[k] not in _ONOFF:
+            return err(ErrorCode.INVALID_INPUT, _SERVICE, f"{k} must be 'on' or 'off'.", docs_url=DOCS_BASE + "cf")
+    if "browser_cache_ttl" in settings and (not isinstance(settings["browser_cache_ttl"], int) or settings["browser_cache_ttl"] < 0):
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "browser_cache_ttl must be a non-negative integer (seconds).", docs_url=DOCS_BASE + "cf")
+    hsts_req = settings.get("hsts")
+    if hsts_req is not None:
+        if not isinstance(hsts_req, dict):
+            return err(ErrorCode.INVALID_INPUT, _SERVICE, "hsts must be an object.", docs_url=DOCS_BASE + "cf")
+        ma = hsts_req.get("max_age")
+        if ma is not None:
+            if not isinstance(ma, int) or ma < 0:
+                return err(ErrorCode.INVALID_INPUT, _SERVICE, "hsts.max_age must be a non-negative integer (seconds).", docs_url=DOCS_BASE + "cf")
+            if ma != 0 and not (_HSTS_VALID_MIN <= ma <= _HSTS_VALID_MAX):
+                return err(ErrorCode.INVALID_INPUT, _SERVICE, f"hsts.max_age must be 0 (disable) or between {_HSTS_VALID_MIN} and {_HSTS_VALID_MAX} seconds.", docs_url=DOCS_BASE + "cf")
+            if 0 < ma < _HSTS_WEAK_MAX_AGE:
+                advisories.append(f"hsts.max_age={ma}s is weak; >= {_HSTS_PRELOAD_MIN}s (1 year) is recommended.")
+        if hsts_req.get("preload") is True:
+            if not hsts_req.get("include_subdomains") or (isinstance(ma, int) and ma < _HSTS_PRELOAD_MIN):
+                return err(
+                    ErrorCode.INVALID_INPUT, _SERVICE,
+                    "hsts.preload requires include_subdomains=true and max_age >= 31536000 (1 year), per the HSTS preload-list requirements.",
+                    docs_url=DOCS_BASE + "cf",
+                )
+            advisories.append("hsts.preload only adds the directive; actual preloading still requires submitting the domain at hstspreload.org.")
+        if hsts_req.get("include_subdomains") is True:
+            advisories.append("hsts.include_subdomains applies HSTS to EVERY subdomain; they must all serve valid HTTPS.")
+
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        before = _settings_map(client.get_zone_settings(zone_id))
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    # Risk classification: ssl_mode change, or an HSTS change that raises protection.
+    requires_confirm = "ssl_mode" in settings
+    hsts_raises = False
+    if hsts_req is not None:
+        cur = _current_hsts(before)
+        cur_enabled, cur_ma = bool(cur.get("enabled")), (cur.get("max_age") or 0)
+        req_enabled = hsts_req.get("enabled", cur_enabled)
+        req_ma = hsts_req.get("max_age", cur_ma)
+        if (
+            (req_enabled and not cur_enabled)
+            or (isinstance(req_ma, int) and req_ma > cur_ma)
+            or (hsts_req.get("include_subdomains") and not cur.get("include_subdomains"))
+            or (hsts_req.get("preload") and not cur.get("preload"))
+        ):
+            hsts_raises = True
+            requires_confirm = True
+
+    # Build the planned PATCH set + proposed snapshot.
+    planned: dict[str, Any] = {sid: settings[k] for k, sid in _SETTING_IDS.items() if k in settings}
+    if hsts_req is not None:
+        merged = {**_current_hsts(before), **{kk: hsts_req[kk] for kk in ("enabled", "max_age", "include_subdomains", "preload", "nosniff") if kk in hsts_req}}
+        planned["security_header"] = {"strict_transport_security": merged}
+    proposed = {**before, **planned}
+
+    if arguments.get("dry_run"):
+        return ok({"zone": zone_name, "dry_run": True, "before": _settings_snapshot(before), "after": _settings_snapshot(proposed), "advisories": advisories, "notes": ["dry_run: nothing was written."]})
+
+    if requires_confirm and arguments.get("confirm") != zone_name:
+        return err(
+            ErrorCode.CONFIRM_REQUIRED, _SERVICE,
+            "High-risk settings change not confirmed.",
+            remediation=f"Pass confirm='{zone_name}' (the resolved zone) to change ssl_mode or raise HSTS protection.",
+            docs_url=DOCS_BASE + "destructive-mode",
+            details={"resolved_zone": zone_name},
+        )
+    if hsts_raises and arguments.get("acknowledge_hsts_risk") is not True:
+        return err(
+            ErrorCode.CONFIRM_REQUIRED, _SERVICE,
+            "Raising HSTS protection requires explicit acknowledgement.",
+            remediation=(
+                "Pass acknowledge_hsts_risk=true. HSTS is hard to undo: browsers cache it for max_age, so "
+                "do not enable or raise it until HTTPS is fully stable on this host (and every subdomain if "
+                "include_subdomains)."
+            ),
+            docs_url=DOCS_BASE + "destructive-mode",
+            details={"resolved_zone": zone_name},
+        )
+
+    try:
+        for sid, value in planned.items():
+            client.patch_zone_setting(zone_id, sid, value)
+        after = _settings_map(client.get_zone_settings(zone_id))
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    changed_rules = {_RULE_FOR_SETTING[k] for k in settings if k in _RULE_FOR_SETTING}
+    post_findings = [f for f in _audit_settings(after) if f["rule_id"] in changed_rules]
+    return ok(
+        {
+            "zone": zone_name,
+            "updated": sorted(planned.keys()),
+            "before": _settings_snapshot(before),
+            "after": _settings_snapshot(after),
+            "post_update_findings": post_findings,
+            "advisories": advisories,
+            "notes": ["A finding still in post_update_findings means CF did not apply the change as expected, or the value remains sub-optimal."],
+        }
+    )
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -967,6 +1207,7 @@ TOOLS = [
     TOOL_CREATE_REDIRECT,
     TOOL_DELETE_REDIRECT,
     TOOL_BULK_REDIRECT_UPSERT,
+    TOOL_SETTINGS_UPDATE,
 ]
 
 HANDLERS = {
@@ -981,4 +1222,5 @@ HANDLERS = {
     "cf_create_redirect": cf_create_redirect,
     "cf_delete_redirect": cf_delete_redirect,
     "cf_bulk_redirect_upsert": cf_bulk_redirect_upsert,
+    "cf_settings_update": cf_settings_update,
 }

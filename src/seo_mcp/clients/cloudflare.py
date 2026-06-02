@@ -73,6 +73,16 @@ class CfClient:
         error = map_http_status(status, body_text, service="Cloudflare")
         if cf_errors:
             error.details = {**(error.details or {}), "cf_errors": cf_errors}
+        # CF 9109 "Unauthorized to access requested resource" = a VALID token that
+        # simply can't reach this zone/account resource (distinct from a bad
+        # token). Give the scope-specific remediation (FEEDBACK R19-FIND-2).
+        if status == 403 and any(e.get("code") == 9109 for e in cf_errors if isinstance(e, dict)):
+            error.remediation = (
+                "The API token is valid but has no access to this Cloudflare "
+                "resource. For a zone tool, the token's Zone Resources must include "
+                "this zone: set it to 'All zones from an account', or add this zone. "
+                "For an account tool, grant the matching account-level permission."
+            )
         return error
 
     @staticmethod
@@ -114,6 +124,14 @@ class CfClient:
         ``{id, value, editable, modified_on, ...}`` entries; the caller indexes
         by ``id`` (e.g. 'ssl', 'always_use_https', 'security_header')."""
         return self._http_request("GET", f"/zones/{zone_id}/settings").get("result", [])
+
+    def patch_zone_setting(self, zone_id: str, setting_id: str, value: Any) -> dict[str, Any]:
+        """Write one zone setting (gated in tools). PATCH the single-setting
+        endpoint with ``{"value": ...}``; returns the updated setting. Needs the
+        Zone Settings:Edit token scope (the audit only needs Read)."""
+        return self._http_request(
+            "PATCH", f"/zones/{zone_id}/settings/{setting_id}", {"value": value}
+        ).get("result", {})
 
     # --- dns --------------------------------------------------------------
 
