@@ -6,15 +6,16 @@ For human-readable install + auth instructions, see [README.md](README.md).
 
 ## What this MCP server gives you
 
-57 tools across **Google Search Console, Google Analytics 4, PageSpeed
+59 tools across **Google Search Console, Google Analytics 4, PageSpeed
 Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), content-
 opportunity intelligence, plus stdlib HTTP tools for technical-SEO checks**
 (`inspect_meta`, `check_canonical`, `redirect_chain_audit`,
 `mixed_content_check`, `robots_txt_validate`, `sitemap_validate`,
 `sitemap_health`, `inspect_schema`, `validate_schema`,
-`hreflang_consistency_check`, `internal_link_graph`, `lighthouse_budget`).
-Cloudflare includes redirect management (single + bulk, for migrations) and a
-zone SEO-settings audit with remediation.
+`hreflang_consistency_check`, `internal_link_graph`, `lighthouse_budget`,
+`robots_ai_posture`). Cloudflare includes redirect management (single + bulk,
+for migrations), a zone SEO-settings audit with remediation, and managed
+robots.txt / Content-Signals control (`cf_managed_robots`).
 
 13 workflow prompts: `content_workflow`, `content_brief`, `content_outline`,
 `content_article`, `content_performance`, `seo_setup_audit`, `weekly_review`,
@@ -25,8 +26,8 @@ Every tool carries MCP standard annotations (`readOnlyHint`,
 `destructiveHint`, `idempotentHint`, `openWorldHint`). Reads are always
 available; the routine writes (sitemap submit, indexing request, IndexNow) are
 on by default; the higher-risk Cloudflare writes (cache purge, redirect
-create/delete/bulk, settings update) are gated behind
-`SEO_MCP_ALLOW_DESTRUCTIVE=true`.
+create/delete/bulk, settings update, managed robots.txt configure/disable) are
+gated behind `SEO_MCP_ALLOW_DESTRUCTIVE=true`.
 
 ## Install
 
@@ -90,7 +91,7 @@ env vars only for the services you intend to use:
 | `CF_ZONE` | Cloudflare | optional (default zone) |
 | `SEO_MCP_INDEXNOW_KEY` | IndexNow | required for IndexNow tools only |
 | `SEO_MCP_INDEXNOW_KEY_LOCATION` | IndexNow | optional |
-| `SEO_MCP_ALLOW_DESTRUCTIVE` | Cloudflare cache-purge | required to unlock; default off |
+| `SEO_MCP_ALLOW_DESTRUCTIVE` | Cloudflare writes (cache purge, redirects, settings, managed robots.txt) | required to unlock; default off |
 
 ## Discovery
 
