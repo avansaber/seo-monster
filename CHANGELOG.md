@@ -13,9 +13,38 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.8.1] - 2026-06-02
+
+`robots_ai_posture` - the Content-Signals advisor, part 3 of the robots feature
+line. One new tool (58 tools / 13 prompts). `cf_managed_robots` (the control
+tool, part 2) is deferred until the Cloudflare managed-robots write API is
+confirmed, so the advisor ships first under 0.8.1.
+
+### Added
+
+- `robots_ai_posture(goal?, sitemap_url?)` - a deterministic, offline advisor
+  for the Content-Signals levers (`search` / `ai-input` / `ai-train`). Takes a
+  business `goal` (`content_authority` default / `maximize_visibility` /
+  `protect_ip`), recommends a posture with a plain-language rationale, always
+  returns the full trade-off menu of `alternatives`, and emits a ready-to-apply
+  `artifact`: the `Content-Signal:` directive line plus a complete suggested
+  robots.txt (embedding `sitemap_url` when supplied, else a placeholder).
+  Read-only, no network, no writes; an unknown `goal` is rejected in-handler
+  with `INVALID_INPUT`. Every success carries a top-level `caveat` stating that
+  Content-Signal is honored only by adopting crawlers, is ignored by Googlebot,
+  and is not a ranking factor - the reliable levers remain a clean `Allow: /`
+  plus a `Sitemap:` line and not `Disallow`-ing the AI bots you want to reach
+  you. The artifact is designed to hand off to a future `cf_managed_robots`
+  step or to paste straight into robots.txt.
+  **(validate)** Default goal -> `content_authority` posture
+  (search=yes / ai-input=yes / ai-train=no) with `default_applied: true`;
+  `protect_ip` -> ai-input=no / ai-train=no; the `caveat` and the four-entry
+  `alternatives` menu are present on every success; an unknown goal ->
+  `INVALID_INPUT`.
+
 ## [0.8.0] - 2026-06-02
 
-Managed-robots / Content-Signals detection — part 1 of the robots feature line.
+Managed-robots / Content-Signals detection - part 1 of the robots feature line.
 No new tools or prompts (57 tools / 13 prompts); `cf_managed_robots` (control)
 and `robots_ai_posture` (advisor) follow.
 

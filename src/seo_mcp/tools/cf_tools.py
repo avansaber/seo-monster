@@ -1003,7 +1003,7 @@ _RULE_FOR_SETTING = {
 }
 _SSL_MODES = {"off", "flexible", "full", "strict"}
 _ONOFF = {"on", "off"}
-# Distinct names from the audit's _HSTS_MIN_MAX_AGE (6-month grading threshold) —
+# Distinct names from the audit's _HSTS_MIN_MAX_AGE (6-month grading threshold);
 # these bound what cf_settings_update will WRITE.
 _HSTS_VALID_MIN = 300
 _HSTS_VALID_MAX = 63072000        # 2 years

@@ -63,7 +63,7 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-57 tools, grouped by service. All return the same result envelope (see
+58 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
 is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
@@ -213,7 +213,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   `/key.txt` paths.
 
 <a name="technical"></a>
-**Technical SEO (7, v0.3.0)** - no credentials needed; built-in HTTP client.
+**Technical SEO (8, v0.3.0)** - no credentials needed; built-in HTTP client.
 - `inspect_meta(url)` - on-page surface in one call: title, meta description,
   meta robots, canonical, Open Graph + Twitter Card tags, hreflang, H1 count.
 - `check_canonical(url)` - canonical-link audit: self-referential / cross-host
@@ -234,6 +234,15 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   transparent.
 - `sitemap_health(sitemap_url, sample_size=25)` - sample-HEAD audit. Status
   histogram + first non-2xx examples.
+- `robots_ai_posture(goal?, sitemap_url?)` - deterministic, offline advisor for
+  the Content-Signals levers (`search` / `ai-input` / `ai-train`). Takes a
+  business goal (`content_authority` default / `maximize_visibility` /
+  `protect_ip`), recommends a posture with a plain-language rationale, lays out
+  the trade-off alternatives, and emits a ready-to-apply artifact: the
+  `Content-Signal:` directive line plus a full suggested robots.txt. No network,
+  no writes. Every response carries the mandatory caveat that Content-Signal is
+  honored only by adopting crawlers, is ignored by Googlebot, and is not a
+  ranking factor. (v0.8.1)
 
 <a name="crux"></a>
 **Chrome UX Report (2)**
