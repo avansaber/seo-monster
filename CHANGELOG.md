@@ -13,6 +13,34 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.8.0] - 2026-06-02
+
+Managed-robots / Content-Signals detection — part 1 of the robots feature line.
+No new tools or prompts (57 tools / 13 prompts); `cf_managed_robots` (control)
+and `robots_ai_posture` (advisor) follow.
+
+### Changed
+
+- `robots_txt_validate` now detects the Cloudflare Managed robots.txt /
+  Content-Signals blind spot that produced a false-clean on a migrated zone
+  (FEEDBACK §27):
+  - **Stale edge cache.** A second cache-busted fetch (`?cb=<rand>`); when the
+    normal fetch is edge-cached (`cf-cache-status` HIT / large `age`) *and*
+    differs from the fresh content, it emits a `stale_edge_cache` finding **and
+    re-parses `groups`/`sitemaps` from the FRESH content**, so it no longer
+    reports stale sitemaps as live. The new `edge_cache` block returns both
+    fetches' cache status / age / last-modified.
+  - **`managed_robots_suspected`.** Fingerprints the Content-Signals boilerplate
+    + the absence of real directives (never `server: cloudflare` alone), with a
+    remediation pointing at the dashboard / `cf_managed_robots`.
+  - **`missing_sitemap`** finding (previously `findings:[]` even with zero sitemaps).
+  - **`content_signals`** parsing (`search` / `ai-input` / `ai-train`) into the output.
+  All advisory (`findings` + a new `advisories` list), no hard errors — a managed
+  robots is a legitimate config. No new scope (still a no-auth HTTP tool).
+  **(validate)** A managed-robots zone → `managed_robots_suspected` + `missing_sitemap`;
+  a stale edge HIT differing from the cache-busted body → `stale_edge_cache` with
+  groups/sitemaps parsed from the FRESH content; Content-Signal directives parsed.
+
 ## [0.7.11] - 2026-06-02
 
 IndexNow multi-host fix + Cloudflare polish. No new tools or prompts (57 tools /

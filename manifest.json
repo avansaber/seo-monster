@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.7.11",
+  "version": "0.8.0",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), and technical-SEO HTTP primitives.",
   "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
   "author": {

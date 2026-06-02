@@ -15,6 +15,7 @@ implements the proper longest-match-wins with Allow-breaks-ties rule.
 
 from __future__ import annotations
 
+import secrets
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
@@ -25,6 +26,26 @@ from ._helpers import ANNOT_READ, require_client
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."
+
+# Cloudflare Managed robots.txt / Content-Signals fingerprint. Match the
+# distinctive boilerplate phrasing PLUS the absence of real directives -- NOT
+# `server: cloudflare` (every CF-fronted site has that). The phrase list may
+# need updating if Cloudflare reworks the boilerplate (FEEDBACK §27 A).
+_MANAGED_ROBOTS_PHRASES = (
+    "content signal",
+    "as a condition of accessing this website",
+)
+# A cache HIT (or large age) on the normal fetch means the edge is serving a
+# cached robots.txt; if it differs from the cache-busted fetch, it is stale.
+_CACHED_CF_STATUSES = {"hit", "stale", "updating", "revalidated"}
+_STALE_EDGE_AGE_SECONDS = 86400  # 1 day
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _require_http(clients: Mapping[str, Any]):
@@ -99,11 +120,40 @@ def robots_txt_validate(arguments, config, clients) -> dict[str, Any]:
             f"robots.txt fetch returned HTTP {resp.status}.",
             details={"status": resp.status, "robots_url": robots_url},
         )
-    text = resp.body_text
-    groups, sitemaps = _parse_robots(text)
+    normal_text = resp.body_text
+    # Cache-bust: the edge may serve a STALE cached robots.txt while the live
+    # origin/managed content differs (FEEDBACK §27 -- the false-clean this fixes).
+    # Re-parse from the FRESH content so groups/sitemaps reflect what crawlers
+    # actually get, not a stale cached body.
+    fresh_resp = _cache_bust_fetch(client, robots_url)
+    truth_text = fresh_resp.body_text if fresh_resp is not None else normal_text
+    groups, sitemaps, content_signals = _parse_robots(truth_text)
+
     findings: list[str] = []
+    advisories: list[str] = []
     if not groups:
         findings.append("empty_ruleset")
+    if not sitemaps:
+        findings.append("missing_sitemap")
+        advisories.append("No Sitemap: directive in robots.txt; search engines rely on it to discover URLs.")
+
+    edge_cache = _edge_cache_report(resp, fresh_resp, normal_text)
+    if edge_cache["stale_edge_cache"]:
+        findings.append("stale_edge_cache")
+        n = edge_cache["normal"]
+        advisories.append(
+            f"The edge served a cached robots.txt (cf-cache-status={n['cf_cache_status']}, "
+            f"age={n['age']}s) that differs from the live cache-busted content. A crawler may "
+            "read the stale file; the groups/sitemaps here are parsed from the FRESH content."
+        )
+    if _looks_managed(truth_text, groups, sitemaps):
+        findings.append("managed_robots_suspected")
+        advisories.append(
+            "A Cloudflare Managed robots.txt / Content-Signals policy appears active and is "
+            "overriding your origin robots.txt (no Sitemap, no Allow/Disallow). Reconfigure or "
+            "disable it in the Cloudflare dashboard (robots.txt for AI bots), or use cf_managed_robots."
+        )
+
     probes_out: list[dict[str, Any]] = []
     for probe in arguments.get("probes") or []:
         ua = str(probe["user_agent"])
@@ -120,18 +170,24 @@ def robots_txt_validate(arguments, config, clients) -> dict[str, Any]:
         "status": resp.status,
         "groups": groups,
         "sitemaps": sitemaps,
+        "content_signals": content_signals,
+        "edge_cache": edge_cache,
         "probes": probes_out,
         "findings": findings,
+        "advisories": advisories,
     })
 
 
-def _parse_robots(text: str) -> tuple[list[dict[str, Any]], list[str]]:
-    """Return (groups, sitemaps). A group is a contiguous block sharing one
-    or more ``User-agent:`` declarations, followed by Allow/Disallow lines and
-    optional ``Crawl-delay``. ``Sitemap:`` lines are collected globally because
-    robots.txt allows them anywhere."""
+def _parse_robots(text: str) -> tuple[list[dict[str, Any]], list[str], dict[str, str]]:
+    """Return (groups, sitemaps, content_signals). A group is a contiguous block
+    sharing one or more ``User-agent:`` declarations, followed by Allow/Disallow
+    lines and optional ``Crawl-delay``. ``Sitemap:`` lines are collected globally
+    because robots.txt allows them anywhere. ``Content-Signal:`` directives
+    (search / ai-input / ai-train, the Content-Signals standard) are parsed into
+    a flat map so callers can see the posture."""
     groups: list[dict[str, Any]] = []
     sitemaps: list[str] = []
+    content_signals: dict[str, str] = {}
     current_uas: list[str] = []
     current_rules: list[dict[str, str]] = []
     current_crawl_delay: int | None = None
@@ -162,6 +218,12 @@ def _parse_robots(text: str) -> tuple[list[dict[str, Any]], list[str]]:
         if directive == "sitemap":
             sitemaps.append(value)
             continue
+        if directive == "content-signal":
+            for part in value.split(","):
+                key, sep, val = part.partition("=")
+                if sep:
+                    content_signals[key.strip().lower()] = val.strip().lower()
+            continue
         if directive == "user-agent":
             if in_block:
                 # End of previous group when we hit a UA after rules.
@@ -179,7 +241,7 @@ def _parse_robots(text: str) -> tuple[list[dict[str, Any]], list[str]]:
             except ValueError:
                 pass
     flush()
-    return groups, sitemaps
+    return groups, sitemaps, content_signals
 
 
 def _verdict(groups: list[dict[str, Any]], user_agent: str, url: str) -> tuple[bool, dict[str, str] | None]:
@@ -263,6 +325,54 @@ def _pattern_matches(pattern: str, path: str) -> bool:
     if end_anchored:
         return path.endswith(last) and len(path) - pos >= len(last)
     return last == "" or path.find(last, pos) != -1
+
+
+def _cache_bust_fetch(client: Any, robots_url: str):
+    """Best-effort second fetch with a random query to bypass the edge cache.
+    Returns the HttpResponse, or None if it fails or is non-2xx (the stale check
+    then degrades to 'no comparison')."""
+    bust_url = f"{robots_url}?cb={secrets.token_hex(6)}"
+    try:
+        resp = client.fetch(bust_url)
+    except ApiError:
+        return None
+    return resp if 200 <= resp.status < 300 else None
+
+
+def _edge_cache_report(normal_resp: Any, fresh_resp: Any, normal_text: str) -> dict[str, Any]:
+    """Compare the normal fetch to the cache-busted one. Flag stale_edge_cache
+    only when the bodies differ AND the normal fetch looks edge-cached (a bare
+    body diff alone can false-positive on query-varying origins, §27 A)."""
+    def hdrs(r: Any) -> dict[str, Any]:
+        return {
+            "cf_cache_status": r.headers.get("cf-cache-status"),
+            "age": _to_int(r.headers.get("age")),
+            "last_modified": r.headers.get("last-modified"),
+        }
+
+    report: dict[str, Any] = {
+        "normal": hdrs(normal_resp),
+        "cache_busted": hdrs(fresh_resp) if fresh_resp is not None else None,
+        "stale_edge_cache": False,
+    }
+    if fresh_resp is None:
+        return report
+    bodies_differ = fresh_resp.body_text.strip() != normal_text.strip()
+    cc = (report["normal"]["cf_cache_status"] or "").lower()
+    age = report["normal"]["age"]
+    looks_cached = cc in _CACHED_CF_STATUSES or (age is not None and age > _STALE_EDGE_AGE_SECONDS)
+    report["stale_edge_cache"] = bool(bodies_differ and looks_cached)
+    return report
+
+
+def _looks_managed(text: str, groups: list[dict[str, Any]], sitemaps: list[str]) -> bool:
+    """Cloudflare Managed robots.txt / Content-Signals fingerprint: the
+    distinctive boilerplate phrasing AND no real directives (no Sitemap, no
+    Allow/Disallow). Never keys on `server: cloudflare` alone."""
+    low = text.lower()
+    has_phrase = "content-signal" in low or any(p in low for p in _MANAGED_ROBOTS_PHRASES)
+    no_real_directives = not sitemaps and all(not g.get("rules") for g in groups)
+    return has_phrase and no_real_directives
 
 
 TOOLS = [TOOL]

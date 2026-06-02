@@ -223,9 +223,12 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 - `redirect_chain_audit(url, max_redirects=10)` - walks the chain hop by hop.
   Flags long chains, protocol downgrades, loops, non-2xx terminus.
 - `robots_txt_validate(site_url, probes?)` - parses robots.txt (per-group
-  rules + sitemaps), optionally verdicts (user_agent, url) probes using RFC
-  9309 longest-match (matches what Google + Bing actually do, not stdlib's
-  first-match).
+  rules + sitemaps + Content-Signals), optionally verdicts (user_agent, url)
+  probes using RFC 9309 longest-match (matches what Google + Bing actually do,
+  not stdlib's first-match). Also detects a **stale edge-cached** robots.txt
+  (cache-bust comparison; re-parses from the fresh content) and a **Cloudflare
+  Managed robots.txt / Content-Signals** policy overriding your origin -
+  catching false-clean robots on migrated/CF-fronted sites. (v0.8.0)
 - `sitemap_validate(sitemap_url)` - validates a sitemap or sitemap-index XML,
   counts entries, flags oversize + cross-host + missing lastmod. `.gz`
   transparent.
