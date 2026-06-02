@@ -134,6 +134,28 @@ class CfClient:
             "PATCH", f"/zones/{zone_id}/settings/{setting_id}", {"value": value}
         ).get("result", {})
 
+    # --- bot management / managed robots.txt (writes gated in tools) ------
+
+    def get_bot_management(self, zone_id: str) -> dict[str, Any]:
+        """Read the zone's Bot Management config (read-only). Returns the full
+        config object, which includes the managed-robots / Content-Signals
+        fields (``is_robots_txt_managed``, ``cf_robots_variant``,
+        ``ai_bots_protection``, ``content_bots_protection``,
+        ``crawler_protection``). Needs the Bot Management Read scope."""
+        return self._http_request("GET", f"/zones/{zone_id}/bot_management").get("result", {})
+
+    def update_bot_management(self, zone_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+        """Write Bot Management fields (gated in tools). GET the current config,
+        overlay only the changed keys, drop the read-only/derived fields the PUT
+        rejects, and PUT the merged object back so we never clobber the zone's
+        plan-specific configuration. Returns the updated config. Needs the Bot
+        Management Edit scope (the read path only needs Read)."""
+        merged = {**self.get_bot_management(zone_id), **changes}
+        # Server-computed fields the schema marks read-only; PUT rejects them.
+        for ro in ("stale_zone_configuration", "using_latest_model"):
+            merged.pop(ro, None)
+        return self._http_request("PUT", f"/zones/{zone_id}/bot_management", merged).get("result", {})
+
     # --- dns --------------------------------------------------------------
 
     def list_dns(self, zone_id: str, record_type: str | None = None) -> list[dict[str, Any]]:

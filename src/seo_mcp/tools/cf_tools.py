@@ -29,8 +29,9 @@ from ._helpers import annotations, preflight_get, require_client
 _SERVICE = "cf"
 _REMEDIATION = (
     "Set CF_API_TOKEN to a Cloudflare API token (Zone:Read; add DNS:Read, "
-    "Account Analytics:Read, Cache Purge:Purge, Single Redirect:Edit, and "
-    "(for cf_bulk_redirect_upsert) Account Rulesets:Edit + Account Filter "
+    "Account Analytics:Read, Cache Purge:Purge, Single Redirect:Edit, "
+    "Bot Management:Edit (for cf_managed_robots writes), and (for "
+    "cf_bulk_redirect_upsert) Account Rulesets:Edit + Account Filter "
     "Lists:Edit as needed). See README > Auth."
 )
 
@@ -1204,6 +1205,183 @@ def cf_settings_update(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- cf_managed_robots ----------------------------------------------------
+
+# Cloudflare exposes managed robots.txt + the Content-Signals policy as fields
+# on the Bot Management config (PUT /zones/{id}/bot_management); there is no
+# separate ai-audit write endpoint. Enum values confirmed from the public CF
+# OpenAPI schema; all four plan variants expose these fields (not Enterprise-only).
+_ROBOTS_VARIANTS = {"off", "policy_only"}
+_AI_BOTS_PROTECTION = {"block", "disabled", "only_on_ad_pages"}
+_CONTENT_BOTS_PROTECTION = {"block", "disabled"}
+_CRAWLER_PROTECTION = {"enabled", "disabled"}
+
+# The honest distinction: managed robots.txt + Content-Signals are a STATED
+# PREFERENCE (only honored by adopting crawlers; Googlebot ignores Content-Signal
+# and it is not a ranking factor). The blocking levers actually enforce at the edge.
+_MR_CAVEAT = (
+    "Managed robots.txt and the Content-Signals policy (cf_robots_variant) are a "
+    "STATED PREFERENCE: only crawlers that have adopted the standard honor them, and "
+    "Googlebot ignores Content-Signal entirely (it is not a ranking factor). The "
+    "levers that actually ENFORCE at Cloudflare's edge are ai_bots_protection / "
+    "content_bots_protection ('block') and crawler_protection ('enabled', the link "
+    "maze) - those drop or trap non-compliant bots regardless of robots.txt. Enabling "
+    "managed robots.txt PREPENDS Cloudflare's block to any existing robots.txt on your "
+    "origin; it does not replace it."
+)
+
+
+def _managed_robots_view(cfg: Mapping[str, Any]) -> dict[str, Any]:
+    """Project the managed-robots / Content-Signals fields out of a full Bot
+    Management config, dropping the rest of the (plan-specific) config."""
+    return {
+        "is_robots_txt_managed": cfg.get("is_robots_txt_managed"),
+        "cf_robots_variant": cfg.get("cf_robots_variant"),
+        "ai_bots_protection": cfg.get("ai_bots_protection"),
+        "content_bots_protection": cfg.get("content_bots_protection"),
+        "crawler_protection": cfg.get("crawler_protection"),
+    }
+
+
+def _build_managed_robots_changes(arguments: Mapping[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Validate the configure inputs and return ``(changes, None)`` or
+    ``(None, error_envelope)``. Only the keys actually supplied are included."""
+    changes: dict[str, Any] = {}
+    if "managed_robots" in arguments:
+        mr = arguments["managed_robots"]
+        if not isinstance(mr, bool):
+            return None, err(ErrorCode.INVALID_INPUT, _SERVICE, "managed_robots must be a boolean.", docs_url=DOCS_BASE + "cf")
+        changes["is_robots_txt_managed"] = mr
+    enums = (
+        ("cf_robots_variant", _ROBOTS_VARIANTS),
+        ("ai_bots_protection", _AI_BOTS_PROTECTION),
+        ("content_bots_protection", _CONTENT_BOTS_PROTECTION),
+        ("crawler_protection", _CRAWLER_PROTECTION),
+    )
+    for key, allowed in enums:
+        if key in arguments:
+            val = arguments[key]
+            if val not in allowed:
+                return None, err(ErrorCode.INVALID_INPUT, _SERVICE, f"{key} must be one of {sorted(allowed)}.", docs_url=DOCS_BASE + "cf")
+            changes[key] = val
+    if not changes:
+        return None, err(
+            ErrorCode.INVALID_INPUT, _SERVICE,
+            "configure requires at least one field to change (managed_robots, cf_robots_variant, "
+            "ai_bots_protection, content_bots_protection, or crawler_protection).",
+            docs_url=DOCS_BASE + "cf",
+        )
+    return changes, None
+
+
+TOOL_MANAGED_ROBOTS = {
+    "name": "cf_managed_robots",
+    "description": (
+        "Get / configure / disable Cloudflare's managed robots.txt and Content-Signals "
+        "policy on a zone (rides on the Bot Management config). action='get' reads the "
+        "current state (read-only, un-gated). action='configure' enables/sets the managed "
+        "robots.txt (is_robots_txt_managed), the Content-Signals variant (cf_robots_variant: "
+        "off / policy_only), and the AI-bot blocking levers (ai_bots_protection, "
+        "content_bots_protection, crawler_protection). action='disable' turns managed "
+        "robots.txt and the Content-Signals policy back off. Writes are gated "
+        "(SEO_MCP_ALLOW_DESTRUCTIVE) and need confirm=<zone>; supports dry_run. Always "
+        "returns a caveat distinguishing the stated-preference signals from the levers that "
+        "actually enforce at the edge."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["get", "configure", "disable"], "description": "get (read), configure (write), or disable (write)."},
+            "zone": {"type": "string", "description": "Zone hostname, e.g. 'example.com'. Defaults to the configured CF_ZONE."},
+            "managed_robots": {"type": "boolean", "description": "configure only: enable (true) or disable (false) Cloudflare managed robots.txt."},
+            "cf_robots_variant": {"type": "string", "enum": ["off", "policy_only"], "description": "configure only: the Content-Signals / Robots Access Control License variant."},
+            "ai_bots_protection": {"type": "string", "enum": ["block", "disabled", "only_on_ad_pages"], "description": "configure only: edge rule to block AI scrapers/crawlers (enforces)."},
+            "content_bots_protection": {"type": "string", "enum": ["block", "disabled"], "description": "configure only: edge rule to block content bots (enforces)."},
+            "crawler_protection": {"type": "string", "enum": ["enabled", "disabled"], "description": "configure only: link-maze punishment for AI crawlers (enforces)."},
+            "confirm": {"type": "string", "description": "For writes: must equal the resolved zone hostname."},
+            "dry_run": {"type": "boolean", "description": "Preview the change without writing."},
+        },
+        "required": ["action"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=False, destructive=True, idempotent=True, open_world=True),
+}
+
+
+def cf_managed_robots(arguments, config, clients) -> dict[str, Any]:
+    action = arguments.get("action")
+    if action not in ("get", "configure", "disable"):
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "action must be one of get, configure, disable.", docs_url=DOCS_BASE + "cf")
+
+    is_write = action in ("configure", "disable")
+    # Gate first, before any client call.
+    if is_write and not config.allow_destructive:
+        return _destructive_disabled("cf_managed_robots")
+
+    client, error = _require(clients)
+    if error:
+        return error
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+
+    # Build the change set for writes (validate before touching the network).
+    changes: dict[str, Any] = {}
+    if action == "configure":
+        changes, cfg_err = _build_managed_robots_changes(arguments)
+        if cfg_err:
+            return cfg_err
+    elif action == "disable":
+        # Turn off both the managed robots.txt and the Content-Signals policy.
+        # The blocking levers (ai/content/crawler protection) are a separate
+        # feature and are left untouched.
+        changes = {"is_robots_txt_managed": False, "cf_robots_variant": "off"}
+
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        before = client.get_bot_management(zone_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    if action == "get":
+        return ok({"zone": zone_name, "action": "get", "managed_robots": _managed_robots_view(before), "caveat": _MR_CAVEAT})
+
+    proposed = {**_managed_robots_view(before), **changes}
+
+    if arguments.get("dry_run"):
+        return ok({
+            "zone": zone_name, "action": action, "dry_run": True,
+            "changed": sorted(changes.keys()),
+            "before": _managed_robots_view(before), "after": proposed,
+            "notes": ["dry_run: nothing was written."], "caveat": _MR_CAVEAT,
+        })
+
+    if arguments.get("confirm") != zone_name:
+        return err(
+            ErrorCode.CONFIRM_REQUIRED, _SERVICE,
+            f"{action} changes live bot/crawler behavior and is not confirmed.",
+            remediation=f"Pass confirm='{zone_name}' (the resolved zone) to apply this change.",
+            docs_url=DOCS_BASE + "destructive-mode",
+            details={"resolved_zone": zone_name},
+        )
+
+    try:
+        after_cfg = client.update_bot_management(zone_id, changes)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    return ok({
+        "zone": zone_name, "action": action,
+        "changed": sorted(changes.keys()),
+        "before": _managed_robots_view(before), "after": _managed_robots_view(after_cfg),
+        "caveat": _MR_CAVEAT,
+        "notes": [
+            "after reflects Cloudflare's response to the write; if a field did not change as "
+            "expected, the token may lack Bot Management:Edit or the plan may not support it."
+        ],
+    })
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -1219,6 +1397,7 @@ TOOLS = [
     TOOL_DELETE_REDIRECT,
     TOOL_BULK_REDIRECT_UPSERT,
     TOOL_SETTINGS_UPDATE,
+    TOOL_MANAGED_ROBOTS,
 ]
 
 HANDLERS = {
@@ -1234,4 +1413,5 @@ HANDLERS = {
     "cf_delete_redirect": cf_delete_redirect,
     "cf_bulk_redirect_upsert": cf_bulk_redirect_upsert,
     "cf_settings_update": cf_settings_update,
+    "cf_managed_robots": cf_managed_robots,
 }

@@ -775,3 +775,149 @@ def test_cf_9109_remediation_is_scope_specific():
     err = CfClient._error_from_http(403, body)
     assert str(err.code) == "AUTH_INVALID"
     assert "Zone Resources" in (err.remediation or "")
+
+
+# --- cf_managed_robots (part B: managed robots.txt / Content-Signals) ------
+
+_MR_BEFORE = {
+    "fight_mode": False,
+    "is_robots_txt_managed": False,
+    "cf_robots_variant": "off",
+    "ai_bots_protection": "disabled",
+    "content_bots_protection": "disabled",
+    "crawler_protection": "disabled",
+    "stale_zone_configuration": {"derived": True},
+}
+
+
+def _make_mr_client(before=None):
+    """Real CfClient driven through a fake transport that models the
+    GET -> merge -> PUT round-trip for /bot_management (PUT echoes back the
+    merged config that was sent)."""
+    from seo_mcp.clients.cloudflare import CfClient
+
+    client = CfClient(token="testtoken")
+    state = {"config": dict(before if before is not None else _MR_BEFORE)}
+    calls = []
+
+    def _raw(method, path, body=None):
+        calls.append((method, path, body))
+        if "bot_management" in path and method == "PUT":
+            state["config"] = dict(body or {})
+            return {"success": True, "errors": [], "result": dict(state["config"])}
+        if "bot_management" in path:
+            return {"success": True, "errors": [], "result": dict(state["config"])}
+        return _zone_envelope()
+
+    client._raw_request = _raw
+    client._calls = calls
+    return client
+
+
+def test_managed_robots_get_is_read_only_and_ungated(make_config):
+    client = _make_mr_client()
+    # destructive OFF: get must still work (it is read-only)
+    result = cf_tools.cf_managed_robots({"action": "get"}, _cfg(make_config), {"cf": client})
+    assert result["ok"] is True
+    assert result["data"]["managed_robots"]["is_robots_txt_managed"] is False
+    assert "caveat" in result["data"]
+    assert not any(c[0] == "PUT" for c in client._calls)
+
+
+def test_managed_robots_configure_blocked_when_destructive_off(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": True}, _cfg(make_config), {"cf": client}
+    )
+    assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
+    assert client._calls == []  # gated before any client call
+
+
+def test_managed_robots_configure_requires_confirm(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": True, "cf_robots_variant": "policy_only"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "CONFIRM_REQUIRED"
+    assert not any(c[0] == "PUT" for c in client._calls)
+
+
+def test_managed_robots_configure_happy_path_merges_and_writes(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {
+            "action": "configure",
+            "managed_robots": True,
+            "cf_robots_variant": "policy_only",
+            "ai_bots_protection": "block",
+            "confirm": "example.com",
+        },
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["after"]["is_robots_txt_managed"] is True
+    assert result["data"]["after"]["cf_robots_variant"] == "policy_only"
+    assert result["data"]["after"]["ai_bots_protection"] == "block"
+    # untouched field is preserved through the GET -> merge -> PUT round-trip
+    put = next(c for c in client._calls if c[0] == "PUT")
+    assert put[2]["fight_mode"] is False
+    # the read-only/derived field is stripped from the PUT body
+    assert "stale_zone_configuration" not in put[2]
+
+
+def test_managed_robots_disable_turns_off_managed_and_policy(make_config):
+    client = _make_mr_client({**_MR_BEFORE, "is_robots_txt_managed": True, "cf_robots_variant": "policy_only"})
+    result = cf_tools.cf_managed_robots(
+        {"action": "disable", "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["after"]["is_robots_txt_managed"] is False
+    assert result["data"]["after"]["cf_robots_variant"] == "off"
+
+
+def test_managed_robots_dry_run_writes_nothing(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": True, "dry_run": True},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["dry_run"] is True
+    assert result["data"]["after"]["is_robots_txt_managed"] is True  # proposed
+    assert not any(c[0] == "PUT" for c in client._calls)
+
+
+def test_managed_robots_configure_rejects_bad_enum(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "cf_robots_variant": "bogus", "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "cf_robots_variant" in result["error"]["message"]
+    assert not any(c[0] == "PUT" for c in client._calls)
+
+
+def test_managed_robots_configure_requires_a_field(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "at least one field" in result["error"]["message"]
+
+
+def test_managed_robots_bad_action_rejected(make_config):
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots({"action": "nope"}, _cfg(make_config), {"cf": client})
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert client._calls == []

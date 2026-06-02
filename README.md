@@ -41,8 +41,10 @@ query your own data with your own credentials.
   is resolved at runtime from your environment or a config file. The published
   package contains zero secrets.
 - **Read-first.** Reads are always available. The two routine SEO writes (sitemap
-  submit, indexing request) are available by default. The only gated actions are
-  the Cloudflare cache-purge tools, behind `SEO_MCP_ALLOW_DESTRUCTIVE`.
+  submit, indexing request) are available by default. The Cloudflare write tools
+  (cache purge, redirect management, settings update, managed robots.txt) are
+  gated behind `SEO_MCP_ALLOW_DESTRUCTIVE` and the riskier ones also need a
+  per-call `confirm` token.
 - **Lean.** Standard library plus the `mcp` SDK and the Google client libraries.
   PageSpeed Insights and Cloudflare ride on `urllib`, no extra HTTP dependency.
 
@@ -63,7 +65,7 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-58 tools, grouped by service. All return the same result envelope (see
+59 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
 is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
@@ -162,7 +164,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   Lab data only. An on-page-basics checklist, not a ranking predictor. (v0.7.1)
 
 <a name="cf"></a>
-**Cloudflare (12)**
+**Cloudflare (13)**
 - `cf_list_zones` - zones the token can see.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
@@ -198,6 +200,20 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   Gated + a confirm token equal to `list_name`. Validates every item locally
   first and rejects the whole batch on any bad item (never half-applies);
   supports `dry_run`. (v0.7.9)
+- `cf_managed_robots(action, zone?, ...)` - get / configure / disable
+  Cloudflare's managed robots.txt and Content-Signals policy (these ride on the
+  zone's Bot Management config). `action="get"` reads the current state
+  (read-only, un-gated). `action="configure"` sets the managed robots.txt
+  (`managed_robots`), the Content-Signals variant (`cf_robots_variant`:
+  off / policy_only), and the AI-bot blocking levers (`ai_bots_protection`,
+  `content_bots_protection`, `crawler_protection`). `action="disable"` turns the
+  managed robots.txt and the policy back off. Writes are gated, need
+  `confirm=<zone>`, and support `dry_run`; reads are safe (GET -> overlay -> PUT,
+  so nothing else in the config is clobbered). Every response carries a caveat
+  separating the stated-preference signals (Content-Signals, honored only by
+  adopting crawlers and ignored by Googlebot) from the levers that actually
+  enforce at the edge. Needs Bot Management:Edit for writes (Read for get).
+  (v0.8.2)
 
 <a name="indexnow"></a>
 **IndexNow (2, v0.2.0)**

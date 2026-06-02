@@ -13,6 +13,47 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.8.2] - 2026-06-02
+
+`cf_managed_robots` - the managed-robots / Content-Signals control tool, part 2
+of the robots feature line (built last because its write API had to be confirmed
+first). One new tool (59 tools / 13 prompts). The robots feature line is now
+complete: detection (0.8.0) + advisor (0.8.1) + control (0.8.2).
+
+### Added
+
+- `cf_managed_robots(action, zone?, ...)` - get / configure / disable
+  Cloudflare's managed robots.txt and Content-Signals policy on a zone. These
+  ride on the zone's Bot Management config (`PUT /zones/{id}/bot_management`);
+  the write verbs and field enums were confirmed against the public Cloudflare
+  OpenAPI schema, and all four Bot Management plan variants expose them (so the
+  feature is not Enterprise-only).
+  - `action="get"` - read-only, un-gated: returns `is_robots_txt_managed`,
+    `cf_robots_variant`, `ai_bots_protection`, `content_bots_protection`,
+    `crawler_protection`.
+  - `action="configure"` - set any of: `managed_robots` (bool),
+    `cf_robots_variant` (`off` / `policy_only`), `ai_bots_protection`
+    (`block` / `disabled` / `only_on_ad_pages`), `content_bots_protection`
+    (`block` / `disabled`), `crawler_protection` (`enabled` / `disabled`).
+  - `action="disable"` - turns the managed robots.txt and the Content-Signals
+    policy back off (`is_robots_txt_managed=false`, `cf_robots_variant=off`).
+  - Writes are gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, need `confirm=<zone>`,
+    and support `dry_run`. The write path is GET → overlay only the changed
+    fields → strip the read-only/derived fields → PUT, so the rest of the zone's
+    Bot Management config is never clobbered. Needs the Bot Management:Edit token
+    scope for writes (Read for `get`).
+  - Every response carries a `caveat` separating the stated-preference signals
+    (managed robots.txt + Content-Signals, honored only by adopting crawlers and
+    ignored by Googlebot, not a ranking factor) from the levers that actually
+    enforce at Cloudflare's edge (`ai_bots_protection` / `content_bots_protection`
+    block, `crawler_protection` link maze).
+  **(validate, live)** `get` returns current state with destructive mode off;
+  `configure` without the gate → `DESTRUCTIVE_DISABLED` (zero CF calls); with the
+  gate but no `confirm` → `CONFIRM_REQUIRED`; with `confirm=<zone>` enables
+  managed robots.txt + the policy and the re-read reflects it without clobbering
+  other Bot Management fields; `disable` reverts it; a bad enum or empty configure
+  → `INVALID_INPUT`.
+
 ## [0.8.1] - 2026-06-02
 
 `robots_ai_posture` - the Content-Signals advisor, part 3 of the robots feature

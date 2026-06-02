@@ -347,6 +347,8 @@ class FakeCfTransport:
             return "rum_get"
         if "dns_records" in path:
             return "dns"
+        if "bot_management" in path:
+            return "bot_management"
         if "bulk_operations" in path:
             return "bulk_operation"
         if "/rules/lists" in path and "/items" in path:
@@ -422,6 +424,19 @@ def cf_payloads() -> dict[str, Any]:
         "POST bulk_lists": _ok({"id": "list-1", "name": "seomonster-redirects", "kind": "redirect"}),
         "bulk_items": _ok({"operation_id": "op-1"}),
         "bulk_operation": _ok({"status": "completed"}),
+        # Bot Management config (carries the managed-robots / Content-Signals fields).
+        # GET returns the current state; PUT echoes the merged config back.
+        "bot_management": _ok(
+            {
+                "fight_mode": False,
+                "is_robots_txt_managed": False,
+                "cf_robots_variant": "off",
+                "ai_bots_protection": "disabled",
+                "content_bots_protection": "disabled",
+                "crawler_protection": "disabled",
+                "stale_zone_configuration": {"some": "derived"},
+            }
+        ),
     }
 
 

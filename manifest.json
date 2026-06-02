@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), and technical-SEO HTTP primitives.",
   "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
   "author": {
@@ -332,6 +332,10 @@
     {
       "name": "robots_ai_posture",
       "description": "Recommend a Content-Signals posture (search / ai-input / ai-train) from a business goal and emit a ready-to-apply artifact: the Content-Signal directive line plus a full suggested robots.txt. Read-only, offline, deterministic. Always returns the trade-off alternatives and the mandatory caveat that Content-Signal is honored only by adopting crawlers, is ignored by Googlebot, and is not a ranking factor."
+    },
+    {
+      "name": "cf_managed_robots",
+      "description": "Get / configure / disable Cloudflare's managed robots.txt and Content-Signals policy on a zone (rides on the Bot Management config). action=get reads state (un-gated); action=configure sets is_robots_txt_managed, cf_robots_variant (off/policy_only), and the AI-bot blocking levers; action=disable turns them off. Writes are gated (SEO_MCP_ALLOW_DESTRUCTIVE) and need confirm=<zone>; supports dry_run. Returns a caveat separating stated-preference signals from the levers that enforce at the edge."
     }
   ]
 }
