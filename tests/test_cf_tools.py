@@ -511,3 +511,114 @@ def test_delete_redirect_blocked_when_destructive_off(make_config, make_cf_clien
     result = cf_tools.cf_delete_redirect({"rule_id": "x"}, _cfg(make_config), {"cf": client})
     assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
     assert client._transport.calls == []
+
+
+# --- bulk redirects (cf_bulk_redirect_upsert) -----------------------------
+
+_ITEMS = [
+    {"source": "https://example.com/old1", "target": "https://example.com/new1"},
+    {"source": "https://example.com/old2", "target": "https://example.com/new2", "status_code": 308},
+]
+
+
+def test_bulk_upsert_blocked_when_destructive_off_zero_calls(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": _ITEMS, "list_name": "mylist", "confirm": "mylist"}, _cfg(make_config), {"cf": client}
+    )
+    assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
+    assert client._transport.calls == []
+
+
+def test_bulk_upsert_rejects_whole_batch_on_bad_item(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    items = [{"source": "https://example.com/a", "target": "not-a-url"}]
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": items, "list_name": "mylist", "confirm": "mylist"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["details"]["reject_count"] == 1
+    assert client._transport.calls == []  # validated before any network
+
+
+def test_bulk_upsert_rejects_duplicate_source_in_batch(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    items = [
+        {"source": "https://example.com/dup", "target": "https://example.com/a"},
+        {"source": "https://example.com/dup", "target": "https://example.com/b"},
+    ]
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": items, "list_name": "mylist", "confirm": "mylist"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "duplicate source" in str(result["error"]["details"]["rejects"])
+
+
+def test_bulk_upsert_requires_confirm(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": _ITEMS, "list_name": "mylist", "confirm": "wrong"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "CONFIRM_REQUIRED"
+    # No write happened (no items POST).
+    assert not any("/items" in c[1] for c in client._transport.calls)
+
+
+def test_bulk_upsert_dry_run_writes_nothing(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": _ITEMS, "list_name": "mylist", "dry_run": True},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["dry_run"] is True
+    assert result["data"]["would_upsert_count"] == 2
+    assert not any("/items" in c[1] for c in client._transport.calls)
+
+
+def test_bulk_upsert_succeeds_creates_list_items_and_wires_ruleset(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": _ITEMS, "list_name": "seomonster_redirects", "confirm": "seomonster_redirects"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["upserted_count"] == 2
+    assert result["data"]["operation_status"] == "completed"
+    assert result["data"]["ruleset_wired"] is True
+    paths = [c[1] for c in client._transport.calls]
+    assert any(p.endswith("/rules/lists") for p in paths)       # created the list
+    assert any("/items" in p for p in paths)                    # appended items
+    assert any("bulk_operations" in p for p in paths)           # polled the op
+
+
+def test_bulk_upsert_rejects_invalid_list_name(make_config, make_cf_client, cf_payloads):
+    # CF list names allow only [A-Za-z0-9_]; a hyphen must be caught up front
+    # with a clear message, not a cryptic CF 10029 (FEEDBACK §22 B-FIND-1).
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_bulk_redirect_upsert(
+        {"items": _ITEMS, "list_name": "site-migration-2026", "confirm": "site-migration-2026"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "underscores" in result["error"]["message"]
+    assert client._transport.calls == []  # rejected before any network
+
+
+def test_list_redirects_includes_bulk_lists(make_config, make_cf_client, cf_payloads):
+    responses = dict(cf_payloads)
+    responses["bulk_lists"] = _ok_env([{"name": "mylist", "id": "list-1", "num_items": 42, "kind": "redirect"}])
+    client = make_cf_client(responses)
+    result = cf_tools.cf_list_redirects({}, _cfg(make_config), {"cf": client})
+    assert result["ok"] is True
+    assert result["data"]["bulk_redirect_lists"][0]["name"] == "mylist"
+    assert result["data"]["bulk_redirect_lists"][0]["num_items"] == 42

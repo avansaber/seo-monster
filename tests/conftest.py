@@ -325,9 +325,14 @@ class FakeCfTransport:
     def __call__(self, method: str, path: str, body: Any = None) -> Any:
         self.calls.append((method, path, body))
         label = self._label(path)
-        if label not in self.responses:
+        # Method-prefixed key wins (e.g. "POST bulk_lists" for create vs the
+        # bare "bulk_lists" GET that lists), falling back to the bare label.
+        if f"{method} {label}" in self.responses:
+            spec = self.responses[f"{method} {label}"]
+        elif label in self.responses:
+            spec = self.responses[label]
+        else:
             raise AssertionError(f"no canned CF response for label {label!r} (path {path})")
-        spec = self.responses[label]
         if isinstance(spec, Exception):
             raise spec
         return spec
@@ -342,6 +347,12 @@ class FakeCfTransport:
             return "rum_get"
         if "dns_records" in path:
             return "dns"
+        if "bulk_operations" in path:
+            return "bulk_operation"
+        if "/rules/lists" in path and "/items" in path:
+            return "bulk_items"
+        if "/rules/lists" in path:
+            return "bulk_lists"
         if "/entrypoint" in path:
             return "redirect_entrypoint"
         if "/rules/" in path:
@@ -406,6 +417,11 @@ def cf_payloads() -> dict[str, Any]:
         "redirect_add_rule": _ok({"id": "rule-new-1"}),
         "redirect_create_ruleset": _ok({"id": "rs-redir-1", "rules": [{"id": "rule-new-1"}]}),
         "redirect_delete_rule": _ok({"id": "rs-redir-1"}),
+        # Bulk redirects (account-level). GET lists -> empty; POST create -> id.
+        "bulk_lists": _ok([]),
+        "POST bulk_lists": _ok({"id": "list-1", "name": "seomonster-redirects", "kind": "redirect"}),
+        "bulk_items": _ok({"operation_id": "op-1"}),
+        "bulk_operation": _ok({"status": "completed"}),
     }
 
 

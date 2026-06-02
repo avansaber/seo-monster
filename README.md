@@ -63,7 +63,7 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-55 tools, grouped by service. All return the same result envelope (see
+56 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
 is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
@@ -162,7 +162,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   Lab data only. An on-page-basics checklist, not a ranking predictor. (v0.7.1)
 
 <a name="cf"></a>
-**Cloudflare (10)**
+**Cloudflare (11)**
 - `cf_list_zones` - zones the token can see.
 - `cf_zone_info` - status, plan, name servers for a zone.
 - `cf_list_dns` - DNS records (read-only); useful for verifying canonical host
@@ -177,14 +177,19 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   cache TTL). Severity-graded with a "verify, not fail" discipline because CF
   cannot see the origin; HSTS is never a hard failure. Needs Zone Settings Read
   on the token. (v0.7.1)
-- `cf_list_redirects(zone?)` - list a zone's single (dynamic) redirect rules:
-  source, target, status code, rule id (read-only). Call before creating/
-  deleting so writes never clobber existing rules. (v0.7.8)
+- `cf_list_redirects(zone?)` - list a zone's single (dynamic) redirect rules
+  plus the account's Bulk Redirect lists (read-only). Call before any redirect
+  write so nothing is clobbered. (v0.7.8; bulk lists added v0.7.9)
 - `cf_create_redirect(source, target, status_code?, ...)` - create one edge
   redirect (e.g. a 301 for a renamed URL). Gated. Pre-flights the target (no
   redirecting to a dead URL), refuses loops/duplicates, supports `dry_run`. (v0.7.8)
 - `cf_delete_redirect(rule_id, zone?)` - remove a single-redirect rule by id
   (rollback for cf_create_redirect). Gated. (v0.7.8)
+- `cf_bulk_redirect_upsert(items, list_name, confirm, ...)` - create/append many
+  redirects at once via an account-level Bulk Redirect List (for migrations).
+  Gated + a confirm token equal to `list_name`. Validates every item locally
+  first and rejects the whole batch on any bad item (never half-applies);
+  supports `dry_run`. (v0.7.9)
 
 <a name="indexnow"></a>
 **IndexNow (2, v0.2.0)**
@@ -547,6 +552,7 @@ the permissions you need:
 | Account: `Account Analytics:Read` | `cf_web_analytics`        |
 | Zone: `Cache Purge:Purge` | `cf_purge_cache`, `cf_purge_cache_all` (only if you enable destructive mode) |
 | Zone: `Single Redirect:Edit` | `cf_create_redirect`, `cf_delete_redirect` (only if you enable destructive mode); `cf_list_redirects` reads with it |
+| Account: `Account Rulesets:Edit` + `Account Filter Lists:Edit` | `cf_bulk_redirect_upsert` (only if you enable destructive mode) |
 
 ### IndexNow
 

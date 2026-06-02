@@ -26,6 +26,7 @@ from .errors import ApiError, map_http_status
 API_BASE = "https://api.cloudflare.com/client/v4"
 _TIMEOUT_SECONDS = 20
 _DYNAMIC_REDIRECT_PHASE = "http_request_dynamic_redirect"
+_REDIRECT_PHASE_ACCOUNT = "http_request_redirect"
 
 
 class CfClient:
@@ -207,6 +208,61 @@ class CfClient:
 
     def delete_dynamic_redirect(self, zone_id: str, ruleset_id: str, rule_id: str) -> None:
         self._http_request("DELETE", f"/zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}")
+
+    # --- bulk redirects (account-level; gated in tools) ------------------
+    #
+    # Bulk Redirects = an account Redirect List (source->target items, added
+    # asynchronously) referenced by an account ruleset in the
+    # http_request_redirect phase. Reuses get_account_id().
+
+    def list_redirect_lists(self, account_id: str) -> list[dict[str, Any]]:
+        lists = self._http_request("GET", f"/accounts/{account_id}/rules/lists").get("result", []) or []
+        return [item for item in lists if item.get("kind") == "redirect"]
+
+    def create_redirect_list(self, account_id: str, name: str, description: str = "") -> dict[str, Any]:
+        body = {"name": name, "kind": "redirect", "description": description or "Managed by SEOMonster"}
+        return self._http_request("POST", f"/accounts/{account_id}/rules/lists", body).get("result", {})
+
+    def get_redirect_list_items(self, account_id: str, list_id: str) -> list[dict[str, Any]]:
+        return self._http_request(
+            "GET", f"/accounts/{account_id}/rules/lists/{list_id}/items?per_page=500"
+        ).get("result", []) or []
+
+    def append_redirect_items(self, account_id: str, list_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+        """Add items (async). Returns the result envelope (carries operation_id)."""
+        return self._http_request(
+            "POST", f"/accounts/{account_id}/rules/lists/{list_id}/items", items
+        ).get("result", {})
+
+    def get_bulk_operation(self, account_id: str, operation_id: str) -> dict[str, Any]:
+        return self._http_request(
+            "GET", f"/accounts/{account_id}/rules/lists/bulk_operations/{operation_id}"
+        ).get("result", {})
+
+    def get_account_redirect_ruleset(self, account_id: str) -> tuple[str | None, list[dict[str, Any]]]:
+        """Return ``(ruleset_id, rules)`` for the account http_request_redirect
+        phase. ``(None, [])`` when no ruleset exists yet."""
+        try:
+            payload = self._http_request(
+                "GET", f"/accounts/{account_id}/rulesets/phases/{_REDIRECT_PHASE_ACCOUNT}/entrypoint"
+            )
+        except ApiError as exc:
+            if exc.code == ErrorCode.NOT_FOUND:
+                return None, []
+            raise
+        result = payload.get("result", {}) or {}
+        return result.get("id"), result.get("rules", []) or []
+
+    def add_account_redirect_rule(self, account_id: str, rule: dict[str, Any]) -> dict[str, Any]:
+        """Append a Bulk Redirect enable-rule. Creates the account phase ruleset
+        on first use. Never blind-replaces existing rules."""
+        ruleset_id, _ = self.get_account_redirect_ruleset(account_id)
+        if ruleset_id is None:
+            body = {"name": "default", "kind": "root", "phase": _REDIRECT_PHASE_ACCOUNT, "rules": [rule]}
+            return self._http_request("POST", f"/accounts/{account_id}/rulesets", body).get("result", {})
+        return self._http_request(
+            "POST", f"/accounts/{account_id}/rulesets/{ruleset_id}/rules", rule
+        ).get("result", {})
 
     # --- health -----------------------------------------------------------
 

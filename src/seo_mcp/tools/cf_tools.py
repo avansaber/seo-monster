@@ -1,13 +1,15 @@
-"""Cloudflare tools (10).
+"""Cloudflare tools (11).
 
 Reads: cf_list_zones, cf_zone_info, cf_list_dns, cf_web_analytics,
 cf_settings_audit, cf_list_redirects (read-only).
-Writes (gated): cf_purge_cache, cf_purge_cache_all, cf_create_redirect, and
-cf_delete_redirect sit behind SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge
-additionally requires a confirm token equal to the resolved zone name. The
-destructive gate is checked before any client call, so a blocked write makes
-zero network requests. Redirect creates pre-flight the target (shared
-preflight_get) and refuse loops/duplicates.
+Writes (gated): cf_purge_cache, cf_purge_cache_all, cf_create_redirect,
+cf_delete_redirect, and cf_bulk_redirect_upsert sit behind
+SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge and the bulk upsert additionally
+require a confirm token. The destructive gate is checked before any client
+call, so a blocked write makes zero network requests. Single-redirect creates
+pre-flight the target (shared preflight_get) and refuse loops/duplicates; bulk
+upsert pre-validates every item locally and rejects the whole batch on any bad
+item (never half-applies).
 """
 
 from __future__ import annotations
@@ -24,8 +26,9 @@ from ._helpers import annotations, preflight_get, require_client
 _SERVICE = "cf"
 _REMEDIATION = (
     "Set CF_API_TOKEN to a Cloudflare API token (Zone:Read; add DNS:Read, "
-    "Account Analytics:Read, Cache Purge:Purge, and Single Redirect:Edit as "
-    "needed). See README > Auth."
+    "Account Analytics:Read, Cache Purge:Purge, Single Redirect:Edit, and "
+    "(for cf_bulk_redirect_upsert) Account Rulesets:Edit + Account Filter "
+    "Lists:Edit as needed). See README > Auth."
 )
 
 
@@ -611,13 +614,27 @@ def cf_list_redirects(arguments, config, clients) -> dict[str, Any]:
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
     shaped = [_shape_redirect_rule(r) for r in rules]
+    # Bulk Redirect lists are account-level; best-effort (needs account access).
+    bulk_lists: list[dict[str, Any]] | None
+    try:
+        account_id = client.get_account_id()
+        bulk_lists = [
+            {"name": item.get("name"), "id": item.get("id"), "num_items": item.get("num_items"), "description": item.get("description")}
+            for item in client.list_redirect_lists(account_id)
+        ]
+    except ApiError:
+        bulk_lists = None  # account-level access not available to this token
     return ok(
         {
             "zone": zone_name,
             "ruleset_id": ruleset_id,
             "count": len(shaped),
             "single_redirects": shaped,
-            "notes": ["Single (dynamic) redirects only; account-level Bulk Redirects are not yet exposed."],
+            "bulk_redirect_lists": bulk_lists,
+            "notes": [
+                "single_redirects are zone-level (http_request_dynamic_redirect).",
+                "bulk_redirect_lists are account-level; null means the token lacks account access.",
+            ],
         }
     )
 
@@ -761,6 +778,181 @@ def cf_delete_redirect(arguments, config, clients) -> dict[str, Any]:
     return ok({"zone": zone_name, "deleted_rule_id": rule_id})
 
 
+# --- bulk redirects (account-level; gated + confirm) ----------------------
+#
+# A Redirect List (source->target items, added asynchronously) referenced by an
+# account ruleset in the http_request_redirect phase. High blast radius (account
+# scope, many URLs), so: gated + a confirm token equal to list_name, plus full
+# local pre-validation of every item before any write (reject the batch, do not
+# half-apply).
+
+_MAX_BULK_REDIRECTS = 1000
+
+
+def _build_bulk_item(source: str, target: str, status_code: int, preserve_qs: Any) -> dict[str, Any]:
+    redirect: dict[str, Any] = {"source_url": source, "target_url": target, "status_code": status_code}
+    if preserve_qs is not None:
+        redirect["preserve_query_string"] = bool(preserve_qs)
+    return {"redirect": redirect}
+
+
+TOOL_BULK_REDIRECT_UPSERT = {
+    "name": "cf_bulk_redirect_upsert",
+    "description": (
+        "Create or append many redirects at once via an account-level Bulk "
+        "Redirect List (for site migrations). Gated: requires "
+        "SEO_MCP_ALLOW_DESTRUCTIVE=true AND a confirm value equal to list_name. "
+        "Validates every item locally first and rejects the whole batch on any "
+        "bad item (never half-applies); supports dry_run. Items are added "
+        "asynchronously by Cloudflare."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": _MAX_BULK_REDIRECTS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "source": {"type": "string", "description": "Source URL/host+path to redirect FROM."},
+                        "target": {"type": "string", "description": "Absolute target URL to redirect TO."},
+                        "status_code": {"type": "integer", "enum": [301, 302, 307, 308]},
+                        "preserve_query_string": {"type": "boolean"},
+                    },
+                    "required": ["source", "target"],
+                    "additionalProperties": False,
+                },
+                "description": f"Up to {_MAX_BULK_REDIRECTS} redirect mappings.",
+            },
+            "list_name": {"type": "string", "description": "Name of the Bulk Redirect List to create/append (also the confirm value). Letters, numbers, and underscores only (no hyphens), e.g. site_migration_2026."},
+            "confirm": {"type": "string", "description": "Must equal list_name to proceed (the high-blast-radius gate)."},
+            "description": {"type": "string", "description": "Optional list description."},
+            "dry_run": {"type": "boolean", "description": "Validate + report what would be written, without writing (default false)."},
+        },
+        "required": ["items", "list_name"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=False, destructive=True),
+}
+
+
+def cf_bulk_redirect_upsert(arguments, config, clients) -> dict[str, Any]:
+    if not config.allow_destructive:
+        return _destructive_disabled("cf_bulk_redirect_upsert")
+    client, error = _require(clients)
+    if error:
+        return error
+    items = arguments.get("items") or []
+    list_name = arguments.get("list_name")
+    if not list_name:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "list_name is required.", docs_url=DOCS_BASE + "cf")
+    # Cloudflare list names allow only [A-Za-z0-9_]; a hyphen returns a cryptic
+    # CF 10029 invalid_name. Catch it up front with a clear message (FEEDBACK
+    # §22 B-FIND-1).
+    if not re.fullmatch(r"[A-Za-z0-9_]+", list_name):
+        return err(
+            ErrorCode.INVALID_INPUT,
+            _SERVICE,
+            f"list_name {list_name!r} is invalid: Cloudflare list names may contain only "
+            "letters, numbers, and underscores (no hyphens or spaces). Example: site_migration_2026.",
+            docs_url=DOCS_BASE + "cf",
+        )
+    if not items:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "items must be a non-empty list.", docs_url=DOCS_BASE + "cf")
+    if len(items) > _MAX_BULK_REDIRECTS:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"Too many items ({len(items)}); max {_MAX_BULK_REDIRECTS} per call.", docs_url=DOCS_BASE + "cf")
+
+    # Pre-validate ALL items locally before any write (never half-apply).
+    rejects: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    built: list[dict[str, Any]] = []
+    for i, it in enumerate(items):
+        src = it.get("source")
+        tgt = it.get("target")
+        if not src or not _valid_abs_url(tgt):
+            rejects.append({"index": i, "reason": "source required; target must be an absolute http(s) URL"})
+            continue
+        sc = int(it.get("status_code", 301))
+        if sc not in _VALID_REDIRECT_STATUS:
+            rejects.append({"index": i, "reason": f"status_code must be one of {sorted(_VALID_REDIRECT_STATUS)}"})
+            continue
+        if src == tgt:
+            rejects.append({"index": i, "reason": "source == target (loop)"})
+            continue
+        if src in seen:
+            rejects.append({"index": i, "reason": "duplicate source in batch"})
+            continue
+        seen.add(src)
+        built.append(_build_bulk_item(src, tgt, sc, it.get("preserve_query_string")))
+    if rejects:
+        return err(
+            ErrorCode.INVALID_INPUT,
+            _SERVICE,
+            f"{len(rejects)} of {len(items)} items failed validation; nothing was written. Fix and retry.",
+            remediation="Correct the listed items (absolute target URLs, valid status codes, no loops/dupes).",
+            docs_url=DOCS_BASE + "cf",
+            details={"reject_count": len(rejects), "rejects": rejects[:50]},
+        )
+
+    try:
+        account_id = client.get_account_id()
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+
+    if arguments.get("dry_run"):
+        return ok({"dry_run": True, "list_name": list_name, "account_id": account_id, "would_upsert_count": len(built), "notes": ["dry_run: nothing was written."]})
+
+    if arguments.get("confirm") != list_name:
+        return err(
+            ErrorCode.CONFIRM_REQUIRED,
+            _SERVICE,
+            "Bulk redirect upsert not confirmed.",
+            remediation=f"Pass confirm='{list_name}' to write {len(built)} redirect(s) to that list.",
+            docs_url=DOCS_BASE + "destructive-mode",
+            details={"list_name": list_name, "item_count": len(built)},
+        )
+
+    try:
+        existing = client.list_redirect_lists(account_id)
+        match = next((lst for lst in existing if lst.get("name") == list_name), None)
+        list_id = match.get("id") if match else client.create_redirect_list(account_id, list_name, arguments.get("description", "")).get("id")
+        op = client.append_redirect_items(account_id, list_id, built)
+        op_id = op.get("operation_id")
+        op_status = client.get_bulk_operation(account_id, op_id).get("status") if op_id else None
+        # Wire the account ruleset to reference the list (idempotent).
+        _rsid, rules = client.get_account_redirect_ruleset(account_id)
+        already = any(
+            (((r.get("action_parameters") or {}).get("from_list") or {}).get("name") == list_name)
+            for r in rules
+        )
+        if not already:
+            client.add_account_redirect_rule(
+                account_id,
+                {
+                    "expression": f"http.request.full_uri in ${list_name}",
+                    "description": f"SEOMonster bulk redirects: {list_name}",
+                    "action": "redirect",
+                    "action_parameters": {"from_list": {"name": list_name, "key": "http.request.full_uri"}},
+                },
+            )
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    return ok(
+        {
+            "account_id": account_id,
+            "list_name": list_name,
+            "list_id": list_id,
+            "upserted_count": len(built),
+            "operation_id": op_id,
+            "operation_status": op_status,
+            "ruleset_wired": True,
+            "notes": ["Items are added asynchronously; if operation_status is not 'completed', re-check shortly with cf_list_redirects."],
+        }
+    )
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -774,6 +966,7 @@ TOOLS = [
     TOOL_LIST_REDIRECTS,
     TOOL_CREATE_REDIRECT,
     TOOL_DELETE_REDIRECT,
+    TOOL_BULK_REDIRECT_UPSERT,
 ]
 
 HANDLERS = {
@@ -787,4 +980,5 @@ HANDLERS = {
     "cf_list_redirects": cf_list_redirects,
     "cf_create_redirect": cf_create_redirect,
     "cf_delete_redirect": cf_delete_redirect,
+    "cf_bulk_redirect_upsert": cf_bulk_redirect_upsert,
 }

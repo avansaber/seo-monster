@@ -13,6 +13,45 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.9] - 2026-06-01
+
+Cloudflare Bulk Redirects (account-level). Adds 1 tool (55 -> 56 tools); 13
+prompts unchanged. Completes CF redirect support (single redirects shipped in
+0.7.8).
+
+### Added
+
+- **`cf_bulk_redirect_upsert(items, list_name, confirm, description?, dry_run?)`**
+  - create or append many redirects at once via an account-level Bulk Redirect
+  List, then wire it into the account `http_request_redirect` ruleset (for site
+  migrations). **Gated** behind `SEO_MCP_ALLOW_DESTRUCTIVE` **and** a `confirm`
+  value equal to `list_name` (high blast radius: account scope, many URLs).
+  Pre-validates *every* item locally (absolute target URL, valid status code, no
+  self-loop, no duplicate source in the batch) and rejects the whole batch on any
+  bad item - never half-applies. Items are added asynchronously by Cloudflare;
+  `dry_run` previews without writing. `list_name` is validated against
+  Cloudflare's allowed charset (`[A-Za-z0-9_]`) so a hyphen returns a clear
+  `INVALID_INPUT` rather than a cryptic CF 10029 (FEEDBACK §22 B-FIND-1).
+  **(validate)** Destructive off -> `DESTRUCTIVE_DISABLED`, zero calls. A bad item
+  (non-absolute target, etc.) or a duplicate source rejects the whole batch with
+  `INVALID_INPUT` and writes nothing. `confirm != list_name` -> `CONFIRM_REQUIRED`.
+  With confirm: the list is created, items appended, and the account ruleset wired
+  to reference the list.
+
+### Changed
+
+- `cf_list_redirects` now also returns the account's Bulk Redirect lists
+  (`bulk_redirect_lists`; null when the token lacks account access), so reads
+  cover both single and bulk before any write.
+
+### Notes
+
+- New token scopes for the bulk tool: **Account > Account Rulesets:Edit** and
+  **Account > Account Filter Lists:Edit** (in addition to the single-redirect
+  `Zone > Single Redirect:Edit` from 0.7.8).
+- Reuses the existing CF client seam, `get_account_id`, the destructive-gate and
+  confirm-token patterns - no new dependency.
+
 ## [0.7.8] - 2026-06-01
 
 Cloudflare single-redirect management. Adds 3 tools (52 -> 55 tools); 13 prompts
