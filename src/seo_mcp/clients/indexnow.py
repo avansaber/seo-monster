@@ -55,14 +55,25 @@ class IndexNowClient:
         self._key = key
         self._key_location = key_location
 
+    def _key_location_for_host(self, host: str) -> str:
+        """IndexNow requires keyLocation to live on the SAME host as the
+        submitted URLs (else HTTP 422). Honor an explicitly-configured
+        key_location only when it is on this host (supports a non-root key file
+        for the configured site); otherwise derive the conventional host-root
+        location so any host works (FEEDBACK §25)."""
+        if self._key_location and _host_of(self._key_location) == host:
+            return self._key_location
+        return f"https://{host}/{self._key}.txt"
+
     def submit(self, url: str) -> dict[str, Any]:
         """Submit a single URL via the GET form. Returns the parsed response
         envelope (most engines reply with an empty body and a status code; we
         normalize to ``{"accepted": True}`` so the tool layer has a shape to
         return)."""
+        host = _host_of(url)
         params = {"url": url, "key": self._key}
-        if self._key_location:
-            params["keyLocation"] = self._key_location
+        if host:
+            params["keyLocation"] = self._key_location_for_host(host)
         qs = urllib.parse.urlencode(params)
         return self._http_request("GET", f"{_ENDPOINT}?{qs}", None)
 
@@ -87,10 +98,9 @@ class IndexNowClient:
         body: dict[str, Any] = {
             "host": host,
             "key": self._key,
+            "keyLocation": self._key_location_for_host(host),
             "urlList": list(urls),
         }
-        if self._key_location:
-            body["keyLocation"] = self._key_location
         return self._http_request("POST", _ENDPOINT, body)
 
     def _http_request(self, method: str, url: str, body: dict[str, Any] | None) -> dict[str, Any]:

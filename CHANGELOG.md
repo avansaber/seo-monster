@@ -13,6 +13,44 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.11] - 2026-06-02
+
+IndexNow multi-host fix + Cloudflare polish. No new tools or prompts (57 tools /
+13 prompts).
+
+### Fixed
+
+- **IndexNow `keyLocation` is now derived per submitted host.** `indexnow_submit`
+  / `indexnow_bulk_submit` previously sent the *configured* `keyLocation` for
+  every host, so a submission to any host other than the configured one failed
+  with IndexNow HTTP 422 ("Keylocation is not allowed ... must belong to the
+  site in the host parameter"). The key file location is now derived as
+  `https://<submitted-host>/<key>.txt`; an explicitly-configured
+  `SEO_MCP_INDEXNOW_KEY_LOCATION` is honored only when it is on the same host as
+  the submission (so a non-root key file on the configured site still works).
+  The v0.7.8 pre-flight (`_verify_key_file`) had the same bug — it validated the
+  configured host's file for a foreign submission, passed, and let the doomed
+  submit through — and is fixed to validate the per-host location too (FEEDBACK
+  §25). For the configured host the derived value equals the old one, so existing
+  behavior is unchanged.
+  **(validate)** Submit to a host other than the configured one: the payload
+  `keyLocation` is `https://<that-host>/<key>.txt` and the engine accepts it.
+
+### Changed
+
+- `cf_settings_update`: an unknown `settings` key now returns the tool's own
+  `INVALID_INPUT` (listing the allowed keys) instead of the host's generic
+  schema error; clarified that `post_update_findings` is a re-audit scoped to the
+  changed settings, not a full audit (FEEDBACK §24-FIND-1 / §24-OBS-3).
+- The Cloudflare `9109` remediation no longer asserts the token "is valid" (9109
+  also fires for a malformed/expired token); it now covers both the zone-scope
+  and bad-token cases (FEEDBACK §24-FIND-2).
+- `cf_bulk_redirect_upsert` success note now states that items appear in
+  `cf_list_redirects` immediately but take ~15-30s to serve at the edge, so an
+  immediate 404 on a source URL is not a failed redirect (FEEDBACK §25 #2; the
+  reported "scheme-less or it 404s" was edge-propagation lag, not a matching bug
+  — no scheme-stripping was applied).
+
 ## [0.7.10] - 2026-06-02
 
 Cloudflare zone-settings write tool (closes the audit -> remediate loop), plus

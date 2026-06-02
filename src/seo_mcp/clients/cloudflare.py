@@ -78,10 +78,11 @@ class CfClient:
         # token). Give the scope-specific remediation (FEEDBACK R19-FIND-2).
         if status == 403 and any(e.get("code") == 9109 for e in cf_errors if isinstance(e, dict)):
             error.remediation = (
-                "The API token is valid but has no access to this Cloudflare "
-                "resource. For a zone tool, the token's Zone Resources must include "
-                "this zone: set it to 'All zones from an account', or add this zone. "
-                "For an account tool, grant the matching account-level permission."
+                "Cloudflare 9109: the token cannot access this resource. Most often the "
+                "token is valid but its Zone Resources do not include this zone - set them to "
+                "'All zones from an account', or add this zone (for an account tool, grant the "
+                "matching account-level permission). If the zone scope is already correct, the "
+                "token may be malformed or expired; regenerate it."
             )
         return error
 

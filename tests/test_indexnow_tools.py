@@ -152,7 +152,10 @@ def test_bulk_submit_posts_with_host_and_url_list(make_config):
     assert body["host"] == "www.example.com"
     assert body["key"] == "testkey1234"
     assert body["urlList"] == urls
-    assert body["keyLocation"] == "https://example.com/testkey1234.txt"
+    # Configured key_location is on example.com but the URLs are on
+    # www.example.com, so keyLocation is derived for the SUBMITTED host
+    # (FEEDBACK §25: keyLocation must match the host or IndexNow 422s).
+    assert body["keyLocation"] == "https://www.example.com/testkey1234.txt"
 
 
 def test_bulk_submit_rejects_mixed_hosts(make_config):
@@ -174,8 +177,9 @@ def test_bulk_submit_rejects_empty_list(make_config):
     assert result["error"]["code"] == "INVALID_INPUT"
 
 
-def test_bulk_submit_omits_key_location_when_not_configured(make_config):
-    # Client constructed with no key_location.
+def test_bulk_submit_derives_key_location_from_host_when_not_configured(make_config):
+    # No configured key_location -> derive the conventional host-root location
+    # for the submitted host (FEEDBACK §25; was previously omitted entirely).
     client = IndexNowClient(key="k123")
     calls = []
     client._http_request = lambda m, u, b: calls.append((m, u, b)) or {"accepted": True, "status": 200}
@@ -183,13 +187,33 @@ def test_bulk_submit_omits_key_location_when_not_configured(make_config):
         {"urls": ["https://x.com/a"]}, make_config(), {"indexnow": client}
     )
     _, _, body = calls[0]
-    assert "keyLocation" not in body
+    assert body["keyLocation"] == "https://x.com/k123.txt"
+
+
+def test_submit_derives_key_location_per_host(make_config):
+    # Single submit to a foreign host derives keyLocation for THAT host.
+    client = _client_with_recorder()  # configured key_location on example.com
+    indexnow_tools.indexnow_submit({"url": "https://www.zapinventory.com/p"}, make_config(), {"indexnow": client})
+    _, url, _ = client._calls[0]
+    assert "keyLocation=https%3A%2F%2Fwww.zapinventory.com%2Ftestkey1234.txt" in url
+
+
+def test_submit_honors_same_host_configured_key_location(make_config):
+    # A configured non-root key_location IS honored when on the submitted host.
+    client = IndexNowClient(key="testkey1234", key_location="https://www.example.com/.well-known/testkey1234.txt")
+    calls = []
+    client._http_request = lambda m, u, b: calls.append((m, u, b)) or {"accepted": True, "status": 200}
+    indexnow_tools.indexnow_submit({"url": "https://www.example.com/a"}, make_config(), {"indexnow": client})
+    _, url, _ = calls[0]
+    assert "keyLocation=https%3A%2F%2Fwww.example.com%2F.well-known%2Ftestkey1234.txt" in url
 
 
 # --- key-file pre-flight (FEEDBACK §20 §3c/§3d) ---------------------------
 
 _KEY = "testkey1234"
-_LOC = "https://example.com/testkey1234.txt"
+# Same host as the www.example.com submit URLs below, so the configured
+# key_location is honored (per-host match) and the preflight fetches exactly it.
+_LOC = "https://www.example.com/testkey1234.txt"
 
 
 def _cfg_with_key(make_config, location=_LOC):
@@ -265,6 +289,18 @@ def test_submit_uses_default_key_file_url_when_no_location(make_config):
     )
     # No SEO_MCP_INDEXNOW_KEY_LOCATION -> default https://<host>/<key>.txt
     assert http.calls == ["https://www.example.com/testkey1234.txt"]
+
+
+def test_verify_key_file_preflights_submitted_host_not_configured(make_config):
+    # Configured key_location is on example.com, but we submit to a foreign host.
+    # The preflight must check the SUBMITTED host's key file, not the configured
+    # one — otherwise it validates the wrong file, passes, and waves a doomed
+    # submit through to an IndexNow 422 (FEEDBACK §25, the masked-by-preflight bug).
+    client = _client_with_recorder()
+    http = _FakeHttp(200, _KEY)
+    cfg = make_config(SEO_MCP_INDEXNOW_KEY=_KEY, SEO_MCP_INDEXNOW_KEY_LOCATION="https://www.example.com/testkey1234.txt")
+    indexnow_tools.indexnow_submit({"url": "https://www.zapinventory.com/p"}, cfg, {"indexnow": client, "http": http})
+    assert http.calls == ["https://www.zapinventory.com/testkey1234.txt"]
 
 
 def test_submit_skips_preflight_when_no_http_client(make_config):

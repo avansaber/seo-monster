@@ -39,7 +39,13 @@ def _verify_key_file(clients, config, host: str | None) -> dict[str, Any] | None
     key = getattr(config, "indexnow_key", None)
     if not key or not host:
         return None
-    loc = getattr(config, "indexnow_key_location", None) or f"https://{host}/{key}.txt"
+    # Mirror IndexNowClient._key_location_for_host: validate the file the submit
+    # will actually reference (the per-host root), honoring a configured
+    # key_location only when it is on THIS host. Validating the configured host's
+    # file for a foreign submission would pass and wave a doomed submit through
+    # to a 422 (FEEDBACK §25).
+    configured = getattr(config, "indexnow_key_location", None)
+    loc = configured if (configured and _host_of(configured) == host) else f"https://{host}/{key}.txt"
     pf = preflight_get(clients, loc)
     if pf is None:
         return None  # no HTTP client wired (minimal unit test); skip

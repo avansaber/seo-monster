@@ -969,7 +969,11 @@ def cf_bulk_redirect_upsert(arguments, config, clients) -> dict[str, Any]:
             "operation_id": op_id,
             "operation_status": op_status,
             "ruleset_wired": True,
-            "notes": ["Items are added asynchronously; if operation_status is not 'completed', re-check shortly with cf_list_redirects."],
+            "notes": [
+                "Items are added asynchronously: they appear in cf_list_redirects immediately, "
+                "but the redirect typically takes ~15-30s to start serving at the edge. Do not "
+                "treat an immediate 404 on a source URL as a failed redirect; re-check after a short wait."
+            ],
         }
     )
 
@@ -1054,7 +1058,10 @@ TOOL_SETTINGS_UPDATE = {
                         "additionalProperties": False,
                     },
                 },
-                "additionalProperties": False,
+                # Intentionally NOT additionalProperties:false here: let an unknown
+                # settings key reach the handler so it returns the tool's own
+                # INVALID_INPUT (listing the allowed keys) rather than the host's
+                # generic schema error (FEEDBACK §24-FIND-1).
             },
             "confirm": {"type": "string", "description": "Must equal the resolved zone for ssl_mode or HSTS-raise changes."},
             "acknowledge_hsts_risk": {"type": "boolean", "description": "Required true for any HSTS change that raises protection (HSTS is hard to undo)."},
@@ -1188,7 +1195,11 @@ def cf_settings_update(arguments, config, clients) -> dict[str, Any]:
             "after": _settings_snapshot(after),
             "post_update_findings": post_findings,
             "advisories": advisories,
-            "notes": ["A finding still in post_update_findings means CF did not apply the change as expected, or the value remains sub-optimal."],
+            "notes": [
+                "post_update_findings is a re-run of cf_settings_audit scoped to ONLY the settings you "
+                "changed (not a full audit). A finding still present here means CF did not apply that change "
+                "as expected, or the value remains sub-optimal; run cf_settings_audit for the full picture."
+            ],
         }
     )
 
