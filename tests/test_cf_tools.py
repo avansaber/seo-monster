@@ -836,7 +836,7 @@ def test_managed_robots_configure_blocked_when_destructive_off(make_config):
 def test_managed_robots_configure_requires_confirm(make_config):
     client = _make_mr_client()
     result = cf_tools.cf_managed_robots(
-        {"action": "configure", "managed_robots": True, "cf_robots_variant": "policy_only"},
+        {"action": "configure", "managed_robots": True},
         _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
         {"cf": client},
     )
@@ -846,11 +846,13 @@ def test_managed_robots_configure_requires_confirm(make_config):
 
 def test_managed_robots_configure_happy_path_merges_and_writes(make_config):
     client = _make_mr_client()
+    # The valid "enable managed robots.txt" combo is managed=true + variant='off'
+    # (CF rejects managed=true + policy_only as mutually exclusive; see §28-FIND-1).
     result = cf_tools.cf_managed_robots(
         {
             "action": "configure",
             "managed_robots": True,
-            "cf_robots_variant": "policy_only",
+            "cf_robots_variant": "off",
             "ai_bots_protection": "block",
             "confirm": "example.com",
         },
@@ -859,13 +861,54 @@ def test_managed_robots_configure_happy_path_merges_and_writes(make_config):
     )
     assert result["ok"] is True
     assert result["data"]["after"]["is_robots_txt_managed"] is True
-    assert result["data"]["after"]["cf_robots_variant"] == "policy_only"
+    assert result["data"]["after"]["cf_robots_variant"] == "off"
     assert result["data"]["after"]["ai_bots_protection"] == "block"
     # untouched field is preserved through the GET -> merge -> PUT round-trip
     put = next(c for c in client._calls if c[0] == "PUT")
     assert put[2]["fight_mode"] is False
     # the read-only/derived field is stripped from the PUT body
     assert "stale_zone_configuration" not in put[2]
+
+
+def test_managed_robots_policy_only_enables_signals_policy(make_config):
+    # The other valid combo: the Content-Signals policy on its own.
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": False, "cf_robots_variant": "policy_only", "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["ok"] is True
+    assert result["data"]["after"]["is_robots_txt_managed"] is False
+    assert result["data"]["after"]["cf_robots_variant"] == "policy_only"
+
+
+def test_managed_robots_rejects_mutually_exclusive_combo_in_request(make_config):
+    # §28-FIND-1: managed=true + policy_only is a CF-invalid combo; reject locally
+    # with zero CF calls instead of surfacing a raw 400.
+    client = _make_mr_client()
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": True, "cf_robots_variant": "policy_only", "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "mutually" in result["error"]["message"].lower() or "cannot be combined" in result["error"]["message"]
+    assert client._calls == []  # rejected before any CF call
+
+
+def test_managed_robots_rejects_cross_state_conflict(make_config):
+    # The zone already has the Content-Signals policy on; turning managed robots on
+    # (without also clearing the variant) would create the invalid combo. Reject
+    # after the GET but before any PUT.
+    client = _make_mr_client({**_MR_BEFORE, "cf_robots_variant": "policy_only"})
+    result = cf_tools.cf_managed_robots(
+        {"action": "configure", "managed_robots": True, "confirm": "example.com"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert not any(c[0] == "PUT" for c in client._calls)
 
 
 def test_managed_robots_disable_turns_off_managed_and_policy(make_config):

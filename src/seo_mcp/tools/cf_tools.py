@@ -1216,6 +1216,29 @@ _AI_BOTS_PROTECTION = {"block", "disabled", "only_on_ad_pages"}
 _CONTENT_BOTS_PROTECTION = {"block", "disabled"}
 _CRAWLER_PROTECTION = {"enabled", "disabled"}
 
+# Cloudflare server-side business rule (not in the schema, only enforced live):
+# managed robots.txt and the Content-Signals policy are MUTUALLY EXCLUSIVE.
+# is_robots_txt_managed=true with cf_robots_variant='policy_only' returns a 400.
+# We validate locally so the caller gets a clean INVALID_INPUT, not a raw CF 400.
+_MR_CONFLICT_MSG = (
+    "Cloudflare does not allow managed robots.txt and the Content-Signals policy at "
+    "the same time: is_robots_txt_managed=true cannot be combined with "
+    "cf_robots_variant='policy_only'. Pick one - managed robots.txt "
+    "(managed_robots=true, cf_robots_variant='off') OR the Content-Signals policy "
+    "(managed_robots=false, cf_robots_variant='policy_only'). A custom Content-Signal "
+    "line (e.g. from robots_ai_posture) is not a managed-feature option; put it in "
+    "your origin robots.txt instead."
+)
+
+
+def _managed_robots_conflict(is_managed: Any, variant: Any) -> bool:
+    """True when the (resulting) state is the CF-invalid combination."""
+    return bool(is_managed) and variant == "policy_only"
+
+
+def _mr_conflict_error() -> dict[str, Any]:
+    return err(ErrorCode.INVALID_INPUT, _SERVICE, _MR_CONFLICT_MSG, docs_url=DOCS_BASE + "cf")
+
 # The honest distinction: managed robots.txt + Content-Signals are a STATED
 # PREFERENCE (only honored by adopting crawlers; Googlebot ignores Content-Signal
 # and it is not a ranking factor). The blocking levers actually enforce at the edge.
@@ -1280,13 +1303,16 @@ TOOL_MANAGED_ROBOTS = {
         "Get / configure / disable Cloudflare's managed robots.txt and Content-Signals "
         "policy on a zone (rides on the Bot Management config). action='get' reads the "
         "current state (read-only, un-gated). action='configure' enables/sets the managed "
-        "robots.txt (is_robots_txt_managed), the Content-Signals variant (cf_robots_variant: "
+        "robots.txt (managed_robots), the Content-Signals variant (cf_robots_variant: "
         "off / policy_only), and the AI-bot blocking levers (ai_bots_protection, "
         "content_bots_protection, crawler_protection). action='disable' turns managed "
-        "robots.txt and the Content-Signals policy back off. Writes are gated "
-        "(SEO_MCP_ALLOW_DESTRUCTIVE) and need confirm=<zone>; supports dry_run. Always "
-        "returns a caveat distinguishing the stated-preference signals from the levers that "
-        "actually enforce at the edge."
+        "robots.txt and the Content-Signals policy back off. NOTE: managed robots.txt and "
+        "the Content-Signals policy are MUTUALLY EXCLUSIVE in Cloudflare - valid "
+        "combinations are managed_robots=true + cf_robots_variant='off' (managed robots.txt) "
+        "OR managed_robots=false + cf_robots_variant='policy_only' (the policy); the tool "
+        "rejects the invalid combo locally. Writes are gated (SEO_MCP_ALLOW_DESTRUCTIVE) and "
+        "need confirm=<zone>; supports dry_run. Always returns a caveat distinguishing the "
+        "stated-preference signals from the levers that actually enforce at the edge."
     ),
     "inputSchema": {
         "type": "object",
@@ -1331,6 +1357,13 @@ def cf_managed_robots(arguments, config, clients) -> dict[str, Any]:
         changes, cfg_err = _build_managed_robots_changes(arguments)
         if cfg_err:
             return cfg_err
+        # Self-conflicting request (both fields set in one call): reject with zero
+        # CF calls. The cross-state case (one field conflicts with the zone's
+        # existing other field) is caught on the merged `proposed` below.
+        if "is_robots_txt_managed" in changes and "cf_robots_variant" in changes and _managed_robots_conflict(
+            changes["is_robots_txt_managed"], changes["cf_robots_variant"]
+        ):
+            return _mr_conflict_error()
     elif action == "disable":
         # Turn off both the managed robots.txt and the Content-Signals policy.
         # The blocking levers (ai/content/crawler protection) are a separate
@@ -1347,6 +1380,12 @@ def cf_managed_robots(arguments, config, clients) -> dict[str, Any]:
         return ok({"zone": zone_name, "action": "get", "managed_robots": _managed_robots_view(before), "caveat": _MR_CAVEAT})
 
     proposed = {**_managed_robots_view(before), **changes}
+
+    # Cross-state mutual-exclusion: e.g. the zone already has managed robots on and
+    # the caller sets cf_robots_variant='policy_only' (or vice versa). Reject before
+    # dry_run / confirm / PUT so we never send CF an invalid combination.
+    if _managed_robots_conflict(proposed.get("is_robots_txt_managed"), proposed.get("cf_robots_variant")):
+        return _mr_conflict_error()
 
     if arguments.get("dry_run"):
         return ok({

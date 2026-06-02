@@ -37,6 +37,14 @@ complete: detection (0.8.0) + advisor (0.8.1) + control (0.8.2).
     (`block` / `disabled`), `crawler_protection` (`enabled` / `disabled`).
   - `action="disable"` - turns the managed robots.txt and the Content-Signals
     policy back off (`is_robots_txt_managed=false`, `cf_robots_variant=off`).
+  - Managed robots.txt and the Content-Signals policy are **mutually exclusive**
+    in Cloudflare (a server-side rule not in the schema): valid combinations are
+    `managed_robots=true` + `cf_robots_variant="off"` OR `managed_robots=false`
+    + `cf_robots_variant="policy_only"`. The tool validates this locally and
+    returns `INVALID_INPUT` (zero CF calls for a self-conflicting request; before
+    any PUT for a cross-state conflict) rather than surfacing a raw CF 400. A
+    custom Content-Signal line (e.g. from `robots_ai_posture`) is not a managed
+    option; it belongs in your origin robots.txt.
   - Writes are gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, need `confirm=<zone>`,
     and support `dry_run`. The write path is GET → overlay only the changed
     fields → strip the read-only/derived fields → PUT, so the rest of the zone's
@@ -49,10 +57,11 @@ complete: detection (0.8.0) + advisor (0.8.1) + control (0.8.2).
     block, `crawler_protection` link maze).
   **(validate, live)** `get` returns current state with destructive mode off;
   `configure` without the gate → `DESTRUCTIVE_DISABLED` (zero CF calls); with the
-  gate but no `confirm` → `CONFIRM_REQUIRED`; with `confirm=<zone>` enables
-  managed robots.txt + the policy and the re-read reflects it without clobbering
-  other Bot Management fields; `disable` reverts it; a bad enum or empty configure
-  → `INVALID_INPUT`.
+  gate but no `confirm` → `CONFIRM_REQUIRED`; with `confirm=<zone>` and the valid
+  combo (`managed_robots=true` + `cf_robots_variant="off"`) enables managed
+  robots.txt and the re-read reflects it without clobbering other Bot Management
+  fields; `disable` reverts it; `managed_robots=true` + `cf_robots_variant="policy_only"`
+  → `INVALID_INPUT` (mutual exclusion); a bad enum or empty configure → `INVALID_INPUT`.
 
 ## [0.8.1] - 2026-06-02
 

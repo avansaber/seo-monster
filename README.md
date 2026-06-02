@@ -207,7 +207,13 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   (`managed_robots`), the Content-Signals variant (`cf_robots_variant`:
   off / policy_only), and the AI-bot blocking levers (`ai_bots_protection`,
   `content_bots_protection`, `crawler_protection`). `action="disable"` turns the
-  managed robots.txt and the policy back off. Writes are gated, need
+  managed robots.txt and the policy back off. **Managed robots.txt and the
+  Content-Signals policy are mutually exclusive in Cloudflare**, so the valid
+  combinations are `managed_robots=true` + `cf_robots_variant="off"` (managed
+  robots.txt) OR `managed_robots=false` + `cf_robots_variant="policy_only"` (the
+  policy); the tool rejects the invalid combo locally with `INVALID_INPUT`. A
+  custom Content-Signal line (e.g. from `robots_ai_posture`) is not a managed
+  option - put that in your origin robots.txt. Writes are gated, need
   `confirm=<zone>`, and support `dry_run`; reads are safe (GET -> overlay -> PUT,
   so nothing else in the config is clobbered). Every response carries a caveat
   separating the stated-preference signals (Content-Signals, honored only by
