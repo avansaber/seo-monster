@@ -13,6 +13,40 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.7.8] - 2026-06-01
+
+Cloudflare single-redirect management. Adds 3 tools (52 -> 55 tools); 13 prompts
+unchanged. Phase 1 of CF redirect support; account-level Bulk Redirects follow
+in 0.7.9.
+
+### Added
+
+- **`cf_list_redirects(zone?)`** - list a zone's single (dynamic) redirect rules
+  (source, target, status code, rule id). Read-only. Call it before any redirect
+  write so nothing is clobbered. Pairs with `redirect_chain_audit` and the
+  `migration_check` prompt.
+- **`cf_create_redirect(source, target, status_code?, preserve_query_string?, dry_run?, skip_preflight?, zone?)`**
+  - create one edge redirect (default 301) in the zone's
+  `http_request_dynamic_redirect` phase. **Gated** behind
+  `SEO_MCP_ALLOW_DESTRUCTIVE`. Reuses the v0.7.7 pre-flight: refuses a target that
+  is non-2xx/unreachable (no redirecting to a dead URL), refuses self-loops and
+  duplicate sources, advises 301-over-302, and supports `dry_run` to preview the
+  rule. Appends a rule (never blind-replaces the phase entrypoint).
+  **(validate)** With destructive on: a redirect to a 200 target is created and
+  appears in `cf_list_redirects`; a 404 target, a self-loop, and a duplicate
+  source are each refused with `INVALID_INPUT`; `dry_run: true` writes nothing;
+  with destructive off, `DESTRUCTIVE_DISABLED` and zero CF calls.
+- **`cf_delete_redirect(rule_id, zone?)`** - delete a single-redirect rule by id
+  (rollback for `cf_create_redirect`). Gated.
+
+### Notes
+
+- New token scope for the writes: **Zone > Single Redirect > Edit** (the reads
+  use it too). Cache-purge and the rest are unchanged.
+- Reuses the existing CF client seam, zone/account resolution, destructive-gate
+  and confirm patterns, and the shared HTTP pre-flight - no new dependency, no
+  duplicated infrastructure.
+
 ## [0.7.7] - 2026-06-01
 
 Pre-flight validation for the routine writes. No new tools or prompts

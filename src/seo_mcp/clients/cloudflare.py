@@ -25,6 +25,7 @@ from .errors import ApiError, map_http_status
 
 API_BASE = "https://api.cloudflare.com/client/v4"
 _TIMEOUT_SECONDS = 20
+_DYNAMIC_REDIRECT_PHASE = "http_request_dynamic_redirect"
 
 
 class CfClient:
@@ -166,6 +167,46 @@ class CfClient:
 
     def purge_all(self, zone_id: str) -> None:
         self._http_request("POST", f"/zones/{zone_id}/purge_cache", {"purge_everything": True})
+
+    # --- single / dynamic redirects (gated in tools) ---------------------
+    #
+    # Single Redirects live in the zone's http_request_dynamic_redirect phase
+    # ruleset. We never blind-PUT the phase entrypoint (that would replace ALL
+    # rules); we read it, then append/delete individual rules by id.
+
+    def get_dynamic_redirects(self, zone_id: str) -> tuple[str | None, list[dict[str, Any]]]:
+        """Return ``(ruleset_id, rules)`` for the zone's dynamic-redirect phase.
+        Returns ``(None, [])`` when no ruleset exists yet (CF 404s the
+        entrypoint until the first rule is created)."""
+        try:
+            payload = self._http_request(
+                "GET", f"/zones/{zone_id}/rulesets/phases/{_DYNAMIC_REDIRECT_PHASE}/entrypoint"
+            )
+        except ApiError as exc:
+            if exc.code == ErrorCode.NOT_FOUND:
+                return None, []
+            raise
+        result = payload.get("result", {}) or {}
+        return result.get("id"), result.get("rules", []) or []
+
+    def add_dynamic_redirect(self, zone_id: str, rule: dict[str, Any]) -> dict[str, Any]:
+        """Append one redirect rule (never replaces existing rules). Creates the
+        phase ruleset on first use. Returns the CF ``result``."""
+        ruleset_id, _ = self.get_dynamic_redirects(zone_id)
+        if ruleset_id is None:
+            body = {
+                "name": "default",
+                "kind": "zone",
+                "phase": _DYNAMIC_REDIRECT_PHASE,
+                "rules": [rule],
+            }
+            return self._http_request("POST", f"/zones/{zone_id}/rulesets", body).get("result", {})
+        return self._http_request(
+            "POST", f"/zones/{zone_id}/rulesets/{ruleset_id}/rules", rule
+        ).get("result", {})
+
+    def delete_dynamic_redirect(self, zone_id: str, ruleset_id: str, rule_id: str) -> None:
+        self._http_request("DELETE", f"/zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}")
 
     # --- health -----------------------------------------------------------
 

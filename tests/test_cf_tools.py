@@ -324,3 +324,190 @@ def test_settings_audit_short_hsts_flagged_medium(make_config):
 def test_settings_audit_auth_missing_without_client(make_config):
     result = cf_tools.cf_settings_audit({}, make_config(), {})
     assert result["error"]["code"] == "AUTH_MISSING"
+
+
+# --- single redirects (cf_list/create/delete_redirect) --------------------
+
+from seo_mcp.clients.errors import ApiError  # noqa: E402
+from seo_mcp.clients.http import HttpResponse  # noqa: E402
+from seo_mcp.errors import ErrorCode  # noqa: E402
+
+
+class _FakeHttp:
+    """Canned (status) for the redirect-target pre-flight; records URLs."""
+
+    def __init__(self, status: int) -> None:
+        self._status = status
+        self.calls: list[str] = []
+
+    def fetch(self, url: str, **_):
+        self.calls.append(url)
+        return HttpResponse(status=self._status, headers={}, body_bytes=b"ok", final_url=url)
+
+
+def _ok_env(result):
+    return {"success": True, "errors": [], "result": result}
+
+
+def _existing_rule(source="https://example.com/old", target="https://example.com/new", rule_id="rule-existing"):
+    return {
+        "id": rule_id,
+        "expression": f'(http.request.full_uri eq "{source}")',
+        "action": "redirect",
+        "action_parameters": {"from_value": {"target_url": {"value": target}, "status_code": 301, "preserve_query_string": True}},
+    }
+
+
+def test_list_redirects_shapes_rules(make_config, make_cf_client, cf_payloads):
+    responses = dict(cf_payloads)
+    responses["redirect_entrypoint"] = _ok_env({"id": "rs-redir-1", "rules": [_existing_rule()]})
+    client = make_cf_client(responses)
+    result = cf_tools.cf_list_redirects({}, _cfg(make_config), {"cf": client})
+    assert result["ok"] is True
+    assert result["data"]["count"] == 1
+    r = result["data"]["single_redirects"][0]
+    assert r["source"] == "https://example.com/old"
+    assert r["target"] == "https://example.com/new"
+    assert r["status_code"] == 301
+
+
+def test_create_redirect_blocked_when_destructive_off_zero_calls(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/a", "target": "https://example.com/b"},
+        _cfg(make_config),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
+    assert client._transport.calls == []  # zero network
+
+
+def test_create_redirect_succeeds_appends_rule(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)  # entrypoint exists, empty rules
+    http = _FakeHttp(200)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/new"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": http},
+    )
+    assert result["ok"] is True
+    assert result["data"]["created"] is True
+    assert http.calls == ["https://example.com/new"]  # target was pre-flighted
+    add_call = next(c for c in client._transport.calls if c[1].endswith("/rules"))
+    assert add_call[0] == "POST"
+    assert add_call[2]["action"] == "redirect"
+
+
+def test_create_redirect_creates_ruleset_when_none(make_config, make_cf_client, cf_payloads):
+    responses = dict(cf_payloads)
+    responses["redirect_entrypoint"] = ApiError(ErrorCode.NOT_FOUND, "no ruleset yet")
+    client = make_cf_client(responses)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/new"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["ok"] is True
+    # No entrypoint -> POST to /rulesets to create it.
+    assert any(c[1].endswith("/rulesets") and c[0] == "POST" for c in client._transport.calls)
+
+
+def test_create_redirect_rejects_loop_zero_calls(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/x", "target": "https://example.com/x"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert "loop" in result["error"]["message"].lower()
+    assert client._transport.calls == []
+
+
+def test_create_redirect_rejects_duplicate_source(make_config, make_cf_client, cf_payloads):
+    responses = dict(cf_payloads)
+    responses["redirect_entrypoint"] = _ok_env({"id": "rs-redir-1", "rules": [_existing_rule()]})
+    client = make_cf_client(responses)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/elsewhere"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["details"]["existing_rule_id"] == "rule-existing"
+
+
+def test_create_redirect_blocks_dead_target(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/missing"},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(404)},
+    )
+    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["details"]["preflight_status"] == 404
+    # blocked before any redirect write
+    assert not any(c[1].endswith("/rules") for c in client._transport.calls)
+
+
+def test_create_redirect_dry_run_writes_nothing(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/new", "dry_run": True},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["ok"] is True
+    assert result["data"]["dry_run"] is True
+    assert result["data"]["would_create"]["target"] == "https://example.com/new"
+    assert not any(c[0] == "POST" and "rule" in c[1] for c in client._transport.calls)
+
+
+def test_create_redirect_skip_preflight_does_not_fetch(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    http = _FakeHttp(404)  # would block, but skipped
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/new", "skip_preflight": True},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": http},
+    )
+    assert result["ok"] is True
+    assert http.calls == []  # pre-flight skipped
+
+
+def test_create_redirect_302_advisory(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_create_redirect(
+        {"source": "https://example.com/old", "target": "https://example.com/new", "status_code": 302},
+        _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"),
+        {"cf": client, "http": _FakeHttp(200)},
+    )
+    assert result["ok"] is True
+    assert any("301" in a for a in result["data"]["advisories"])
+
+
+def test_delete_redirect_succeeds(make_config, make_cf_client, cf_payloads):
+    responses = dict(cf_payloads)
+    responses["redirect_entrypoint"] = _ok_env({"id": "rs-redir-1", "rules": [_existing_rule(rule_id="rule-existing")]})
+    client = make_cf_client(responses)
+    result = cf_tools.cf_delete_redirect(
+        {"rule_id": "rule-existing"}, _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"), {"cf": client}
+    )
+    assert result["ok"] is True
+    assert result["data"]["deleted_rule_id"] == "rule-existing"
+    assert any(c[0] == "DELETE" and c[1].endswith("/rules/rule-existing") for c in client._transport.calls)
+
+
+def test_delete_redirect_unknown_rule_not_found(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)  # entrypoint has no rules
+    result = cf_tools.cf_delete_redirect(
+        {"rule_id": "nope"}, _cfg(make_config, SEO_MCP_ALLOW_DESTRUCTIVE="true"), {"cf": client}
+    )
+    assert result["error"]["code"] == "NOT_FOUND"
+
+
+def test_delete_redirect_blocked_when_destructive_off(make_config, make_cf_client, cf_payloads):
+    client = make_cf_client(cf_payloads)
+    result = cf_tools.cf_delete_redirect({"rule_id": "x"}, _cfg(make_config), {"cf": client})
+    assert result["error"]["code"] == "DESTRUCTIVE_DISABLED"
+    assert client._transport.calls == []

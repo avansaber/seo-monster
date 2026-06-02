@@ -1,26 +1,31 @@
-"""Cloudflare tools (6).
+"""Cloudflare tools (10).
 
-Reads: cf_list_zones, cf_zone_info, cf_list_dns, cf_web_analytics (read-only).
-Writes (gated): cf_purge_cache and cf_purge_cache_all sit behind
-SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge additionally requires a confirm token
-equal to the resolved zone name. The destructive gate is checked before any
-client call, so a blocked purge makes zero network requests.
+Reads: cf_list_zones, cf_zone_info, cf_list_dns, cf_web_analytics,
+cf_settings_audit, cf_list_redirects (read-only).
+Writes (gated): cf_purge_cache, cf_purge_cache_all, cf_create_redirect, and
+cf_delete_redirect sit behind SEO_MCP_ALLOW_DESTRUCTIVE; the all-purge
+additionally requires a confirm token equal to the resolved zone name. The
+destructive gate is checked before any client call, so a blocked write makes
+zero network requests. Redirect creates pre-flight the target (shared
+preflight_get) and refuse loops/duplicates.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping
 
 from ..clients.errors import ApiError
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import annotations, require_client
+from ._helpers import annotations, preflight_get, require_client
 
 
 _SERVICE = "cf"
 _REMEDIATION = (
     "Set CF_API_TOKEN to a Cloudflare API token (Zone:Read; add DNS:Read, "
-    "Account Analytics:Read, and Cache Purge:Purge as needed). See README > Auth."
+    "Account Analytics:Read, Cache Purge:Purge, and Single Redirect:Edit as "
+    "needed). See README > Auth."
 )
 
 
@@ -523,6 +528,239 @@ def cf_settings_audit(arguments, config, clients) -> dict[str, Any]:
     )
 
 
+# --- single / dynamic redirects (read ungated; create/delete gated) -------
+#
+# Single Redirects live in the zone's http_request_dynamic_redirect phase.
+# cf_list_redirects is a safe read (call it before any write so nothing is
+# clobbered). create/delete are gated behind SEO_MCP_ALLOW_DESTRUCTIVE exactly
+# like purge. Validation reuses the v0.7.7 pre-flight (preflight_get) so we
+# never point a redirect at a dead target, plus loop / duplicate / status
+# checks and a dry_run preview. Bulk Redirects (account-level) come in 0.7.9.
+
+_VALID_REDIRECT_STATUS = {301, 302, 307, 308}
+
+
+def _valid_abs_url(u: Any) -> bool:
+    return isinstance(u, str) and u.startswith(("http://", "https://"))
+
+
+def _redirect_source_of(rule: Mapping[str, Any]) -> str | None:
+    """Extract the source URL from a rule's expression for dedupe + listing."""
+    m = re.search(r'full_uri eq "([^"]+)"', rule.get("expression") or "")
+    return m.group(1) if m else None
+
+
+def _shape_redirect_rule(rule: Mapping[str, Any]) -> dict[str, Any]:
+    fv = (rule.get("action_parameters") or {}).get("from_value") or {}
+    tgt = fv.get("target_url") or {}
+    return {
+        "id": rule.get("id"),
+        "source": _redirect_source_of(rule),
+        "target": tgt.get("value") or tgt.get("expression"),
+        "status_code": fv.get("status_code"),
+        "preserve_query_string": fv.get("preserve_query_string"),
+        "description": rule.get("description"),
+    }
+
+
+def _build_redirect_rule(source: str, target: str, status_code: int, preserve_qs: bool, description: str | None) -> dict[str, Any]:
+    return {
+        "expression": f'(http.request.full_uri eq "{source}")',
+        "description": description or f"SEOMonster redirect: {source} -> {target}",
+        "action": "redirect",
+        "action_parameters": {
+            "from_value": {
+                "target_url": {"value": target},
+                "status_code": status_code,
+                "preserve_query_string": preserve_qs,
+            }
+        },
+    }
+
+
+TOOL_LIST_REDIRECTS = {
+    "name": "cf_list_redirects",
+    "description": (
+        "List a zone's single (dynamic) redirect rules: source, target, status "
+        "code, and rule id (read-only). Call this before cf_create_redirect / "
+        "cf_delete_redirect so writes never clobber existing rules. Pairs with "
+        "redirect_chain_audit and the migration_check prompt. (Account-level "
+        "Bulk Redirects are not yet exposed.)"
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "zone": {"type": "string", "description": "Zone hostname. Defaults to the configured CF_ZONE."},
+        },
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=True),
+}
+
+
+def cf_list_redirects(arguments, config, clients) -> dict[str, Any]:
+    client, error = _require(clients)
+    if error:
+        return error
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        ruleset_id, rules = client.get_dynamic_redirects(zone_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    shaped = [_shape_redirect_rule(r) for r in rules]
+    return ok(
+        {
+            "zone": zone_name,
+            "ruleset_id": ruleset_id,
+            "count": len(shaped),
+            "single_redirects": shaped,
+            "notes": ["Single (dynamic) redirects only; account-level Bulk Redirects are not yet exposed."],
+        }
+    )
+
+
+TOOL_CREATE_REDIRECT = {
+    "name": "cf_create_redirect",
+    "description": (
+        "Create one single (dynamic) redirect at the Cloudflare edge (e.g. a 301 "
+        "for a renamed/migrated URL). Gated: requires SEO_MCP_ALLOW_DESTRUCTIVE=true. "
+        "Validates the target is reachable (no redirecting to a dead URL), refuses "
+        "loops and duplicates, and supports dry_run to preview the rule first."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "source": {"type": "string", "description": "Absolute source URL to redirect FROM (exact full-URI match)."},
+            "target": {"type": "string", "description": "Absolute target URL to redirect TO."},
+            "status_code": {"type": "integer", "description": "301 (default, permanent), 302/307 (temporary), or 308.", "enum": [301, 302, 307, 308]},
+            "preserve_query_string": {"type": "boolean", "description": "Carry the original query string to the target (default true)."},
+            "zone": {"type": "string", "description": "Zone hostname. Defaults to the configured CF_ZONE."},
+            "dry_run": {"type": "boolean", "description": "Preview the rule that would be created without writing it (default false)."},
+            "skip_preflight": {"type": "boolean", "description": "Bypass the target-reachability pre-flight (default false)."},
+        },
+        "required": ["source", "target"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=False, destructive=True),
+}
+
+
+def cf_create_redirect(arguments, config, clients) -> dict[str, Any]:
+    # Gate first: a blocked write must make zero client calls.
+    if not config.allow_destructive:
+        return _destructive_disabled("cf_create_redirect")
+    client, error = _require(clients)
+    if error:
+        return error
+    source = arguments.get("source")
+    target = arguments.get("target")
+    if not _valid_abs_url(source) or not _valid_abs_url(target):
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "source and target must be absolute http(s) URLs.", docs_url=DOCS_BASE + "cf")
+    status_code = int(arguments.get("status_code", 301))
+    if status_code not in _VALID_REDIRECT_STATUS:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"status_code must be one of {sorted(_VALID_REDIRECT_STATUS)}.", docs_url=DOCS_BASE + "cf")
+    if source == target:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "source and target are identical (redirect loop).", docs_url=DOCS_BASE + "cf")
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+    advisories: list[str] = []
+    if status_code == 302:
+        advisories.append("302 is a temporary redirect; use 301 for a permanent move so search engines pass authority to the target.")
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        _ruleset_id, existing = client.get_dynamic_redirects(zone_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    for r in existing:
+        if _redirect_source_of(r) == source:
+            return err(
+                ErrorCode.INVALID_INPUT,
+                _SERVICE,
+                f"A redirect for source {source!r} already exists (rule id {r.get('id')}). "
+                "Delete it first with cf_delete_redirect, or change the source.",
+                remediation="Use cf_list_redirects to review existing rules.",
+                details={"existing_rule_id": r.get("id")},
+            )
+    if not arguments.get("skip_preflight"):
+        pf = preflight_get(clients, target)
+        if pf is not None:
+            st, _body, reason = pf
+            if st is None or not (200 <= st < 300):
+                detail = f"returned HTTP {st}" if st is not None else f"was unreachable ({reason})"
+                return err(
+                    ErrorCode.INVALID_INPUT,
+                    _SERVICE,
+                    f"The redirect target {detail}. Redirecting visitors and crawlers to a dead URL is "
+                    "worse than no redirect, so the redirect was not created.",
+                    remediation="Fix the target so it returns HTTP 200, or pass skip_preflight=true to override.",
+                    docs_url=DOCS_BASE + "cf",
+                    details={"target": target, "preflight_status": st},
+                )
+    rule = _build_redirect_rule(source, target, status_code, bool(arguments.get("preserve_query_string", True)), arguments.get("description"))
+    if arguments.get("dry_run"):
+        return ok({"zone": zone_name, "dry_run": True, "would_create": _shape_redirect_rule(rule), "advisories": advisories, "notes": ["dry_run: nothing was written."]})
+    try:
+        client.add_dynamic_redirect(zone_id, rule)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    return ok({"zone": zone_name, "created": True, "source": source, "target": target, "status_code": status_code, "advisories": advisories})
+
+
+TOOL_DELETE_REDIRECT = {
+    "name": "cf_delete_redirect",
+    "description": (
+        "Delete one single (dynamic) redirect rule by its id (the rollback path "
+        "for cf_create_redirect). Gated: requires SEO_MCP_ALLOW_DESTRUCTIVE=true. "
+        "Get the rule id from cf_list_redirects."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "rule_id": {"type": "string", "description": "The redirect rule id (from cf_list_redirects)."},
+            "zone": {"type": "string", "description": "Zone hostname. Defaults to the configured CF_ZONE."},
+        },
+        "required": ["rule_id"],
+        "additionalProperties": False,
+    },
+    "annotations": annotations(read=False, destructive=True),
+}
+
+
+def cf_delete_redirect(arguments, config, clients) -> dict[str, Any]:
+    if not config.allow_destructive:
+        return _destructive_disabled("cf_delete_redirect")
+    client, error = _require(clients)
+    if error:
+        return error
+    rule_id = arguments.get("rule_id")
+    if not rule_id:
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "rule_id is required (from cf_list_redirects).", docs_url=DOCS_BASE + "cf")
+    zone = _resolve_zone_name(arguments, config)
+    if not zone:
+        return _missing_zone_error()
+    try:
+        zone_id, zone_name = client.resolve_zone_id(zone)
+        ruleset_id, existing = client.get_dynamic_redirects(zone_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    if ruleset_id is None or not any(r.get("id") == rule_id for r in existing):
+        return err(
+            ErrorCode.NOT_FOUND,
+            _SERVICE,
+            f"No redirect rule {rule_id!r} found in zone {zone_name}.",
+            remediation="List current rules with cf_list_redirects.",
+        )
+    try:
+        client.delete_dynamic_redirect(zone_id, ruleset_id, rule_id)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
+    return ok({"zone": zone_name, "deleted_rule_id": rule_id})
+
+
 # --- registry -------------------------------------------------------------
 
 TOOLS = [
@@ -533,6 +771,9 @@ TOOLS = [
     TOOL_PURGE_CACHE,
     TOOL_PURGE_CACHE_ALL,
     TOOL_SETTINGS_AUDIT,
+    TOOL_LIST_REDIRECTS,
+    TOOL_CREATE_REDIRECT,
+    TOOL_DELETE_REDIRECT,
 ]
 
 HANDLERS = {
@@ -543,4 +784,7 @@ HANDLERS = {
     "cf_purge_cache": cf_purge_cache,
     "cf_purge_cache_all": cf_purge_cache_all,
     "cf_settings_audit": cf_settings_audit,
+    "cf_list_redirects": cf_list_redirects,
+    "cf_create_redirect": cf_create_redirect,
+    "cf_delete_redirect": cf_delete_redirect,
 }

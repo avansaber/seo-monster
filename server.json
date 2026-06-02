@@ -6,13 +6,13 @@
     "url": "https://github.com/avansaber/seo-monster",
     "source": "github"
   },
-  "version": "0.7.7",
+  "version": "0.7.8",
   "websiteUrl": "https://seomonster.avansaber.com",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "seo-monster",
-      "version": "0.7.7",
+      "version": "0.7.8",
       "transport": {
         "type": "stdio"
       },
@@ -54,7 +54,7 @@
         },
         {
           "name": "CF_API_TOKEN",
-          "description": "Cloudflare API token. Optional; needed only for the Cloudflare tools. Scopes: Zone:Read, DNS:Read, Account Analytics:Read, and (only when destructive mode is on) Cache Purge:Purge.",
+          "description": "Cloudflare API token. Optional; needed only for the Cloudflare tools. Scopes: Zone:Read, DNS:Read, Account Analytics:Read, and (only when destructive mode is on) Cache Purge:Purge and Single Redirect:Edit.",
           "isRequired": false,
           "format": "string",
           "isSecret": true

@@ -342,6 +342,14 @@ class FakeCfTransport:
             return "rum_get"
         if "dns_records" in path:
             return "dns"
+        if "/entrypoint" in path:
+            return "redirect_entrypoint"
+        if "/rules/" in path:
+            return "redirect_delete_rule"
+        if path.endswith("/rules"):
+            return "redirect_add_rule"
+        if path.endswith("/rulesets"):
+            return "redirect_create_ruleset"
         if "name=" in path:
             return "resolve"
         if "per_page=1" in path:
@@ -393,6 +401,11 @@ def cf_payloads() -> dict[str, Any]:
             {"host": "example.com", "site_tag": "tag-abc", "auto_install": True, "enabled": True, "created": "2025-01-01", "ruleset_id": "rs1"}
         ),
         "purge": _ok({"id": "zone123"}),
+        # Redirect (dynamic) phase: default entrypoint exists with no rules.
+        "redirect_entrypoint": _ok({"id": "rs-redir-1", "rules": []}),
+        "redirect_add_rule": _ok({"id": "rule-new-1"}),
+        "redirect_create_ruleset": _ok({"id": "rs-redir-1", "rules": [{"id": "rule-new-1"}]}),
+        "redirect_delete_rule": _ok({"id": "rs-redir-1"}),
     }
 
 
