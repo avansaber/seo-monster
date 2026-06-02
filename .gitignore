@@ -47,3 +47,8 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Tester/local harness scripts (live outside the repo; guard against drift)
+rv.py
+call_tool.py
+smoke.py
