@@ -31,34 +31,48 @@ from mcp.types import (
 )
 
 from . import prompts as prompts_module
+from .clients.ai_engines import build_ai_engines_client
 from .clients.cloudflare import build_cf_client
 from .clients.crux import build_crux_client
+from .clients.dataforseo import build_dataforseo_client
 from .clients.ga4 import build_ga4_client
 from .clients.ga4_admin import build_ga4_admin_client
 from .clients.gsc import build_gsc_client
 from .clients.http import build_http_client
 from .clients.indexnow import build_indexnow_client
+from .clients.openpagerank import build_openpagerank_client
 from .clients.psi import build_psi_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
 from .tools import (
+    ai_citation_tools,
+    ai_readiness_tools,
+    ai_referral_tools,
     budget_tools,
     cf_tools,
+    content_brief_tools,
     content_tools,
     crux_tools,
     ga4_tools,
+    gsc_keyword_tools,
     gsc_tools,
     hreflang_tools,
     indexnow_tools,
+    keyword_universe_tools,
     linkgraph_tools,
+    linkrec_tools,
+    onpage_serp_gap_tools,
     onpage_tools,
     psi_tools,
+    rank_attribution_tools,
     redirect_tools,
     robots_posture_tools,
     robots_tools,
     schema_tools,
+    serp_adjacency_tools,
     sitemap_tools,
     system_status,
+    topic_cluster_tools,
 )
 
 
@@ -92,6 +106,21 @@ _TOOL_DEFS: list[dict[str, Any]] = [
     *budget_tools.TOOLS,
     # v0.7 content intelligence (Layer 1)
     *content_tools.TOOLS,
+    # v0.9 roadmap Wave 1: AI/GEO + discovery + rank-loop
+    *ai_readiness_tools.TOOLS,
+    *ai_referral_tools.TOOLS,
+    *gsc_keyword_tools.TOOLS,
+    *linkrec_tools.TOOLS,
+    # v0.9 roadmap Wave 2: attribution + cluster map + data-wired brief
+    *rank_attribution_tools.TOOLS,
+    *topic_cluster_tools.TOOLS,
+    *content_brief_tools.TOOLS,
+    # v0.9 roadmap Wave 3: external-data discovery + SERP gap (DataForSEO/OPR)
+    *serp_adjacency_tools.TOOLS,
+    *keyword_universe_tools.TOOLS,
+    *onpage_serp_gap_tools.TOOLS,
+    # v0.9 roadmap Wave 4: AI citation tracking (headline)
+    *ai_citation_tools.TOOLS,
 ]
 
 # name -> handler with signature (arguments, config, clients) -> envelope.
@@ -113,6 +142,17 @@ _HANDLERS: dict[str, Any] = {
     **linkgraph_tools.HANDLERS,
     **budget_tools.HANDLERS,
     **content_tools.HANDLERS,
+    **ai_readiness_tools.HANDLERS,
+    **ai_referral_tools.HANDLERS,
+    **gsc_keyword_tools.HANDLERS,
+    **linkrec_tools.HANDLERS,
+    **rank_attribution_tools.HANDLERS,
+    **topic_cluster_tools.HANDLERS,
+    **content_brief_tools.HANDLERS,
+    **serp_adjacency_tools.HANDLERS,
+    **keyword_universe_tools.HANDLERS,
+    **onpage_serp_gap_tools.HANDLERS,
+    **ai_citation_tools.HANDLERS,
 }
 
 # service key -> builder(config) -> client. Used by the lazy ClientProvider.
@@ -127,6 +167,9 @@ _CLIENT_BUILDERS: dict[str, Any] = {
     "indexnow": build_indexnow_client,
     "http": lambda _config: build_http_client(),
     "crux": build_crux_client,
+    "dataforseo": build_dataforseo_client,
+    "openpagerank": build_openpagerank_client,
+    "ai_engines": build_ai_engines_client,
 }
 
 

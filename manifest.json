@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.8.2",
+  "version": "0.9.2",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), and technical-SEO HTTP primitives.",
-  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in.",
+  "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in. v0.9 adds AI/GEO citation tools (ai_citation_readiness, ai_referral_overview, ai_citation_track), net-new keyword discovery (gsc_keyword_expand, serp_adjacency_expand, keyword_universe), data-wired content briefs + topic-cluster mapping, internal-link recommendations, rank-change attribution, and on-page SERP-gap analysis. The keyword/SERP/AI-engine providers (DataForSEO, Open PageRank, Perplexity/OpenAI/Anthropic/Gemini) are all optional and pluggable; the free GSC/GA4/HTTP core works without them.",
   "author": {
     "name": "AvanSaber Inc.",
     "email": "support@avansaber.com",
@@ -336,6 +336,50 @@
     {
       "name": "cf_managed_robots",
       "description": "Get / configure / disable Cloudflare's managed robots.txt and Content-Signals policy on a zone (rides on the Bot Management config). action=get reads state (un-gated); action=configure sets is_robots_txt_managed, cf_robots_variant (off/policy_only), and the AI-bot blocking levers; action=disable turns them off. Writes are gated (SEO_MCP_ALLOW_DESTRUCTIVE) and need confirm=<zone>; supports dry_run. Returns a caveat separating stated-preference signals from the levers that enforce at the edge."
+    },
+    {
+      "name": "ai_citation_readiness",
+      "description": "Score whether a page is structured to be extracted/cited by LLM answer engines. Leads with a render-blindness check (AI crawlers don't run JS), then scores evidence-backed signals (statistics, quotations, cited sources, no keyword-stuffing); reports schema.org/FAQ/llms.txt as informational only (2026 evidence: not AI-citation drivers). Free, HTTP-only. (v0.9.0)"
+    },
+    {
+      "name": "ai_referral_overview",
+      "description": "First-party view of AI traffic: GA4 referral sessions from AI apps (ChatGPT/Perplexity/Gemini/Copilot/Claude) via the native ai-assistant channel + a source-host regex, plus AI-crawler robots coverage (GPTBot/ClaudeBot/PerplexityBot...). Surfaces the ~70% dark-traffic undercount; keeps AI-Overview clicks (Organic) separate. Free. (v0.9.0)"
+    },
+    {
+      "name": "ai_citation_track",
+      "description": "Sampled brand mention + citation share-of-voice across AI answer engines (Perplexity/OpenAI/Anthropic/Gemini APIs + Google AI Overviews via DataForSEO) for a managed prompt set, vs competitors. N samples/prompt with a 95% CI, share-of-voice, and run-to-run volatility -- NOT an 'AI rank'. Discloses API-vs-UI and AIO-no-API caveats. Paid + non-deterministic. (v0.9.0)"
+    },
+    {
+      "name": "gsc_keyword_expand",
+      "description": "Ground host-brainstormed keyword candidates against your own Search Console data to find net-new terms with no current footprint. Per candidate: footprint (covered/thin/none) + a sibling-strength confidence band. 'none' = no VISIBLE footprint (GSC hides ~75% of impressions); net-new terms are scored hypotheses. Free. (v0.9.0)"
+    },
+    {
+      "name": "serp_adjacency_expand",
+      "description": "Expand seed terms into adjacent terms. FREE core: Google Autocomplete (no key). Optional People-Also-Ask + related searches via DataForSEO. Returns per-seed suggestions + aggregated net-new terms; degrades gracefully without a key. (v0.9.0)"
+    },
+    {
+      "name": "keyword_universe",
+      "description": "Optional external keyword data: competitor keyword GAP (DataForSEO Domain Intersection; no Google equivalent) + search volume/difficulty/intent via a provider chain (DataForSEO, else Google Ads volume-only). External volume is a degraded directional signal -- a tiebreaker, never a gate. Requires DataForSEO and/or Google Ads. (v0.9.0)"
+    },
+    {
+      "name": "content_brief_data",
+      "description": "Data-wired backing for a content brief: fetches competitor (or your own GSC-ranking) pages and returns heading union, median word-count floor, schema types, entity coverage, plus 2026 GEO writing directives. The host writes the prose. Free (own pages) / competitor_urls. (v0.9.0)"
+    },
+    {
+      "name": "topic_cluster_map",
+      "description": "Map a content cluster from your own GSC data and surface missing subtopics. Classifies each cluster query into defend/optimize/create/monitor by demand and best position; the create quadrant = missing-subtopic candidates. Flags cannibalization. Free, GSC-only. (v0.9.0)"
+    },
+    {
+      "name": "internal_link_recommend",
+      "description": "Recommend specific source->target internal links from high-authority pages to GSC striking-distance pages (default position 8-20), with anchor text, relevance floor, per-source cap, and anchor-dedupe guards; never suggests nofollow. Free (crawl + GSC). (v0.9.0)"
+    },
+    {
+      "name": "rank_change_attribution",
+      "description": "Estimate whether an on-site change moved a page's clicks via difference-in-differences against a matched control group (never a naked before/after). Returns an estimated lift + 95% CI + a three-state verdict + a confounders block that auto-detects the 2025 GSC data-regime breaks. Observational, not causal. Free, GSC-only. (v0.9.0)"
+    },
+    {
+      "name": "onpage_serp_gap",
+      "description": "Headings/entities/schema the top SERP results have that a target page lacks -> on-page actions. FREE with caller competitor_urls, or DataForSEO SERP auto-fetch by query (which also returns SERP-composition zero-click-risk signals + Open PageRank competitor authority). Surfaces information gain, not just parity. (v0.9.0)"
     }
   ]
 }

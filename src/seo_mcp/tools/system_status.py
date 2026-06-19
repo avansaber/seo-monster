@@ -54,7 +54,7 @@ TOOL: dict[str, Any] = {
 }
 
 
-_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf", "indexnow", "crux")
+_SERVICE_PREFIXES = ("gsc", "ga4", "psi", "cf", "indexnow", "crux", "ai")
 
 # Tools whose names do not encode their service in a prefix. The v0.3.0
 # technical-SEO tools have natural verbs (``inspect_meta``, ``check_canonical``,
@@ -73,10 +73,28 @@ _TECHNICAL_NAMES = frozenset({
     "validate_schema",
     "hreflang_consistency_check",
     "internal_link_graph",
+    # v0.9 roadmap Wave 1
+    "internal_link_recommend",
+    # v0.9 roadmap Wave 3
+    "onpage_serp_gap",
     # lighthouse_budget wraps PsiClient internally, but conceptually belongs in
     # the technical-SEO catalog because that is when SEO triage actually reaches
     # for it (CI / pre-deploy gate). Grouping is for catalog UX, not routing.
     "lighthouse_budget",
+})
+
+# Content-intelligence tools (no service prefix). Grouped together for catalog UX.
+_CONTENT_NAMES = frozenset({
+    "content_opportunities",
+    "content_brief_data",
+    "topic_cluster_map",
+    "rank_change_attribution",
+})
+
+# Keyword/SERP discovery tools (no service prefix). v0.9 roadmap Wave 3.
+_DISCOVERY_NAMES = frozenset({
+    "serp_adjacency_expand",
+    "keyword_universe",
 })
 
 
@@ -91,10 +109,18 @@ def group_tools(tool_names: list[str]) -> dict[str, list[str]]:
     """
     catalog: dict[str, list[str]] = {p: [] for p in _SERVICE_PREFIXES}
     catalog["technical"] = []
+    catalog["content"] = []
+    catalog["discovery"] = []
     catalog["general"] = []
     for name in tool_names:
         if name in _TECHNICAL_NAMES:
             catalog["technical"].append(name)
+            continue
+        if name in _CONTENT_NAMES:
+            catalog["content"].append(name)
+            continue
+        if name in _DISCOVERY_NAMES:
+            catalog["discovery"].append(name)
             continue
         prefix = name.split("_", 1)[0]
         if prefix in _SERVICE_PREFIXES:
@@ -102,6 +128,22 @@ def group_tools(tool_names: list[str]) -> dict[str, list[str]]:
         else:
             catalog["general"].append(name)
     return catalog
+
+
+_AI_ENGINE_KEYS = (
+    ("perplexity", "perplexity_api_key"),
+    ("openai", "openai_api_key"),
+    ("anthropic", "anthropic_api_key"),
+    ("gemini", "gemini_api_key"),
+)
+
+
+def _ai_engines_list(config: Config) -> list[str]:
+    return [name for name, attr in _AI_ENGINE_KEYS if getattr(config, attr, None)]
+
+
+def _ai_engines_configured(config: Config) -> bool:
+    return bool(_ai_engines_list(config))
 
 
 def _probe(clients: Mapping[str, Any], key: str, probe: bool) -> bool | None:
@@ -202,6 +244,42 @@ def handle(
             "configured": True,
             "auth_method": "api_key" if config.psi_api_key else "anonymous",
             "reachable": _probe(clients, "crux", probe),
+        },
+        # v0.9 roadmap Wave 3: optional external keyword/SERP/backlink providers.
+        # All optional; the consuming tools degrade gracefully when unconfigured.
+        "dataforseo": {
+            "configured": bool(getattr(config, "dataforseo_login", None) and getattr(config, "dataforseo_password", None)),
+            "auth_method": "basic" if getattr(config, "dataforseo_login", None) else None,
+            "reachable": (
+                _probe(clients, "dataforseo", probe)
+                if (getattr(config, "dataforseo_login", None) and getattr(config, "dataforseo_password", None))
+                else None
+            ),
+        },
+        "openpagerank": {
+            "configured": bool(getattr(config, "openpagerank_key", None)),
+            "auth_method": "api_key" if getattr(config, "openpagerank_key", None) else None,
+            "reachable": _probe(clients, "openpagerank", probe) if getattr(config, "openpagerank_key", None) else None,
+        },
+        "google_ads": {
+            # Alternative volume source. Configured = developer token + customer
+            # id present, but live use also needs an adwords-scope OAuth consent
+            # (the running GSC/GA4 token lacks it) -- a tester live-setup step.
+            "configured": bool(getattr(config, "google_ads_developer_token", None) and getattr(config, "google_ads_customer_id", None)),
+            "auth_method": "oauth+developer_token" if getattr(config, "google_ads_developer_token", None) else None,
+            "reachable": None,
+            "reason": (
+                "volume-only alternative to DataForSEO; requires an adwords-scope "
+                "OAuth re-consent before live use"
+            ),
+        },
+        # v0.9 roadmap Wave 4: AI answer-engine keys for ai_citation_track. Each
+        # is optional; the tool queries whichever are configured (+ Google AIO
+        # via DataForSEO). reachable reflects key presence, NOT a live (paid) call.
+        "ai_engines": {
+            "configured": _ai_engines_configured(config),
+            "engines": _ai_engines_list(config),
+            "reachable": _probe(clients, "ai_engines", probe) if _ai_engines_configured(config) else None,
         },
     }
 

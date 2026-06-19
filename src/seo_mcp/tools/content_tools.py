@@ -34,6 +34,8 @@ from urllib.parse import urlparse
 from ..clients.errors import ApiError
 from ..errors import ok
 from ._helpers import annotations, missing_site_error, require_client, resolve_site
+from ._html import content_terms
+from ._scoring import TIER_A, banded_score
 
 _SERVICE = "gsc"
 _REMEDIATION = (
@@ -279,6 +281,18 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
 
     current_rows = current.get("rows", [])
     curve = _calibrate_curve(current_rows)
+    # Topical-proximity index for winnability (roadmap C1, free GSC-personalization
+    # tier): which themes the site already ranks for. token -> queries we show for
+    # in a non-trivial position (<= 40), so a candidate sharing tokens with proven
+    # winners is more winnable.
+    prox_index: dict[str, set[str]] = {}
+    for r in current_rows:
+        q = _query_of(r)
+        pos = r.get("position", 0.0) or 0.0
+        if not q or pos <= 0 or pos > 40:
+            continue
+        for tok in content_terms(q):
+            prox_index.setdefault(tok, set()).add(q)
 
     prior_impressions: dict[str, float] = {}
     for r in prior.get("rows", []):
@@ -367,6 +381,22 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             + _W_MOMENTUM * c["momentum"]
         )
         score = round(base * c["effort"] * c["value_multiplier"], 4)
+        # Winnability (free GSC-personalization tier): can we plausibly win this,
+        # not just do we have demand. striking-distance + topical proximity to
+        # queries we already rank for. The SERP weak-spot / click-value (zero-
+        # click / AIO) axis is Wave 3 (needs a SERP client).
+        ctoks = content_terms(c["query"])
+        siblings: set[str] = set()
+        for tok in ctoks:
+            siblings |= prox_index.get(tok, set())
+        siblings.discard(c["query"])
+        topical_proximity = min(1.0, len(siblings) / 3.0)
+        winnability = banded_score(
+            {"striking_distance": c["striking"], "topical_proximity": topical_proximity},
+            {"striking_distance": 0.5, "topical_proximity": 0.5},
+            evidence_tier=TIER_A,
+            caveats=["GSC-personalization only; SERP weak-spot + click-value (zero-click/AIO) axis lands in Wave 3."],
+        )
         candidates.append(
             {
                 "topic": c["query"],
@@ -389,6 +419,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
                     "effort_multiplier": c["effort"],
                     "value_multiplier": round(c["value_multiplier"], 3),
                 },
+                "winnability": winnability,
             }
         )
 

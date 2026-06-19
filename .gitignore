@@ -38,6 +38,10 @@ marketing/
 # quote secrets and private planning content; never commit them.
 20??-??-??-*.txt
 
+# Local-only archive of moved-aside clutter (e.g. old session transcripts).
+# Never committed; kept locally for reference. See archive/README.md.
+archive/
+
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/

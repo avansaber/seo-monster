@@ -13,6 +13,249 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.9.2] - 2026-06-19 (closes the F1 release blocker; pending tester re-run)
+
+Round 3 of the tester pass signed off F6/F7/F5/F2 live (Open PageRank
+registrable-domain, Google-AIO answer-body detection + consistent SoV, SERP
+related/paa dedup, entity noise). Two residuals are closed here.
+
+### Fixed
+
+- **F1 (release blocker) — chrome filter now generalizes.** `is_chrome_heading`
+  was tuned to the specific reported strings and still leaked generic chrome on
+  fresh inputs (e.g. the newsletter CTA "Listen for weekly AI news & analysis"
+  reached the `onpage_serp_gap` actions list; "Similar Articles", "Products and
+  pricing", "Solutions", "Why Google", and product taglines leaked too).
+  Rewrote it as pattern CLASSES: subscribe/newsletter, related-content modules,
+  generic nav/footer labels, "Why <Brand>", marketing-CTA/tagline verbs (curated
+  to promotional verbs only — tutorial-step imperatives like Create/Build/Install/
+  Configure/Set up survive), sentence-period taglines, and the existing
+  listicle/length/comma rules. Real content sections (Pricing, How it works, FAQ,
+  Features) and tutorial headings are preserved.
+  **(validate, live)** re-run the IBM provided-URL + auto-fetch SERP cases; the
+  Round 3 leaks should be gone from `gaps.headings` / `actions` and from
+  `content_brief_data`'s heading union.
+- **F4 (polish) — plural-stem under-merge.** The keyword-gap stemmer split
+  `makes`/`make` (→ `mak` vs `make`) and `ads`/`ad`. Rewrote with sibilant-aware
+  plural handling (`makes`→`make`, `boxes`→`box`, `companies`→`company`,
+  `ads`→`ad`) so identical-after-plural pairs collapse to one representative.
+  Cross-stem synonyms (`ad`/`advertisement`, `dev`/`development`) are out of scope
+  for a morphological stemmer and remain as documented residual (non-gating).
+
+### Notes
+
+- **F3** was a question, not a defect: the `gsc_keyword_expand` covered/thin/none
+  caveat is unconditional in the success envelope. The Round 3 observation of a
+  caveat "not rendering" was on `serp_adjacency_expand`'s `net_new_terms` (a
+  different tool with its own caveats), not `gsc_keyword_expand`.
+
+### Validation
+
+- 567 mocked tests pass (the F1 test now asserts the Round 3 leak strings are
+  filtered AND tutorial-imperative headings survive; new F4 plural-collapse test),
+  ruff clean. Docs/manifest/server.json at 0.9.2 / 70 tools.
+
+## [0.9.1] - 2026-06-19 (post-validation fixes; superseded by 0.9.2)
+
+Fixes from the v0.9.0 tester pass (full free/GSC/GA4/HTTP surface passed Round 1;
+DataForSEO / Open PageRank / Gemini paid surface validated live Round 2 —
+`ai_citation_track` ran 42 queries, 0 failed samples). No new tools; 70 tools.
+
+### Fixed
+
+- **F1 (release blocker) — boilerplate headings leaked into the content tools.**
+  `onpage_serp_gap` turned nav/CTA/subscribe/footer headings into nonsense
+  actions ("Add a section covering: 'Table of contents' / 'Connect to 1,000+
+  apps'"), worse on the live SERP. Added a shared `is_chrome_heading` chrome
+  filter (`_html.py`) applied to `onpage_serp_gap` heading gaps + actions and
+  `content_brief_data`'s heading union. Conservative: real sections (Pricing,
+  How it works, FAQ, …) survive.
+  **(validate, live)** re-run the IBM/Google-Cloud + auto-fetch SERP cases; the
+  cited chrome strings should no longer appear in `gaps.headings` / `actions`.
+- **F6 (bug) — Open PageRank queried with the `www.` host → null scores.**
+  `onpage_serp_gap.competitor_authority` now strips to the registrable domain
+  (`_registrable`) before the lookup, so `www.`-prefixed competitors resolve.
+  **(validate, live)** `www.bcg.com` etc. now return a `page_rank`.
+- **F4 (quality) — `keyword_universe` gap flooded with morphological dupes.**
+  Added a stemmed token-set near-duplicate collapse before applying `limit`, so
+  one concept (advertisement/advertisements/advertising/ad/ads + ethos) keeps a
+  single highest-volume representative instead of eating the budget.
+  **(validate, live)** the `limit:25` gap should show distinct concepts, not
+  one-word variants of one.
+- **F7 (verify) — `ai_citation_track` Google-AIO competitor detection + null/zero.**
+  google_aio now scans the AI-Overview **answer body** (new
+  `dataforseo.serp().ai_overview_text`), not just citation domains, so named
+  competitors are detected as Gemini does. `share_of_voice` is now `null` only
+  when there is no data (n=0); with responses but zero brand mentions it is
+  `0.0`, consistent across engines.
+  **(validate, live)** on a brand-naming AIO query, google_aio competitor counts
+  should be non-zero and align with Gemini.
+- **F5 (cosmetic) — `serp_adjacency_expand` raw `per_seed.related`/`paa` duplicated.**
+  `dataforseo.serp()` now order-preserving de-dups PAA + related.
+- **F3 (clarification) — `gsc_keyword_expand` thin-vs-none boundary.** Strong-
+  sibling, zero-footprint `thin` terms (thin only via a substring coincidence)
+  now join `net_new` — they're the most promising net-new bets and were falling
+  out. Added a caveat documenting the footprint/net_new definitions.
+- **F2 (quality) — entity noise.** `gaps.entities` / `evidence.entities_to_cover`
+  used raw doc-frequency tokens (leaking "good / just / same / thank / main").
+  New `content_entities` applies a ≥4-char + broader-stopword filter.
+
+### Docs
+
+- Corrected the label on `content_opportunities`' full winnability SERP axis:
+  it is **deferred to Wave 3 by design** (unbuilt in 0.9.x), NOT "needs
+  DataForSEO" — setting a key does not change the output; the GSC-only winnability
+  block (striking-distance + topical-proximity) is the shipped Wave-2 tier, as
+  the tool's own caveat already states.
+
+### Validation
+
+- 566 mocked tests pass (8 new regression tests covering F1–F7), ruff clean.
+  The fixes are deterministic and unit-tested; the live re-confirmation of the
+  paid surfaces is a quick re-run for the tester.
+
+## [0.9.0] - 2026-06-19 (validated by tester 2026-06-19; fixes folded into 0.9.1)
+
+The discovery + AI/GEO roadmap: 11 new tools across four tracks taking
+SEOMonster from "diagnose my own data" to "discover what I don't, and prove it
+moved" — including the AI-answer surfaces. **70 tools / 13 prompts** (was 59).
+
+Design law for every new tool: the **host LLM does generation/semantic work**
+(tools stay deterministic + mockable); scores are **banded + evidence-tagged**
+(Tier A causal / B correlational / C informational), never a bare 0-100; free
+cores everywhere, with **one optional paid vendor (DataForSEO)** + free Open
+PageRank for the things Google has no API for. Three new optional clients
+(DataForSEO, Open PageRank, AI engines); no change to the lean default install.
+
+New `system_status` tool groups: `ai`, `content`, `discovery`. New (all
+optional) services: `dataforseo`, `openpagerank`, `google_ads`, `ai_engines`.
+
+### Added — Track A (AI / GEO)
+
+- `ai_citation_readiness(url)` — is a page structured to be extracted/cited by
+  LLM answer engines? Leads with a **render-blindness** check (AI crawlers do
+  not run JS), then scores Tier-A signals (statistics, quotations, cited
+  sources, no keyword-stuffing). schema.org / FAQ / llms.txt are reported as
+  **informational only** (2026 evidence: neutral-to-negative for AI citation) —
+  not scored. Free, HTTP-only.
+  **(validate, live)** real SPA → `rendered_blind=true`; a stats/quote/citation-
+  rich SSR page → moderate/high band; schema appears under `informational`, not
+  `readiness.components`.
+- `ai_referral_overview(property_id?, site_url?, days?)` — GA4 AI-referral
+  detection (native `ai-assistant` channel + configurable source-host regex) +
+  AI-crawler robots coverage (curated UA list run through the RFC-9309 verdict
+  engine). Surfaces the ~70% dark-traffic undercount and keeps AIO-clicks
+  (Organic) separate. Free (GA4 + HTTP).
+  **(validate, live)** AI sources classified into `by_source`; a robots.txt
+  blocking an AI search crawler raises the blocked-crawler caveat.
+- `ai_citation_track(prompts, brand, brand_domains?, competitors?, engines?,
+  samples?)` — **headline.** Sampled **share-of-voice with a 95% CI + run-to-run
+  volatility**, NOT an "AI rank" (single runs are statistically meaningless).
+  Queries the configured developer APIs (Perplexity / OpenAI / Anthropic /
+  Gemini) + Google AI Overviews via DataForSEO, N samples/prompt (default 7).
+  Honest bounds in every response (API ≠ logged-in UI; AIO has no API).
+  **(validate, live, paid)** confirm per-engine request shapes/model ids + auth
+  against real keys; verify visibility/CI/SoV/volatility on a frozen prompt set;
+  confirm DataForSEO `ai_overview_citations` parsing. Non-deterministic — mocks
+  cannot validate the live surface.
+
+### Added — Track B (net-new keyword discovery)
+
+- `gsc_keyword_expand(candidates, site_url?, days?, impressions_min?)` — the host
+  brainstorms candidate terms; this tool grounds them against your own GSC data
+  (footprint covered/thin/**none**) with a sibling-strength confidence band.
+  "none" = no *visible* footprint (GSC hides ~75% of impressions). Free.
+  `autocomplete_present` / `external_volume` are `null` placeholders (Wave-3
+  enrichment ships via the other tools).
+  **(validate)** mockable; live-confirm against a real property's query set.
+- `serp_adjacency_expand(seeds, include_paa?)` — FREE Google Autocomplete core
+  (public endpoint via HttpClient) + optional DataForSEO PAA/related. Degrades
+  gracefully (autocomplete-only without a key). Bing autosuggest dropped (API
+  retired 2025-08); SerpApi deliberately not the default (active DMCA suit).
+  **(validate, live)** autocomplete returns suggestions for real seeds; with a
+  DataForSEO key, PAA/related populate.
+- `keyword_universe(target_domain?, competitors?, keywords?, limit?)` — optional,
+  paid. Core value = **competitor keyword gap** (DataForSEO Domain Intersection;
+  no Google equivalent). Volume is a **provider chain**: DataForSEO → Google Ads
+  → none. With only Google Ads configured, volume returns `google_ads_pending`
+  (needs an adwords-scope OAuth re-consent — a tester live step), never faked.
+  **(validate, live)** with a DataForSEO key: gap = competitor-ranked keywords
+  minus yours; volume populates. No provider → `AUTH_MISSING`.
+
+### Added — Track C (content winnability)
+
+- `content_brief_data(target_query, topic?, competitor_urls?, site_url?, days?)` —
+  the data-wired backing for the `content_brief` prompt: fetches competitor (or
+  your own GSC-ranking) pages and returns heading union, median word-count
+  **floor**, schema types, entity coverage, + 2026 GEO directives. Host writes
+  the prose. Free (own-pages via GSC) / competitor_urls.
+  **(validate)** mockable; live-confirm heading/word-count extraction on real
+  competitor URLs.
+- `topic_cluster_map(cluster_path | pillar_url, site_url?, days?,
+  impressions_min?)` — four-quadrant gap (Defend / Optimize / Create / Monitor)
+  from owned GSC data; the **Create** quadrant = `missing_subtopics` for the host
+  to group into named subtopics. Flags cannibalization. Free, GSC-only.
+  **(validate, live)** quadrant split + missing-subtopic surfacing on a real
+  partly-owned cluster.
+
+### Added — Track D (rank loop)
+
+- `internal_link_recommend(start_url, site_url?, days?, position band,
+  relevance_floor?, limit?)` — recommends source→target internal links from
+  high-in-degree pages to GSC striking-distance pages (default position 8–20),
+  with anchor text, relevance floor, per-source cap, and anchor-dedupe guards;
+  never suggests nofollow. Free (crawl + GSC).
+  **(validate, live)** real crawl + striking-distance targets yield ranked,
+  relevant, not-already-linked recommendations.
+- `rank_change_attribution(url|urls, change_date, query?, site_url?, windows,
+  control_scope?)` — **difference-in-differences vs a matched control group**
+  (never a naked before/after): estimated clicks lift + 95% CI + a three-state
+  verdict (likely_positive / likely_negative / inconclusive) + a confounders
+  block that **auto-detects the 2025 GSC data-regime breaks** (impression bug →
+  ~2026-04, num=100 → 2025-09-11) and downgrades position reliability.
+  Observational, not causal. Free, GSC-only.
+  **(validate, live)** verdict + CI on a real change; data-regime flag fires when
+  a window overlaps the bug span.
+- `onpage_serp_gap(target_url, query?, competitor_urls?, max_competitors?)` —
+  headings / entities / schema the top results have that a target lacks → on-page
+  actions. FREE with caller `competitor_urls`, or DataForSEO SERP auto-fetch by
+  `query`. When auto-fetched, also returns winnability signals: `serp_composition`
+  (AI-Overview presence + UGC/forum dominance = zero-click risk) and, with Open
+  PageRank, competitor domain authority. Surfaces information-gain, not parity.
+  **(validate, live)** provided-URL gaps free; SERP auto-fetch + composition +
+  authority with DataForSEO/OPR keys.
+
+### Changed
+
+- `content_opportunities` — additive per-candidate **`winnability`** block
+  (banded: striking-distance + topical-proximity, GSC-personalization tier). The
+  existing `components` / `score` / `weights` contract is unchanged.
+- `clients/dataforseo.py` `serp()` — additive `ai_overview_citations` (for
+  `ai_citation_track`'s Google AIO path).
+- Version → `0.9.0`; branded HTTP User-Agent → `SEOMonster/0.9.0`.
+
+### Provider setup (all optional)
+
+- **DataForSEO** (the one paid vendor): `DATAFORSEO_LOGIN` + `DATAFORSEO_PASSWORD`
+  (TOML `[dataforseo]`). Unlocks SERP/PAA/related, keyword volume/difficulty/
+  intent, competitor gap, Google AIO citations.
+- **Open PageRank** (free backlink proxy): `OPENPAGERANK_API_KEY` (`[openpagerank]`).
+- **Google Ads** (volume alternative, recognized-but-pending): `GOOGLE_ADS_DEVELOPER_TOKEN`
+  + `GOOGLE_ADS_CUSTOMER_ID` (`[google_ads]`). Needs an adwords-scope OAuth
+  re-consent before live use.
+- **AI engines** (for `ai_citation_track`): `PERPLEXITY_API_KEY`, `OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (`[ai_engines]`). Any subset; the tool
+  uses whichever are set, plus Google AIO if DataForSEO is configured.
+
+### Validation notes
+
+- 558 mocked tests pass (102 new), ruff clean. Pure-GSC / HTTP / arithmetic
+  tools are fully unit-tested. The external/paid/non-deterministic surfaces
+  (`ai_citation_track`, `keyword_universe`, `serp_adjacency_expand` PAA,
+  `onpage_serp_gap` auto-fetch) are mocked at the client seam in dev and are
+  **live-probe-only** for this pass — confirm real request/response shapes,
+  auth, and field mappings against live keys.
+
 ## [0.8.2] - 2026-06-02
 
 `cf_managed_robots` - the managed-robots / Content-Signals control tool, part 2

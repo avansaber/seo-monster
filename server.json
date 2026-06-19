@@ -6,13 +6,13 @@
     "url": "https://github.com/avansaber/seo-monster",
     "source": "github"
   },
-  "version": "0.8.2",
+  "version": "0.9.2",
   "websiteUrl": "https://seomonster.avansaber.com",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "seo-monster",
-      "version": "0.8.2",
+      "version": "0.9.2",
       "transport": {
         "type": "stdio"
       },
@@ -83,6 +83,69 @@
         {
           "name": "SEO_MCP_ALLOW_DESTRUCTIVE",
           "description": "Set to 'true' to enable the Cloudflare cache-purge tools. Default false: all destructive tools refuse to run.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "DATAFORSEO_LOGIN",
+          "description": "DataForSEO Basic-auth login. Optional (v0.9). Unlocks SERP/PAA/related, keyword volume+difficulty+intent, competitor keyword-gap, and Google AI Overview citations for keyword_universe / serp_adjacency_expand / onpage_serp_gap auto-fetch / ai_citation_track.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "DATAFORSEO_PASSWORD",
+          "description": "DataForSEO Basic-auth password. Optional (v0.9). Required alongside DATAFORSEO_LOGIN.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "OPENPAGERANK_API_KEY",
+          "description": "Open PageRank (DomCop) free API key. Optional (v0.9). Free competitor domain-authority proxy for onpage_serp_gap.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "PERPLEXITY_API_KEY",
+          "description": "Perplexity Sonar API key. Optional (v0.9). One of the AI answer-engines for ai_citation_track.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "description": "OpenAI API key (Responses web_search). Optional (v0.9). One of the AI answer-engines for ai_citation_track.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "description": "Anthropic API key (web_search tool). Optional (v0.9). One of the AI answer-engines for ai_citation_track.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "GEMINI_API_KEY",
+          "description": "Google Gemini API key (Search grounding). Optional (v0.9). One of the AI answer-engines for ai_citation_track.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "GOOGLE_ADS_DEVELOPER_TOKEN",
+          "description": "Google Ads API developer token. Optional (v0.9). Volume-only alternative to DataForSEO for keyword_universe; live use also needs an adwords-scope OAuth re-consent.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "GOOGLE_ADS_CUSTOMER_ID",
+          "description": "Google Ads customer id (digits). Optional (v0.9). Required alongside GOOGLE_ADS_DEVELOPER_TOKEN.",
           "isRequired": false,
           "format": "string",
           "isSecret": false

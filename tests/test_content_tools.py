@@ -212,6 +212,18 @@ def test_ga4_reachable_but_no_conversions_reports_distinct_status(
     assert all(c["components"]["value_multiplier"] == 1.0 for c in d["candidates"])
 
 
+def test_winnability_block_present_and_shaped(make_gsc_client, make_config):
+    # Additive winnability block (roadmap C1 free tier); must NOT alter the
+    # existing components/score contract.
+    d = _run(make_gsc_client, make_config, impressions_min=100)["data"]
+    for c in d["candidates"]:
+        w = c["winnability"]
+        assert {"band", "score", "components", "evidence_tier"} <= set(w)
+        assert w["evidence_tier"] == "A"
+        assert set(w["components"]) <= {"striking_distance", "topical_proximity"}
+        assert w["band"] in ("low", "moderate", "high")
+
+
 def test_missing_site_returns_invalid_input(make_gsc_client, make_config):
     cfg = make_config()  # no SEO_MCP_GSC_DEFAULT_SITE
     res = content_tools.content_opportunities({}, cfg, _clients(make_gsc_client))

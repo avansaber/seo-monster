@@ -235,7 +235,7 @@ def test_group_tools_buckets_by_prefix():
 
 def test_group_tools_always_has_all_service_keys():
     catalog = group_tools([])
-    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "indexnow", "crux", "technical", "general"}
+    assert set(catalog) == {"gsc", "ga4", "psi", "cf", "indexnow", "crux", "ai", "technical", "content", "discovery", "general"}
     assert all(v == [] for v in catalog.values())
 
 

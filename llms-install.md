@@ -6,7 +6,7 @@ For human-readable install + auth instructions, see [README.md](README.md).
 
 ## What this MCP server gives you
 
-59 tools across **Google Search Console, Google Analytics 4, PageSpeed
+70 tools across **Google Search Console, Google Analytics 4, PageSpeed
 Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), content-
 opportunity intelligence, plus stdlib HTTP tools for technical-SEO checks**
 (`inspect_meta`, `check_canonical`, `redirect_chain_audit`,
@@ -16,6 +16,17 @@ opportunity intelligence, plus stdlib HTTP tools for technical-SEO checks**
 `robots_ai_posture`). Cloudflare includes redirect management (single + bulk,
 for migrations), a zone SEO-settings audit with remediation, and managed
 robots.txt / Content-Signals control (`cf_managed_robots`).
+
+**v0.9 adds the discovery + AI/GEO surface** (all optional providers are
+pluggable; the free GSC/GA4/HTTP core works without keys): AI/GEO citation
+(`ai_citation_readiness`, `ai_referral_overview`, `ai_citation_track`),
+net-new keyword discovery (`gsc_keyword_expand`, `serp_adjacency_expand`,
+`keyword_universe`), data-wired content briefs + topic-cluster mapping
+(`content_brief_data`, `topic_cluster_map`), internal-link recommendations
+(`internal_link_recommend`), rank-change attribution (`rank_change_attribution`),
+and on-page SERP-gap analysis (`onpage_serp_gap`). Optional vendors: DataForSEO
+(SERP/keyword/competitor-gap/AIO), Open PageRank (free domain authority), and AI
+answer-engine keys (Perplexity/OpenAI/Anthropic/Gemini) for citation tracking.
 
 13 workflow prompts: `content_workflow`, `content_brief`, `content_outline`,
 `content_article`, `content_performance`, `seo_setup_audit`, `weekly_review`,
@@ -92,6 +103,10 @@ env vars only for the services you intend to use:
 | `SEO_MCP_INDEXNOW_KEY` | IndexNow | required for IndexNow tools only |
 | `SEO_MCP_INDEXNOW_KEY_LOCATION` | IndexNow | optional |
 | `SEO_MCP_ALLOW_DESTRUCTIVE` | Cloudflare writes (cache purge, redirects, settings, managed robots.txt) | required to unlock; default off |
+| `DATAFORSEO_LOGIN` + `DATAFORSEO_PASSWORD` | DataForSEO (SERP/PAA, keyword volume+difficulty+intent, competitor gap, AIO) | optional (v0.9) |
+| `OPENPAGERANK_API_KEY` | Open PageRank (free competitor domain authority) | optional (v0.9) |
+| `PERPLEXITY_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | AI answer-engines for `ai_citation_track` | optional (v0.9; any subset) |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` + `GOOGLE_ADS_CUSTOMER_ID` | Google Ads volume (alt to DataForSEO; needs adwords-scope consent) | optional (v0.9) |
 
 ## Discovery
 

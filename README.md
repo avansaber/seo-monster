@@ -65,7 +65,7 @@ shell profile, so MCP configs need the full path.
 
 ## Tools
 
-59 tools, grouped by service. All return the same result envelope (see
+70 tools, grouped by service. All return the same result envelope (see
 [Result envelope](#result-envelope)). Call `system_status` first if unsure what
 is configured. The server also publishes thirteen named [workflow prompts](#workflow-prompts).
 
@@ -123,7 +123,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   frequencies.
 
 <a name="content"></a>
-**Content intelligence (1, v0.7.0)**
+**Content intelligence (4)**
 - `content_opportunities(site_url?, days?, count?, impressions_min?)` - ranks
   data-grounded content topics from your own Search Console data: fuses
   CTR-vs-expected gap (curve self-calibrated from your own per-position CTR),
@@ -134,7 +134,68 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   reports whether that ran and why (`applied` / `no_ga4_property` /
   `ga4_unreachable` / `no_conversions`). Prioritizes demand you already have;
   does not do cold-start keyword research or write the content. Pairs with the
-  content workflow prompts below. (GA4 weighting v0.7.3)
+  content workflow prompts below. (GA4 weighting v0.7.3) v0.9.0 adds an additive
+  per-candidate `winnability` block (banded: striking-distance + topical-
+  proximity, GSC-personalization tier; existing fields unchanged).
+- `content_brief_data(target_query, competitor_urls?, topic?, site_url?, days?)` -
+  data-wired backing for a content brief: fetches the competitor pages (or your
+  own GSC-ranking pages as a fallback) and returns the heading union, median
+  word-count floor, schema types, and entity coverage, plus the 2026 GEO writing
+  directives and validation rules. The host writes the prose; SEOMonster brings
+  rules + evidence. Backs the `content_brief` prompt. (v0.9.0)
+- `topic_cluster_map(cluster_path | pillar_url, site_url?, days?, impressions_min?)`
+  - maps a content cluster from your own GSC data and surfaces missing subtopics.
+  Classifies each cluster query into defend / optimize / create / monitor by
+  demand and best position; the create quadrant is your missing-subtopic list.
+  Flags cannibalization. GSC-only; honest about the ~47% query anonymization. (v0.9.0)
+- `rank_change_attribution(url | urls, change_date, query?, site_url?, pre_days?, post_days?, gap_days?, control_scope?)`
+  - estimates whether an on-site change moved a page's clicks via
+  difference-in-differences against a matched control group (never a naked
+  before/after). Returns an estimated lift with a 95% CI, a three-state verdict
+  (likely_positive / likely_negative / inconclusive), and a confounders block
+  that auto-detects the 2025 GSC data-regime breaks (impression bug, num=100) and
+  downgrades position reliability. Observational, not causal -- a server-side
+  split test is the only true causal test. GSC-only. (v0.9.0)
+
+<a name="ai"></a>
+**AI / GEO citation (3, v0.9.0)** - whether the AI answer surfaces reach and cite you.
+- `ai_citation_readiness(url)` - is a page structured to be extracted/cited by
+  LLM answer engines? Leads with a render-blindness check (GPTBot / ClaudeBot /
+  PerplexityBot fetch but do not run JS, so a client-rendered SPA is invisible to
+  them), then scores evidence-backed signals (statistics, quotations, cited
+  sources, no keyword-stuffing). schema.org / FAQ / llms.txt are reported as
+  informational only -- the 2026 evidence does not support them as AI-citation
+  drivers, so they are not scored. Free, HTTP-only.
+- `ai_referral_overview(property_id?, site_url?, days?)` - first-party AI traffic:
+  GA4 referral sessions from AI apps (the native `ai-assistant` channel plus a
+  configurable source-host regex) and AI-crawler robots coverage (GPTBot,
+  ClaudeBot, PerplexityBot, ...). Surfaces the ~70% dark-traffic undercount and
+  keeps AI-Overview clicks (counted as Organic) separate. Free.
+- `ai_citation_track(prompts, brand, brand_domains?, competitors?, engines?, samples?)`
+  - sampled brand mention + citation share-of-voice across AI engines
+  (Perplexity / OpenAI / Anthropic / Gemini APIs + Google AI Overviews via
+  DataForSEO) for a managed prompt set, vs competitors. N samples/prompt (default
+  7) with a 95% CI, share-of-voice, and run-to-run volatility -- NOT an "AI rank"
+  (single runs are statistically meaningless). Discloses that developer-API output
+  differs from the logged-in consumer UI and that AIO has no API. Paid +
+  non-deterministic. Needs at least one engine key and/or DataForSEO.
+
+<a name="discovery"></a>
+**Keyword discovery (3, v0.9.0)** - find terms you don't already rank for.
+- `gsc_keyword_expand(candidates, site_url?, days?, impressions_min?)` - you
+  (the host) brainstorm candidate terms from your winning queries; this grounds
+  each against your own Search Console data (footprint covered / thin / none) with
+  a sibling-strength confidence band. "none" = no VISIBLE footprint (GSC hides
+  ~75% of impressions), so net-new terms are scored hypotheses. Free.
+- `serp_adjacency_expand(seeds, include_paa?)` - expand seed terms into adjacent
+  terms. FREE core: Google Autocomplete (no key). Optional People-Also-Ask +
+  related searches via DataForSEO. Returns per-seed suggestions plus the
+  aggregated net-new terms; degrades gracefully without a key.
+- `keyword_universe(target_domain?, competitors?, keywords?, limit?)` - optional,
+  paid. Core value: the competitor keyword GAP (DataForSEO Domain Intersection;
+  no Google equivalent). Optional search volume / difficulty / intent via a
+  provider chain (DataForSEO, else Google Ads volume-only). External volume is a
+  degraded directional signal -- a tiebreaker, never a gate.
 
 <a name="ga4"></a>
 **Google Analytics 4 (7)**
@@ -277,7 +338,7 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   Time metrics use `p75_ms`; the unitless CLS uses `p75`. Small origins return
   a `no_data` envelope. (v0.7.1)
 
-**Structured data + cross-site (5, v0.4.0)** - no new credentials.
+**Structured data + cross-site + on-page (7)** - no new credentials (the v0.9 SERP auto-fetch is optional).
 - `inspect_schema(url)` - extract every JSON-LD block from a page; report
   the schema.org @type counts and a sample entity per type.
 - `validate_schema(url, types?)` - verdict each JSON-LD entity against the
@@ -298,6 +359,19 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
   `{performance: 80, LCP_ms: 2500, CLS: 0.1}`. Per-metric pass/fail and
   an overall verdict. Useful as a CI / pre-deploy gate inside an LLM
   session. Reuses `PSI_API_KEY`.
+- `internal_link_recommend(start_url, site_url?, days?, position_min?, position_max?, relevance_floor?, limit?)`
+  - recommends specific source->target internal links from high-in-degree pages
+  to GSC striking-distance pages (default position 8-20 with real impressions),
+  with anchor text. Ranks sources by lexical relevance + internal authority, skips
+  pages that already link the target, balances anchor text, and never suggests
+  nofollow. Built on `internal_link_graph` + GSC. Free. (v0.9.0)
+- `onpage_serp_gap(target_url, query?, competitor_urls?, max_competitors?)` - the
+  headings, entities, and schema the top SERP results have that a target page
+  lacks, turned into on-page actions. FREE with caller-supplied `competitor_urls`;
+  optional DataForSEO SERP auto-fetch by `query`, which also returns winnability
+  signals (`serp_composition` AI-Overview / UGC zero-click risk) and, with Open
+  PageRank, competitor domain authority. Surfaces information gain, not just
+  parity. Boilerplate/nav headings are filtered out (pattern-class chrome filter). (v0.9.0; F6 fix v0.9.1, F1 generalized v0.9.2)
 
 Every tool's `tools/list` entry carries the MCP standard annotations
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP
@@ -691,6 +765,10 @@ wins. The config file is normally written for you by `seo-monster setup` (with
 | `SEO_MCP_INDEXNOW_KEY_LOCATION`  | IndexNow| Override default key-file URL (optional).        |
 | `SEO_MCP_ALLOW_DESTRUCTIVE`      | all     | `true` enables cache-purge tools. Default off.   |
 | `SEO_MCP_CONFIG`                 | all     | Path to the TOML config file.                    |
+| `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | DataForSEO | Optional (v0.9): SERP/PAA, keyword volume/difficulty/intent, competitor gap, Google AIO. |
+| `OPENPAGERANK_API_KEY`           | Open PageRank | Optional (v0.9): free competitor domain authority. |
+| `PERPLEXITY_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | AI engines | Optional (v0.9): engines for `ai_citation_track` (any subset). |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_CUSTOMER_ID` | Google Ads | Optional (v0.9): volume alt to DataForSEO (needs adwords-scope consent). |
 
 Config file fallback at `~/.config/seo-mcp/config.toml` (or `SEO_MCP_CONFIG`):
 
@@ -716,6 +794,25 @@ zone      = "example.com"
 
 [server]
 allow_destructive = false
+
+# Optional v0.9 providers (discovery + AI/GEO). The free GSC/GA4/HTTP core
+# works without any of these; each tool degrades gracefully when unset.
+[dataforseo]
+# login    = "..."
+# password = "..."
+
+[openpagerank]
+# api_key = "..."
+
+[ai_engines]
+# perplexity = "..."
+# openai     = "..."
+# anthropic  = "..."
+# gemini     = "..."
+
+[google_ads]
+# developer_token = "..."   # volume alt to DataForSEO; needs adwords-scope OAuth
+# customer_id     = "..."
 ```
 
 <a name="errors"></a>

@@ -54,6 +54,17 @@ class Config:
     cf_zone: str | None
     indexnow_key: str | None
     indexnow_key_location: str | None
+    # v0.9 roadmap Wave 3: optional external keyword/SERP/backlink providers.
+    dataforseo_login: str | None
+    dataforseo_password: str | None
+    openpagerank_key: str | None
+    google_ads_developer_token: str | None
+    google_ads_customer_id: str | None
+    # AI answer-engine keys for ai_citation_track (Wave 4).
+    perplexity_api_key: str | None
+    openai_api_key: str | None
+    anthropic_api_key: str | None
+    gemini_api_key: str | None
     allow_destructive: bool
     source_path: str | None  # the config file actually read, or None
 
@@ -131,6 +142,10 @@ def load_config(
     psi_file = file_data.get("psi", {})
     cf_file = file_data.get("cloudflare", {})
     indexnow_file = file_data.get("indexnow", {})
+    dataforseo_file = file_data.get("dataforseo", {})
+    openpagerank_file = file_data.get("openpagerank", {})
+    google_ads_file = file_data.get("google_ads", {})
+    ai_engines_file = file_data.get("ai_engines", {})
     server_file = file_data.get("server", {})
 
     def pick(env_key: str, file_value: Any) -> str | None:
@@ -176,6 +191,15 @@ def load_config(
         cf_zone=pick("CF_ZONE", cf_file.get("zone")),
         indexnow_key=pick("SEO_MCP_INDEXNOW_KEY", indexnow_file.get("key")),
         indexnow_key_location=pick("SEO_MCP_INDEXNOW_KEY_LOCATION", indexnow_file.get("key_location")),
+        dataforseo_login=pick("DATAFORSEO_LOGIN", dataforseo_file.get("login")),
+        dataforseo_password=pick("DATAFORSEO_PASSWORD", dataforseo_file.get("password")),
+        openpagerank_key=pick("OPENPAGERANK_API_KEY", openpagerank_file.get("api_key")),
+        google_ads_developer_token=pick("GOOGLE_ADS_DEVELOPER_TOKEN", google_ads_file.get("developer_token")),
+        google_ads_customer_id=pick("GOOGLE_ADS_CUSTOMER_ID", google_ads_file.get("customer_id")),
+        perplexity_api_key=pick("PERPLEXITY_API_KEY", ai_engines_file.get("perplexity")),
+        openai_api_key=pick("OPENAI_API_KEY", ai_engines_file.get("openai")),
+        anthropic_api_key=pick("ANTHROPIC_API_KEY", ai_engines_file.get("anthropic")),
+        gemini_api_key=pick("GEMINI_API_KEY", ai_engines_file.get("gemini")),
         allow_destructive=allow_destructive,
         source_path=source_path,
     )
