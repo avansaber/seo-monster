@@ -1,56 +1,88 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="SEOMonster" width="120" height="120">
-</p>
+<div align="center">
 
-<h1 align="center">SEOMonster</h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/wordmark-light.svg">
+  <img alt="SEOMonster" src="assets/wordmark-light.svg" width="440">
+</picture>
 
-<p align="center">
-  <em>Turn the AI assistant you already use into an SEO analyst that works from your own data.</em>
-</p>
+<h3>Don't learn another SEO dashboard. Just ask.</h3>
 
-<p align="center">
-  <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/v/seo-monster?color=2BD9A8" alt="PyPI version"></a>
+<p>The open-source SEO analyst that lives inside the AI assistant you already use —<br>working from <b>your own</b> Search Console, Analytics, and PageSpeed data, on your machine.</p>
+
+<p>
+  <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/v/seo-monster?color=2BD9A8&label=pypi" alt="PyPI version"></a>
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/pyversions/seo-monster" alt="Python versions"></a>
+  <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/dm/seo-monster?color=2BD9A8" alt="Downloads"></a>
+  <a href="https://github.com/avansaber/seo-monster/actions"><img src="https://img.shields.io/badge/tests-567%20passing-2BD9A8" alt="Tests"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
-  <a href="https://seomonster.avansaber.com"><img src="https://img.shields.io/badge/website-seomonster.avansaber.com-2BD9A8" alt="Website"></a>
+  <a href="https://github.com/avansaber/seo-monster/stargazers"><img src="https://img.shields.io/github/stars/avansaber/seo-monster?style=flat&color=2BD9A8" alt="GitHub stars"></a>
 </p>
 
-**SEOMonster turns the AI assistant you already use into an SEO analyst that
-works from your own data.** Ask it what to write next and it surfaces the topics
-your site is *almost* ranking for; ask whether a page is ready and it checks the
-technical SEO before you publish; then it nudges Google and Bing to index the
-page and measures whether rankings actually moved. It works from your own Google
-Search Console, Analytics 4, and PageSpeed data, which stays on your machine -
-there's no new dashboard to learn, you just chat with Claude (or Cursor, Cline,
-or Codex).
+<p>
+  <a href="https://cursor.com/en/install-mcp?name=seomonster&amp;config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJzZW8tbW9uc3RlciJdfQ=="><img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" height="32"></a>
+  &nbsp;
+  <a href="https://insiders.vscode.dev/redirect/mcp/install?name=seomonster&amp;config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22seo-monster%22%5D%7D"><img src="https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" height="32"></a>
+  &nbsp;
+  <a href="https://seomonster.avansaber.com"><img src="https://img.shields.io/badge/Website-seomonster.avansaber.com-555" alt="Website" height="32"></a>
+</p>
 
-<sub>The rest of this README is the technical reference for installing and
-configuring the server. If you just want the product overview, see
-[seomonster.avansaber.com](https://seomonster.avansaber.com).</sub>
+</div>
 
-SEOMonster is an MCP server for SEO workflows. It exposes strictly SEO-focused
-tools over **Google Search Console**, **Google Analytics 4**, **PageSpeed
-Insights (PSI)**, **Cloudflare**, **IndexNow**, the **Chrome UX Report (CrUX)
-History API**, and a built-in HTTP client for technical-SEO checks
-(`inspect_meta`, `check_canonical`, `redirect_chain_audit`,
-`mixed_content_check`, `robots_txt_validate`, `sitemap_validate`,
-`sitemap_health`), so an AI host (Claude Desktop, Cline, Cursor, Codex) can
-query your own data with your own credentials.
+---
 
-- **User-credential-driven.** No auth is baked into the package. Every credential
-  is resolved at runtime from your environment or a config file. The published
-  package contains zero secrets.
-- **Read-first.** Reads are always available. The two routine SEO writes (sitemap
-  submit, indexing request) are available by default. The Cloudflare write tools
-  (cache purge, redirect management, settings update, managed robots.txt) are
-  gated behind `SEO_MCP_ALLOW_DESTRUCTIVE` and the riskier ones also need a
-  per-call `confirm` token.
-- **Lean.** Standard library plus the `mcp` SDK and the Google client libraries.
-  PageSpeed Insights and Cloudflare ride on `urllib`, no extra HTTP dependency.
+You don't open a new tool — you just ask, in plain English, inside **Claude** (or Cursor / Cline / Codex):
 
-> Published on PyPI as **`seo-monster`**, so the `uvx` command is
-> `seo-monster`. The import package is `seo_mcp`, and `seo-mcp` stays as a
-> dev/local console alias.
+> **You** &nbsp; *"What should I write about next?"*
+>
+> **🦖 SEOMonster** &nbsp; Pulls your Search Console and surfaces three topics you're *almost* ranking for — positions 8–20 with real demand — ranked by opportunity. Say the word and it drafts the brief.
+
+| You ask … | … SEOMonster does |
+| :-- | :-- |
+| *"What should I write about next?"* | Surfaces near-ranking topics from **your own** Search Console demand |
+| *"Is this page ready to publish?"* | Runs the technical-SEO + structured-data checks before you ship |
+| *"Get this indexed."* | Nudges Google (Indexing API) and Bing / Yandex (IndexNow) |
+| *"Did my change actually move rankings?"* | Before/after attribution vs a matched control group — with a confidence interval, not a guess |
+| *"Is ChatGPT recommending us, or our competitors?"* | Tracks your brand's **share of voice** across the AI answer engines |
+
+**70 tools** across Search Console, GA4, PageSpeed, Cloudflare, AI-citation tracking, keyword discovery, and technical SEO — every one returning the same JSON result envelope, every one driven by your own credentials. No new dashboard to learn; you chat with the assistant you already use.
+
+> [!NOTE]
+> Published on PyPI as **`seo-monster`** (so the command is `uvx seo-monster`). The import package is `seo_mcp`; `seo-mcp` is a dev/local alias. The package ships **zero secrets** — every credential is resolved at runtime from your own environment or config file.
+
+- **Your data, your machine.** User-credential-driven; nothing is sent to any third party.
+- **Read-first, safe by default.** Reads always work; the two routine writes (sitemap submit, indexing request) are on by default; the Cloudflare write tools (cache purge, redirects, settings, managed robots.txt) are gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, and the riskier ones also need a per-call `confirm` token.
+- **Lean.** Standard library + the `mcp` SDK + the Google client libraries; PageSpeed and Cloudflare ride on `urllib`, no extra HTTP dependency.
+
+## Quickstart
+
+> [!TIP]
+> Fastest path: the **one-click install** buttons above. Or add it to any MCP client by hand:
+
+```json
+{
+  "mcpServers": {
+    "seomonster": { "command": "uvx", "args": ["seo-monster"] }
+  }
+}
+```
+
+Run the one-time Google sign-in once — `uvx --from seo-monster seo-monster auth` — then ask your assistant to call **`system_status`** to confirm what's connected. Full per-client setup and credentials are in [Install](#install) and [Auth](#auth).
+
+## How it works
+
+```mermaid
+flowchart LR
+  U["You — plain English"] --> H["Claude · Cursor · Cline · Codex"]
+  H -- "MCP · stdio" --> S["SEOMonster<br/>70 tools"]
+  S --> GSC["Search Console · GA4"]
+  S --> PSI["PageSpeed · CrUX"]
+  S --> CF["Cloudflare · IndexNow"]
+  S --> AI["AI engines · SERP<br/>(optional)"]
+  S -. "your creds · your machine" .-> U
+```
+
+SEOMonster is a stdio **MCP server**: your AI host launches it, it calls Google / Cloudflare / the AI engines with *your* credentials, and returns a consistent JSON envelope the assistant reads back to you in plain language.
 
 ## Requirements
 
@@ -73,6 +105,10 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 - `system_status` - which services are configured/reachable, the Google auth
   method and scopes, whether destructive mode is on, the full tool catalog,
   and the list of registered prompts.
+
+<details>
+<summary><b>📂 Browse all 70 tools</b> — grouped by service (GSC · GA4 · AI/GEO · keyword discovery · content · PageSpeed/CrUX · Cloudflare · IndexNow · technical · schema). Click to expand.</summary>
+<br>
 
 <a name="gsc"></a>
 **Google Search Console (18)**
@@ -376,6 +412,8 @@ is configured. The server also publishes thirteen named [workflow prompts](#work
 Every tool's `tools/list` entry carries the MCP standard annotations
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so MCP
 hosts can decide what to auto-approve and what to confirm.
+
+</details>
 
 ## Workflow prompts
 

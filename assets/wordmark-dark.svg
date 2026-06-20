@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 150" role="img" aria-label="SEOMonster wordmark, light on dark">
+  <title>SEOMonster</title>
+  <rect width="600" height="150" fill="#0E1726"/>
+  <g transform="translate(20 27)">
+    <rect width="96" height="96" rx="18" fill="#F5F7FA"/>
+    <g transform="translate(15 21)">
+      <path d="M3 5 L3 50 Q3 55 8 55 L58 55 Q63 55 63 50 L63 5 L52 16 L44 7 L33 18 L22 7 L14 16 Z"
+            fill="#2BD9A8"/>
+      <circle cx="21" cy="29" r="4.5" fill="#0E1726"/>
+      <circle cx="45" cy="29" r="4.5" fill="#0E1726"/>
+      <circle cx="22.5" cy="27.5" r="1.4" fill="#F5F7FA"/>
+      <circle cx="46.5" cy="27.5" r="1.4" fill="#F5F7FA"/>
+      <path d="M18 42 L23 45 L30 41 L37 45 L44 41 L49 45" stroke="#0E1726" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+  </g>
+  <text x="138" y="95"
+        font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        font-weight="700"
+        font-size="64"
+        letter-spacing="-1.6"
+        fill="#F5F7FA">SEOMonster</text>
+  <rect x="138" y="108" width="56" height="4" rx="2" fill="#2BD9A8"/>
+</svg>
