@@ -16,6 +16,7 @@ for the pure-logic unit tests.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,33 @@ def _service_account_credentials(config: Config, scopes: list[str]) -> Any:
     )
 
 
+def _granted_scopes(token_path: str) -> set[str]:
+    """Return the scopes Google actually *granted*, read from the token file.
+
+    ``creds.scopes`` cannot be used for this. ``from_authorized_user_file(path,
+    scopes)`` passes the requested scopes straight through to
+    ``from_authorized_user_info``, which only falls back to the file's own
+    ``scopes`` key when the caller passes ``None`` -- so the credentials object
+    echoes back whatever we asked for and can never disagree with it
+    (GH issue #2).
+
+    google-auth accepts the file's ``scopes`` key as either a list or a
+    space-delimited string, so both forms are normalized here. Treating a
+    string as a sequence would produce a set of single characters and lock out
+    every user holding a string-form token.
+
+    An unreadable, absent, or malformed value yields an empty set so the caller
+    fails toward re-consent rather than proceeding on an assumption.
+    """
+    try:
+        raw = json.loads(Path(token_path).read_text()).get("scopes")
+    except (OSError, ValueError, AttributeError):
+        return set()
+    if isinstance(raw, str):
+        return set(raw.split(" "))
+    return set(raw or [])
+
+
 def _oauth_credentials_silent(config: Config, scopes: list[str]) -> Any:
     """Load + refresh the cached OAuth token. Never opens a browser.
 
@@ -89,14 +117,16 @@ def _oauth_credentials_silent(config: Config, scopes: list[str]) -> Any:
             f"the call from your MCP host."
         )
 
-    creds = Credentials.from_authorized_user_file(token_path, scopes)
-    scopes_ok = set(scopes).issubset(set(creds.scopes or []))
-    if not scopes_ok:
+    # Check coverage BEFORE handing the file to google-auth: a malformed token
+    # file makes ``from_authorized_user_file`` raise a bare AttributeError,
+    # which is exactly the unactionable error this guard exists to replace.
+    if not set(scopes).issubset(_granted_scopes(token_path)):
         raise MissingGoogleAuth(
             "Cached OAuth token does not cover the scopes this tool needs. "
             "Re-run `seo-monster auth` from a terminal to re-consent with the "
             "broader scope set."
         )
+    creds = Credentials.from_authorized_user_file(token_path, scopes)
     if creds.valid:
         return creds
     if creds.expired and creds.refresh_token:

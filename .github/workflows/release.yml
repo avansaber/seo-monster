@@ -59,9 +59,14 @@ jobs:
           py=$(grep -E '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')
           init=$(grep -E '__version__' src/seo_mcp/__init__.py | sed -E 's/.*"(.*)".*/\1/')
           mf=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          # server.json feeds the official MCP registry. It was not gated here,
+          # which is how the registry entry drifted to v0.5.1 while PyPI was on
+          # 0.9.2 (PLAN §11.4.1). Both of its version fields are checked.
+          sj=$(python3 -c "import json; print(json.load(open('server.json'))['version'])")
+          sjp=$(python3 -c "import json; d=json.load(open('server.json')); print(','.join(sorted({p['version'] for p in d.get('packages', [])})) or d['version'])")
           tag="${{ steps.version.outputs.version }}"
-          echo "tag=$tag  pyproject=$py  __init__=$init  manifest=$mf"
-          [ "$py" = "$tag" ] && [ "$init" = "$tag" ] && [ "$mf" = "$tag" ] || {
+          echo "tag=$tag  pyproject=$py  __init__=$init  manifest=$mf  server.json=$sj  server.json/packages=$sjp"
+          [ "$py" = "$tag" ] && [ "$init" = "$tag" ] && [ "$mf" = "$tag" ] && [ "$sj" = "$tag" ] && [ "$sjp" = "$tag" ] || {
             echo "version stamps disagree with the tag; refusing to release"
             exit 1
           }

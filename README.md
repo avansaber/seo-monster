@@ -14,7 +14,7 @@
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/v/seo-monster?color=2BD9A8&label=pypi" alt="PyPI version"></a>
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/pyversions/seo-monster" alt="Python versions"></a>
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/dm/seo-monster?color=2BD9A8" alt="Downloads"></a>
-  <a href="https://github.com/avansaber/seo-monster/actions"><img src="https://img.shields.io/badge/tests-567%20passing-2BD9A8" alt="Tests"></a>
+  <a href="https://github.com/avansaber/seo-monster/actions"><img src="https://img.shields.io/badge/tests-575%20passing-2BD9A8" alt="Tests"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
   <a href="https://github.com/avansaber/seo-monster/stargazers"><img src="https://img.shields.io/github/stars/avansaber/seo-monster?style=flat&color=2BD9A8" alt="GitHub stars"></a>
 </p>

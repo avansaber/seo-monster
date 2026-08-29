@@ -1,0 +1,32 @@
+# Dependabot is the real control against the failure that broke v0.9.2.
+#
+# mcp 2.0.0 shipped on 2026-07-28 and removed the decorator registration API.
+# Our dependency was declared `mcp>=1.0.0` with no ceiling, so every fresh
+# resolve produced a server that could not start -- and CI never noticed,
+# because it only runs on push and there were no pushes for 69 days.
+#
+# Opening PRs for dependency bumps fixes both halves of that: we see the major
+# version arrive, and the repository stays active (GitHub disables scheduled
+# workflows after 60 days of inactivity, which would otherwise switch off the
+# cron in ci.yml).
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - "dependencies"

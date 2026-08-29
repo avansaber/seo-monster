@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "seo-monster",
   "display_name": "SEOMonster",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Local, user-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights (PSI), Cloudflare, IndexNow, Chrome UX Report (CrUX), and technical-SEO HTTP primitives.",
   "long_description": "SEOMonster is an open-source MCP server that exposes strictly SEO-focused tools across Google Search Console, Google Analytics 4, PageSpeed Insights (PSI), Cloudflare, IndexNow, the Chrome UX Report (CrUX) History API, and a built-in HTTP client for technical-SEO checks (inspect_meta, check_canonical, redirect_chain_audit, mixed_content_check, robots_txt_validate, sitemap_validate, sitemap_health). All credentials are user-supplied and stay on your machine: nothing is shared with any third party. Reads are always available; the two routine SEO writes (sitemap submit, indexing request) and IndexNow notifications are available by default; only Cloudflare cache-purge tools are gated behind an explicit opt-in. v0.9 adds AI/GEO citation tools (ai_citation_readiness, ai_referral_overview, ai_citation_track), net-new keyword discovery (gsc_keyword_expand, serp_adjacency_expand, keyword_universe), data-wired content briefs + topic-cluster mapping, internal-link recommendations, rank-change attribution, and on-page SERP-gap analysis. The keyword/SERP/AI-engine providers (DataForSEO, Open PageRank, Perplexity/OpenAI/Anthropic/Gemini) are all optional and pluggable; the free GSC/GA4/HTTP core works without them.",
   "author": {
@@ -31,7 +31,6 @@
     "https://policies.google.com/privacy",
     "https://www.cloudflare.com/privacypolicy/"
   ],
-
   "server": {
     "type": "uv",
     "entry_point": "src/seo_mcp/server.py",
@@ -56,7 +55,6 @@
       }
     }
   },
-
   "user_config": {
     "google_oauth_client": {
       "type": "file",
@@ -117,15 +115,17 @@
       "required": false
     }
   },
-
   "compatibility": {
     "claude_desktop": ">=1.0.0",
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "python": ">=3.11"
     }
   },
-
   "tools_generated": false,
   "prompts_generated": false,
   "tools": [
@@ -380,6 +380,34 @@
     {
       "name": "onpage_serp_gap",
       "description": "Headings/entities/schema the top SERP results have that a target page lacks -> on-page actions. FREE with caller competitor_urls, or DataForSEO SERP auto-fetch by query (which also returns SERP-composition zero-click-risk signals + Open PageRank competitor authority). Surfaces information gain, not just parity. (v0.9.0)"
+    },
+    {
+      "name": "ga4_setup_audit",
+      "description": "Audit a GA4 property's configuration for SEO-measurement readiness (read-only): is a web data stream present, are key events / conversions defined, is data retention long enough for year-over-year analysis, are content-group custom dimensions set, and (via v1alpha) is enhanced measurement on and wha"
+    },
+    {
+      "name": "ga4_site_search",
+      "description": "Internal site-search terms over the last N days: what visitors typed into the on-site search box (GA4 'searchTerm'), by event count and sessions. A direct content-gap signal. If the property has no site-search data (no search box, or enhanced-measurement site search is off), the tool says so honestl"
+    },
+    {
+      "name": "ga4_landing_page_conversions",
+      "description": "Landing pages with their conversions / key events over the last N days, broken down by channel group and sorted by conversions descending. Filtered to organic search by default (the SEO view) so you see which entry pages actually drive organic outcomes. Convenience wrapper over ga4_run_report."
+    },
+    {
+      "name": "psi_opportunities",
+      "description": "Run PageSpeed Insights and return the actionable Lighthouse opportunity audits (estimated load-time savings) plus the Lighthouse SEO-category audits graded by severity (critical/high/medium/low). Lab data only; does not use field/CrUX data (use crux_snapshot / crux_history for real-user metrics). De"
+    },
+    {
+      "name": "cf_settings_audit",
+      "description": "Audit a Cloudflare zone's settings for SEO and crawl/index safety (read-only): SSL/TLS mode, Always Use HTTPS, HSTS, Automatic HTTPS Rewrites, Brotli, and browser cache TTL. Findings are severity-graded with the reason and a benign exception each. Cloudflare cannot see the origin, so the SSL and Alw"
+    },
+    {
+      "name": "crux_snapshot",
+      "description": "Return the CURRENT (latest 28-day) p75 Core Web Vitals snapshot (LCP, INP, CLS, FCP, TTFB) for a URL or origin via the Chrome UX Report queryRecord API, with each metric's GOOD/NEEDS_IMPROVEMENT/POOR category and an overall verdict. Use crux_history for the 25-week trend. Small pages/origins legitim"
+    },
+    {
+      "name": "content_opportunities",
+      "description": "Rank data-grounded content/blog topics from your own Search Console data. Fuses CTR-vs-expected gap, striking-distance position, demand volume, and momentum into a transparent opportunity score, flags cannibalization, and reports the click upside plus the score's components. Read-only. It prioritize"
     }
   ]
 }

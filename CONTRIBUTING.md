@@ -52,12 +52,12 @@ credentials are needed.
 
 Tag-driven. Pushing a tag of the form `v*` triggers
 `.github/workflows/release.yml`, which verifies the version stamps in
-`pyproject.toml`, `manifest.json`, and `src/seo_mcp/__init__.py` all match
+`pyproject.toml`, `manifest.json`, `server.json`, and `src/seo_mcp/__init__.py` all match
 the tag, rejects any internal planning docs in the tag tree, runs `pytest`,
 builds the wheel + sdist + `.mcpb`, scans the artifacts for credential
 patterns, and attaches all three to the GitHub release for the tag.
 
-PyPI publishing is currently still a manual `uv publish` step from the
-maintainer's shell. Switching to PyPI Trusted Publishing is a one-time
-setup at `pypi.org/manage/project/seo-monster/settings/publishing/`; the
-commented step at the bottom of the workflow becomes active once enabled.
+PyPI publishing is automated via PyPI Trusted Publishing and has been live
+since v0.6.0. The publish steps are gated on the repository variable
+`PYPI_PUBLISH_ENABLED`; while it is unset the tag still builds and attaches
+artifacts but publishes nothing, so confirm it is `true` before tagging.

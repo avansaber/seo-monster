@@ -29,11 +29,15 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
+from .. import __version__
 from ..errors import ErrorCode
 from .errors import ApiError
 
 
-_USER_AGENT = "SEOMonster/0.9.2 (+https://seomonster.avansaber.com)"
+# Derived from the package version rather than hardcoded: this string drifted
+# behind the real version for several releases because it was a literal, and a
+# release-gate check does not cover it (see PLAN §11.4.2).
+_USER_AGENT = f"SEOMonster/{__version__} (+https://seomonster.avansaber.com)"
 _DEFAULT_TIMEOUT = 20
 _DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_REDIRECTS = 10

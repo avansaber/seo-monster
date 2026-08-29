@@ -10,6 +10,19 @@ on:
     branches: ['**']
     tags-ignore: ['v*']   # release.yml owns tag pushes; don't double-run there
   pull_request:
+  # Dependencies are resolved fresh on every run (`uv pip install -e`, not the
+  # lockfile), so a green build only proves the code was fine *against the
+  # versions available that day*. mcp 2.0.0 (2026-07-28) broke the published
+  # package and nobody noticed for a month because CI only fires on push and
+  # there were no pushes for 69 days. This catches upstream breakage without
+  # waiting for a commit.
+  #
+  # NOTE: GitHub disables scheduled workflows after 60 days of repository
+  # inactivity, so this is best-effort. Dependabot (.github/dependabot.yml) is
+  # the real control: it both surfaces the bumps and keeps the repo active.
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -41,4 +54,35 @@ jobs:
         run: uv run ruff check src/ tests/
 
       - name: Test (offline suite)
+        run: uv run pytest -q
+
+  # Early-warning leg: install the newest mcp regardless of our pin and run the
+  # suite against it. Allowed to fail -- it exists to tell us when the pin is
+  # ready to be lifted (PLAN §9.7), not to block PRs. `--no-deps` keeps it from
+  # re-resolving the rest of the tree; `--refresh` defeats the setup-uv cache.
+  mcp-canary:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.11 + project deps
+        run: |
+          uv python install 3.11
+          uv venv
+          uv pip install -e ".[dev]"
+
+      - name: Force the newest mcp, ignoring our pin
+        run: uv pip install --no-deps --upgrade --refresh "mcp>=2"
+
+      - name: Report the resolved mcp version
+        run: uv run python -c "import importlib.metadata as m; print('mcp', m.version('mcp'))"
+
+      - name: Test against unpinned mcp (informational)
         run: uv run pytest -q

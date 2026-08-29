@@ -214,3 +214,49 @@ def test_full_v02_surface_registered():
     # v0.2.0 baseline: 26 tools. IndexNow lands in commit 3/6 of this sprint
     # and will push the assertion to 28.
     assert expected <= names, f"missing: {expected - names}"
+
+
+def test_manifest_tool_list_matches_tool_registry():
+    """manifest.json must advertise exactly the tools the server registers.
+
+    This drifted silently for roughly ten releases (63 advertised vs 70
+    registered), which affects the .mcpb bundle catalog and every directory
+    submission that reads the manifest. Asserting against the registry rather
+    than a hardcoded count keeps the two in lockstep from here on.
+    """
+    import json
+
+    from seo_mcp import server
+
+    with open(os.path.join(REPO_ROOT, "manifest.json")) as fh:
+        manifest = json.load(fh)
+    manifest_names = {t["name"] for t in manifest["tools"]}
+    code_names = {t["name"] for t in server._TOOL_DEFS}
+    assert manifest_names == code_names
+
+
+def test_version_stamps_agree():
+    """Every version stamp must match, including the ones release.yml gates on.
+
+    release.yml hard-gates pyproject / __init__ / manifest and fails *after*
+    the tag is pushed, so a mismatch is expensive. server.json is not gated
+    there, which is how the MCP registry entry drifted.
+    """
+    import json
+
+    import tomllib as _tomllib
+
+    from seo_mcp import __version__
+
+    with open(os.path.join(REPO_ROOT, "pyproject.toml"), "rb") as fh:
+        pyproject_version = _tomllib.load(fh)["project"]["version"]
+    with open(os.path.join(REPO_ROOT, "manifest.json")) as fh:
+        manifest = json.load(fh)
+    with open(os.path.join(REPO_ROOT, "server.json")) as fh:
+        server_json = json.load(fh)
+
+    assert pyproject_version == __version__
+    assert manifest["version"] == __version__
+    assert server_json["version"] == __version__
+    for pkg in server_json.get("packages", []):
+        assert pkg["version"] == __version__

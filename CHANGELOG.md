@@ -13,6 +13,73 @@ external testing pass on that version.
 
 Nothing pending.
 
+## [0.9.3] - 2026-08-28 (hotfix: unbreak fresh installs)
+
+**If your client reported "server failed to start" or a closed connection
+after roughly 2026-07-28, this release fixes it.** No tool behaviour changed.
+
+The dependency on the MCP SDK was declared `mcp>=1.0.0` with no upper bound.
+The SDK shipped 2.0.0 on 2026-07-28, which removed the decorator registration
+API (`@server.list_tools()` and friends), so every fresh resolve produced a
+server that raised `AttributeError: 'Server' object has no attribute
+'list_tools'` before the MCP handshake. Hosts surfaced that only as a closed
+connection.
+
+**Scope:** this affected the PyPI resolve path — `uvx seo-monster`,
+`pip install seo-monster`, and the one-click Cursor / VS Code buttons.
+Claude Desktop `.mcpb` installs were **not** affected, because the bundle
+ships `uv.lock`, which pinned a working SDK version.
+
+### Fixed
+
+- Pin the MCP SDK to `>=1.0.0,<2`. Migration to the 2.x constructor API is
+  tracked separately and will land in a major release.
+- **OAuth scope guard now actually fires** (GH issue #2, reported by
+  @shridipavansaber). `Credentials.from_authorized_user_file(path, scopes)`
+  echoes the *requested* scopes back on the credentials object, so the
+  coverage check could never fail and its `MissingGoogleAuth` branch was
+  unreachable. The granted scopes are now read from the token file itself,
+  normalizing both the list and space-delimited-string forms google-auth
+  accepts, and the check runs before the credentials are constructed so a
+  malformed token file yields our remediation text rather than a bare
+  `AttributeError`. **You may need to re-run `seo-monster auth`** if your
+  cached token predates a scope you now need, or was minted by another tool
+  and records no scopes — previously that surfaced as an opaque
+  `ACCESS_TOKEN_SCOPE_INSUFFICIENT` 403 from Google.
+- Resync `manifest.json` from 63 to all 70 registered tools. The bundle
+  catalog and directory listings had been under-advertising
+  `cf_settings_audit`, `content_opportunities`, `crux_snapshot`,
+  `ga4_landing_page_conversions`, `ga4_setup_audit`, `ga4_site_search` and
+  `psi_opportunities` since the 0.7.x line.
+- Derive the crawler User-Agent from the package version instead of a
+  hardcoded literal, which had drifted behind the real version.
+
+### Changed
+
+- Pin `ruff` to `>=0.15,<0.16` (dev extra). Ruff 0.16 reports 162 findings on
+  the existing tree, which would have turned CI red independently of any code
+  change. Adopting 0.16 is tracked as separate work.
+
+### Added
+
+- Scheduled CI (weekly) plus an informational `mcp-canary` job that installs
+  the newest MCP SDK regardless of the pin. CI previously ran only on push, so
+  breakage originating upstream was invisible between commits — which is why
+  this took a month to surface.
+- Dependabot for `pip` and `github-actions`. This is the durable control:
+  GitHub disables scheduled workflows after 60 days of repository inactivity,
+  and the gap that hid this bug was 69 days.
+- Regression tests: six for the scope guard (including the
+  space-delimited-string form, absent `scopes` key, and malformed files), one
+  asserting `manifest.json` matches the tool registry, and one asserting every
+  version stamp agrees. **(validate)**
+- `server.json` is now covered by the release workflow's version-stamp gate,
+  so the MCP registry entry cannot silently drift from the released version.
+
+**(validate)** Fresh `uvx --refresh seo-monster` starts and completes the MCP
+handshake; `system_status` reports 0.9.3 and 70 tools. Note `--refresh`: a
+cached 0.9.2 will otherwise be re-run.
+
 ## [0.9.2] - 2026-06-19 (closes the F1 release blocker; pending tester re-run)
 
 Round 3 of the tester pass signed off F6/F7/F5/F2 live (Open PageRank
