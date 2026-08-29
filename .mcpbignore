@@ -64,3 +64,6 @@ Thumbs.db
 
 # The bundle itself (in case it is re-packed in place)
 *.mcpb
+
+# Never bundle the registry publisher binary if a workflow ever leaves it in the tree.
+mcp-publisher

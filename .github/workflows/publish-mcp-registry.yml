@@ -1,0 +1,113 @@
+# Publishes server.json to the official MCP registry on every release tag.
+#
+# WHY THIS IS A SEPARATE FILE, NOT A STEP IN release.yml
+# -----------------------------------------------------
+# This job needs `id-token: write` to authenticate to the registry over OIDC.
+# The `id-token: write` permission is not audience-scoped: any code running in
+# the job can mint an OIDC token for *any* audience, including PyPI's.
+#
+# This project's PyPI Trusted Publisher is bound to owner/repo plus the
+# workflow FILENAME `release.yml` (with a blank environment). Trusted
+# publishing matches on that filename, not on the job or step. So a step in
+# release.yml that fetches and executes a third-party binary would sit inside
+# a workflow whose identity is already trusted by PyPI -- and a compromised
+# binary could publish an arbitrary package. PyPI is immutable, so that is
+# unrecoverable.
+#
+# Running it from a different filename means an OIDC token minted here does
+# not satisfy PyPI's claim, and `contents: read` keeps it away from releases
+# and tags. Same outcome, without lending the registry publisher our PyPI
+# identity.
+name: Publish to MCP Registry
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read     # deliberately NOT write: this job only reads server.json
+  id-token: write    # OIDC auth to registry.modelcontextprotocol.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Gated until the OIDC namespace auth has been proven by a manual publish.
+    # A publish step failing for the first time during a release is exactly the
+    # surprise worth avoiding.
+    if: ${{ vars.MCP_REGISTRY_PUBLISH_ENABLED == 'true' }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+
+      - name: Verify server.json version matches the tag
+        # Tag reaches the script via env:, never a ${{ }} interpolation --
+        # git accepts refnames containing `$( )` and backticks.
+        env:
+          TAG_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${TAG_REF#v}"
+          sj=$(python3 -c "import json; print(json.load(open('server.json'))['version'])")
+          echo "tag=$tag  server.json=$sj"
+          [ "$tag" = "$sj" ] || { echo "server.json disagrees with the tag"; exit 1; }
+
+      - name: Wait for the PyPI release to be visible
+        # This workflow and release.yml both fire on the tag and run
+        # concurrently. The registry validates that the PyPI version referenced
+        # in server.json actually exists, and this job (checkout -> verify ->
+        # publish) is far shorter than release.yml (test -> build -> pack ->
+        # scan -> upload -> PyPI). Without this wait it wins the race and the
+        # registry rejects the submission. Fails closed rather than publishing
+        # a server.json that points at a version nobody can install.
+        env:
+          TAG_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          v="${TAG_REF#v}"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/seo-monster/${v}/json")
+            if [ "$code" = "200" ]; then echo "seo-monster ${v} is on PyPI"; exit 0; fi
+            echo "attempt ${i}: PyPI returned ${code} for ${v}; waiting"
+            sleep 20
+          done
+          echo "seo-monster ${v} never appeared on PyPI; refusing to publish to the registry"
+          exit 1
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Download and verify the mcp-publisher CLI
+        # Upstream signs its release assets with cosign blob signatures
+        # (`messageSignature` bundles), NOT with GitHub build attestations --
+        # so `gh attestation verify` returns 404 and fails closed on every run.
+        # The signature also covers the TARBALL, not the extracted binary
+        # (verified: signed digest a06c9096... == tarball, while the binary is
+        # 5e39fe8b...). So the tarball must land on disk and be verified before
+        # extraction -- `curl | tar` leaves nothing to check.
+        #
+        # `latest` rather than a pinned version is deliberate: upstream
+        # documents that a stale publisher fails with "invalid audience", so a
+        # hard pin is scheduled breakage. Integrity comes from the signature,
+        # and the identity regexp keeps it bound to that repo's own release
+        # workflow across versions.
+        run: |
+          set -euo pipefail
+          os=$(uname -s | tr '[:upper:]' '[:lower:]')
+          arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          base="https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${os}_${arch}.tar.gz"
+          curl -sSL --fail "$base" -o mcp-publisher.tar.gz
+          curl -sSL --fail "${base}.sigstore.json" -o mcp-publisher.sigstore.json
+          cosign verify-blob mcp-publisher.tar.gz \
+            --bundle mcp-publisher.sigstore.json \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github\.com/modelcontextprotocol/registry/\.github/workflows/release\.yml@refs/tags/v'
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Publish server.json to the registry
+        run: |
+          set -euo pipefail
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+          echo "published $(python3 -c "import json; print(json.load(open('server.json'))['version'])")"

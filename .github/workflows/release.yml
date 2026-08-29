@@ -54,6 +54,13 @@ jobs:
           echo "tag tree free of internal planning docs"
 
       - name: Verify version stamps match the tag
+        # The tag name reaches this script through `env:` rather than a `${{ }}`
+        # interpolation. Git accepts refnames containing `$( )` and backticks
+        # (verified with `git check-ref-format`), so interpolating the tag
+        # directly into a `run:` block would let a crafted tag execute arbitrary
+        # commands in a job that holds `contents: write` and `id-token: write`.
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           py=$(grep -E '^version' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')
@@ -64,7 +71,7 @@ jobs:
           # 0.9.2 (PLAN §11.4.1). Both of its version fields are checked.
           sj=$(python3 -c "import json; print(json.load(open('server.json'))['version'])")
           sjp=$(python3 -c "import json; d=json.load(open('server.json')); print(','.join(sorted({p['version'] for p in d.get('packages', [])})) or d['version'])")
-          tag="${{ steps.version.outputs.version }}"
+          tag="$TAG_VERSION"
           echo "tag=$tag  pyproject=$py  __init__=$init  manifest=$mf  server.json=$sj  server.json/packages=$sjp"
           [ "$py" = "$tag" ] && [ "$init" = "$tag" ] && [ "$mf" = "$tag" ] && [ "$sj" = "$tag" ] && [ "$sjp" = "$tag" ] || {
             echo "version stamps disagree with the tag; refusing to release"
@@ -94,14 +101,20 @@ jobs:
           node-version: '20'
 
       - name: Pack the .mcpb bundle
+        # Tag via env: for the same injection reason as the version gate.
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version }}
         run: |
           npx -y @anthropic-ai/mcpb@latest pack . \
-            dist/seo-monster-${{ steps.version.outputs.version }}.mcpb
+            "dist/seo-monster-${TAG_VERSION}.mcpb"
 
       - name: Security scan (no credentials / PII / real local paths in any artifact)
+        # Tag passed via `env:` for the same injection reason as above.
+        env:
+          TAG_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          v="${{ steps.version.outputs.version }}"
+          v="$TAG_VERSION"
           for f in "dist/seo_monster-${v}-py3-none-any.whl" \
                    "dist/seo_monster-${v}.tar.gz" \
                    "dist/seo-monster-${v}.mcpb"; do
