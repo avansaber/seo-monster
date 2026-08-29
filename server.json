@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.avansaber/seo-monster",
-  "description": "SEO MCP over Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, CrUX, technical-SEO.",
+  "description": "Local-first SEO MCP server: track whether AI assistants cite you or your competitors, plus Search Console, GA4, PageSpeed, Cloudflare, IndexNow and CrUX. Runs on your own credentials.",
   "repository": {
     "url": "https://github.com/avansaber/seo-monster",
     "source": "github"

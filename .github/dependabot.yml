@@ -21,6 +21,21 @@ updates:
       prefix: "chore(deps)"
     labels:
       - "dependencies"
+    ignore:
+      # Both of these majors are pinned deliberately, and a bump would undo a
+      # fix rather than deliver one. Dependabot should still tell us about
+      # minor/patch releases within the pinned range.
+      #
+      # mcp: 2.x removed the decorator registration API this server is built
+      # on. Auto-relaxing the ceiling re-breaks every fresh install -- exactly
+      # the v0.9.2 outage. Lift this together with the 2.x migration, not
+      # before. See the internal migration plan.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
+      # ruff: 0.16 reports 162 findings on the current tree, so a bump turns CI
+      # red independently of any code change. Adopting it is its own PR.
+      - dependency-name: "ruff"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
