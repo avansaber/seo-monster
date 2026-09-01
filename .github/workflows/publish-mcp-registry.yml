@@ -38,7 +38,7 @@ jobs:
     if: ${{ vars.MCP_REGISTRY_PUBLISH_ENABLED == 'true' }}
     steps:
       - name: Check out the tagged commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify server.json version matches the tag
         # Tag reaches the script via env:, never a ${{ }} interpolation --
