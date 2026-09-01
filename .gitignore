@@ -56,3 +56,10 @@ htmlcov/
 rv.py
 call_tool.py
 smoke.py
+
+# mcp-publisher's registry bearer token. v1.8.1 writes it to
+# ~/.config/mcp-publisher/token.json (outside the repo), but upstream also
+# supports a working-directory token file and gitignores `.mcpregistry*` for
+# exactly this reason. Cheap insurance against a future version dropping a
+# live credential into a public repo.
+.mcpregistry*
