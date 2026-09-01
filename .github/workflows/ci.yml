@@ -10,16 +10,22 @@ on:
     branches: ['**']
     tags-ignore: ['v*']   # release.yml owns tag pushes; don't double-run there
   pull_request:
-  # Dependencies are resolved fresh on every run (`uv pip install -e`, not the
-  # lockfile), so a green build only proves the code was fine *against the
-  # versions available that day*. mcp 2.0.0 (2026-07-28) broke the published
-  # package and nobody noticed for a month because CI only fires on push and
-  # there were no pushes for 69 days. This catches upstream breakage without
-  # waiting for a commit.
+  # mcp 2.0.0 (2026-07-28) broke the published package and nobody noticed for a
+  # month, because CI only fires on push and there were no pushes for 69 days.
+  #
+  # Note what this schedule does and does not buy. The `test` job runs
+  # `uv run pytest`, which syncs from uv.lock first -- so it exercises the
+  # LOCKED mcp, not whatever the ecosystem has moved to. On its own this cron
+  # would therefore have stayed green through the 2.x break indefinitely. The
+  # control that actually detects this particular drift is the mcp-canary job
+  # below -- Dependabot deliberately ignores mcp majors (see dependabot.yml),
+  # and pyproject pins <2 anyway, so neither can surface a 2.x break. The cron
+  # only ensures the canary runs without waiting for someone to push.
   #
   # NOTE: GitHub disables scheduled workflows after 60 days of repository
-  # inactivity, so this is best-effort. Dependabot (.github/dependabot.yml) is
-  # the real control: it both surfaces the bumps and keeps the repo active.
+  # inactivity, so this schedule is best-effort. Dependabot
+  # (.github/dependabot.yml) is what keeps the repo active enough for it to
+  # survive -- that, rather than detecting mcp drift, is the role it plays here.
   schedule:
     - cron: '0 6 * * 1'   # Mondays 06:00 UTC
   workflow_dispatch:
@@ -58,8 +64,8 @@ jobs:
 
   # Early-warning leg: install the newest mcp regardless of our pin and run the
   # suite against it. Allowed to fail -- it exists to tell us when the pin is
-  # ready to be lifted (PLAN §9.7), not to block PRs. `--no-deps` keeps it from
-  # re-resolving the rest of the tree; `--refresh` defeats the setup-uv cache.
+  # ready to be lifted, not to block PRs. Flag rationale is on the install step
+  # below.
   mcp-canary:
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -79,10 +85,23 @@ jobs:
           uv pip install -e ".[dev]"
 
       - name: Force the newest mcp, ignoring our pin
-        run: uv pip install --no-deps --upgrade --refresh "mcp>=2"
+        # Deliberately NOT --no-deps: mcp 2.x introduces new requirements
+        # (mcp-types, httpx2, ...), and skipping them makes the suite die with
+        # ModuleNotFoundError while silently skipping 12 tests -- which hides
+        # the actual incompatibility behind a packaging artifact. Installing
+        # deps properly surfaces the real signal: 11 failures with
+        # `AttributeError: 'Server' object has no attribute 'list_tools'`.
+        # --refresh defeats the setup-uv cache.
+        run: uv pip install --upgrade --refresh "mcp>=2"
 
+      # --no-sync is load-bearing on both commands. Plain `uv run` re-syncs the
+      # environment from uv.lock before executing, which silently reinstalls
+      # the pinned mcp and reverts the upgrade above -- the canary then tests
+      # the pinned version and reports success, which is worse than having no
+      # canary at all. Verified: after forcing mcp 2.1.1, `uv run` reported
+      # 1.27.1; `uv run --no-sync` reported 2.1.1.
       - name: Report the resolved mcp version
-        run: uv run python -c "import importlib.metadata as m; print('mcp', m.version('mcp'))"
+        run: uv run --no-sync python -c "import importlib.metadata as m; print('mcp', m.version('mcp'))"
 
       - name: Test against unpinned mcp (informational)
-        run: uv run pytest -q
+        run: uv run --no-sync pytest -q
