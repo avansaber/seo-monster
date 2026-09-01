@@ -68,6 +68,7 @@ exclude = [
   ".env",
   ".env.*",
   "20??-??-??-*.txt",
+  "archive/",
 ]
 
 [tool.pytest.ini_options]

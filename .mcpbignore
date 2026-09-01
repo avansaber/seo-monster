@@ -67,3 +67,7 @@ Thumbs.db
 
 # Never bundle the registry publisher binary if a workflow ever leaves it in the tree.
 mcp-publisher
+
+# Local-only scratch. Gitignored, so CI's fresh checkout never sees it, but a
+# local `mcpb pack` would otherwise sweep archive/README.md into the bundle.
+archive/
