@@ -260,3 +260,22 @@ def test_version_stamps_agree():
     assert server_json["version"] == __version__
     for pkg in server_json.get("packages", []):
         assert pkg["version"] == __version__
+
+
+def test_server_json_description_fits_registry_limit():
+    """server.json's description must satisfy the MCP registry's schema.
+
+    The registry rejects a publish with HTTP 422 when description exceeds 100
+    characters. That only surfaces at publish time, long after review, so it is
+    asserted here instead. (Learned the hard way: a 183-character description
+    was merged and then bounced by the registry.)
+    """
+    import json
+
+    with open(os.path.join(REPO_ROOT, "server.json")) as fh:
+        server_json = json.load(fh)
+    description = server_json["description"]
+    assert 0 < len(description) <= 100, (
+        f"server.json description is {len(description)} chars; the MCP registry "
+        f"schema allows at most 100"
+    )
