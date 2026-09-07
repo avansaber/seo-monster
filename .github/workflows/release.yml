@@ -160,7 +160,7 @@ jobs:
         # release body, so hand-crafted notes set via `gh release create` or
         # `gh release edit` survive. Use fail_on_unmatched_files so a missing
         # artifact aborts the workflow loudly.
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/seo_monster-${{ steps.version.outputs.version }}-py3-none-any.whl
