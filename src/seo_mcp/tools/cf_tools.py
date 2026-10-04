@@ -24,6 +24,7 @@ from ..clients.errors import ApiError
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations, preflight_get, require_client
+from ._cf_ssl import ssl_coverage
 
 
 _SERVICE = "cf"
@@ -401,7 +402,6 @@ def _audit_settings(by_id: Mapping[str, Any]) -> list[dict[str, Any]]:
             "Verify: Flexible/Full SSL lets CF reach the origin over weak or unauthenticated TLS, "
             "risking redirect loops, mixed content, and insecure origin hops.",
             "Legacy origin that genuinely cannot do TLS; CF cannot see origin TLS, so confirm before changing.",
-            fix={"setting": "ssl_mode", "recommended": "strict"},
         ))
 
     # cf.always_https: want "on". CF cannot see whether http->https is handled
@@ -515,6 +515,41 @@ def cf_settings_audit(arguments, config, clients) -> dict[str, Any]:
 
     by_id = _settings_map(settings)
     findings = _audit_settings(by_id)
+    ruleset = None
+    rule_error = None
+    rule_error_details = None
+    try:
+        ruleset = client.get_configuration_rules(zone_id)
+    except ApiError as exc:
+        rule_error = exc.code.value
+        rule_error_details = {
+            "code": exc.code.value, "remediation": exc.remediation,
+            "audit_guidance": "Verify configuration-rule read permission and zone scope before replacing credentials; a resource denial alone does not prove an invalid token.",
+        }
+    coverage = ssl_coverage(zone_name, by_id.get("ssl"), ruleset, rule_error)
+    coverage["error"] = rule_error_details
+    for finding in findings:
+        if finding["rule_id"] == "cf.ssl_mode":
+            finding["scope"] = "zone_default"
+            finding["why"] = "Observed zone default only. Review hostname overrides and origin readiness before proposing changes."
+            if coverage["hosts"][zone_name]["ssl"] in ("strict", "origin_pull"):
+                finding["severity"] = "info"
+    for host, observation in coverage["hosts"].items():
+        if observation["rule_positions"] and observation["ssl"] in ("off", "flexible", "full"):
+            finding = _cf_finding(
+                "cf.ssl_mode", "high", f"hostname={host}, ssl={observation['ssl']}",
+                "review hostname-scoped origin readiness", "A configuration rule sets this hostname's SSL mode.",
+                "The origin may require this mode; no origin certificate check or zone-wide change is performed.",
+            )
+            finding.update({"scope": "hostname_configuration_rule", "affected_hostnames": [host],
+                            "rule_positions": observation["rule_positions"]})
+            findings.append(finding)
+    if coverage["status"] != "observed":
+        findings.append(_cf_finding(
+            "cf.ssl_coverage", "info", coverage["status"], "review complete configuration rule coverage",
+            "Some configuration rule evidence is unavailable or outside the supported expression subset.",
+            "Permission limits and unsupported expressions do not establish that a hostname has insecure TLS.",
+        ))
     by_severity: dict[str, int] = {}
     for f in findings:
         by_severity[f["severity"]] = by_severity.get(f["severity"], 0) + 1
@@ -535,10 +570,12 @@ def cf_settings_audit(arguments, config, clients) -> dict[str, Any]:
         {
             "zone": zone_name,
             "settings_snapshot": settings_snapshot,
+            "ssl_coverage": coverage,
             "findings": findings,
             "summary": {"by_severity": by_severity, "verdict": verdict},
             "notes": [
                 "Read-only: no settings are changed.",
+                "SSL findings distinguish zone defaults from supported configuration-rule observations; origin readiness remains unknown.",
                 "Cloudflare cannot see the origin, so SSL and Always-HTTPS findings are 'verify,' not failures.",
                 "HSTS is never hard-failed: premature HSTS is dangerous and hard to undo.",
             ],

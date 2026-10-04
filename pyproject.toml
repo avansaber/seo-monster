@@ -42,8 +42,8 @@ seo-monster = "seo_mcp.server:main"
 seo-mcp = "seo_mcp.server:main"
 
 [project.urls]
-Homepage = "https://seomonster.avansaber.com"
-Documentation = "https://seomonster.avansaber.com"
+Homepage = "https://www.avansaber.com/seomonster/"
+Documentation = "https://www.avansaber.com/seomonster/docs/"
 Repository = "https://github.com/avansaber/seo-monster"
 Issues = "https://github.com/avansaber/seo-monster/issues"
 
@@ -63,12 +63,15 @@ exclude = [
   "RESEARCH-AND-PROPOSAL.md",
   "LISTINGS-PLAN.md",
   "PLAN.md",
+  "CLAUDE.md",
+  "HANDOFF.md",
   "marketing/",
   ".private/",
   ".env",
   ".env.*",
   "20??-??-??-*.txt",
   "archive/",
+  "companion/",
 ]
 
 [tool.pytest.ini_options]

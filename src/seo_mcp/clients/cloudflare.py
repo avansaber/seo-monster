@@ -77,6 +77,7 @@ class CfClient:
         # simply can't reach this zone/account resource (distinct from a bad
         # token). Give the scope-specific remediation (FEEDBACK R19-FIND-2).
         if status == 403 and any(e.get("code") == 9109 for e in cf_errors if isinstance(e, dict)):
+            error.code = ErrorCode.SCOPE_INSUFFICIENT
             error.remediation = (
                 "Cloudflare 9109: the token cannot access this resource. Most often the "
                 "token is valid but its Zone Resources do not include this zone - set them to "
@@ -125,6 +126,19 @@ class CfClient:
         ``{id, value, editable, modified_on, ...}`` entries; the caller indexes
         by ``id`` (e.g. 'ssl', 'always_use_https', 'security_header')."""
         return self._http_request("GET", f"/zones/{zone_id}/settings").get("result", [])
+
+    def get_configuration_rules(self, zone_id: str) -> dict[str, Any]:
+        """Read the zone configuration phase; absence is distinct from denial."""
+        try:
+            payload = self._http_request("GET", f"/zones/{zone_id}/rulesets/phases/http_config_settings/entrypoint")
+        except ApiError as exc:
+            if exc.code == ErrorCode.NOT_FOUND:
+                return {"id": None, "rules": [], "availability": "absent"}
+            raise
+        result = payload.get("result")
+        if not isinstance(result, dict) or not isinstance(result.get("rules"), list):
+            raise ApiError(ErrorCode.UPSTREAM_ERROR, "Malformed configuration rules response.")
+        return result
 
     def patch_zone_setting(self, zone_id: str, setting_id: str, value: Any) -> dict[str, Any]:
         """Write one zone setting (gated in tools). PATCH the single-setting

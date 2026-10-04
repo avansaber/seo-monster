@@ -8,15 +8,15 @@
   "author": {
     "name": "AvanSaber Inc.",
     "email": "support@avansaber.com",
-    "url": "https://seomonster.avansaber.com"
+    "url": "https://www.avansaber.com/"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/avansaber/seo-monster"
   },
-  "homepage": "https://seomonster.avansaber.com",
-  "documentation": "https://seomonster.avansaber.com",
+  "homepage": "https://www.avansaber.com/seomonster/",
+  "documentation": "https://www.avansaber.com/seomonster/docs/",
   "support": "https://github.com/avansaber/seo-monster/issues",
   "keywords": [
     "seo",

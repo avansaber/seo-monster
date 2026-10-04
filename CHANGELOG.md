@@ -11,7 +11,16 @@ external testing pass on that version.
 
 ## [Unreleased]
 
-Nothing pending.
+### Fixed
+
+- Unicode lexical extraction now retains non-Latin letters and combining marks in word counts, content terms, entities and token ratios. Scripts requiring segmentation carry explicit limits instead of producing confident word-based comparisons.
+- AI readiness no longer labels substantial CJK or Thai server-rendered text as render-blind solely because lexical word counts are low. Unsupported stuffing and statistics-density signals remain unavailable.
+- Cloudflare settings auditing reads hostname configuration rules, reports source/rule order and coverage limits, and withholds zone-wide Strict fix hints while origin readiness is unknown. Permission failures retain the observed zone settings with explicit uncertainty.
+
+### Documentation
+
+- Canonical website metadata, Cursor version metadata and provider/privacy disclosures are reconciled with the current engine. Tool inputs, names, prompts, envelopes, configuration precedence and external-write controls remain unchanged.
+- These changes are local and unreleased. Package versions and publication are not advanced by this entry.
 
 ## [0.9.3] - 2026-08-28 (hotfix: unbreak fresh installs)
 

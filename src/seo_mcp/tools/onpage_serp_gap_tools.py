@@ -144,7 +144,8 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
             continue
         comp_parsed.append(p)
         comp_domains.append(_domain(resp.final_url))
-        analyzed.append({"url": resp.final_url, "word_count": p.word_count, "h2_h3": sum(1 for h in p.headings if h["level"] in (2, 3)), "schema_types": p.jsonld_types()})
+        analyzed.append({"url": resp.final_url, "word_count": p.word_count, "text_measurement": p.text_measurement,
+                         "h2_h3": sum(1 for h in p.headings if h["level"] in (2, 3)), "schema_types": p.jsonld_types()})
 
     if not comp_parsed:
         return ok(_empty(target_url, source, "Could not fetch any competitor pages."))
@@ -190,6 +191,8 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
 
     comp_words = [p.word_count for p in comp_parsed]
     median_words = int(statistics.median(comp_words)) if comp_words else 0
+    if not target.text_measurement["word_count_reliable"] or any(not p.text_measurement["word_count_reliable"] for p in comp_parsed):
+        median_words = None
 
     # winnability backlink tier: competitor domain authority via Open PageRank.
     competitor_authority = None
@@ -221,7 +224,8 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
     return ok({
         "target_url": target_url,
         "source": source,
-        "target": {"word_count": target.word_count, "schema_types": target.jsonld_types(), "h2_h3": sum(1 for h in target.headings if h["level"] in (2, 3))},
+        "target": {"word_count": target.word_count, "text_measurement": target.text_measurement,
+                   "schema_types": target.jsonld_types(), "h2_h3": sum(1 for h in target.headings if h["level"] in (2, 3))},
         "competitors_analyzed": analyzed,
         "gaps": {
             "headings": heading_gaps,
@@ -233,6 +237,7 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
         "competitor_authority": competitor_authority,
         "actions": actions,
         "caveats": [
+            "Word comparisons are unavailable for scripts needing segmentation; stopword filters are English-only.",
             "Gaps are lexical (term/heading overlap), not semantic -- review before "
             "acting. Entities are document-frequency terms, not verified entities.",
             "Match-the-competitors is table stakes; the ranking lever in 2026 is "

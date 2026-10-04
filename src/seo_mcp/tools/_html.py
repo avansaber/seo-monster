@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -25,7 +26,38 @@ _SKIP_TAGS = {"script", "style", "template"}
 # Tokens that look like a statistic / number (incl. %, currency, decimals,
 # thousands separators). A proxy for the GEO-paper "statistics" signal.
 _NUMBER_RE = re.compile(r"(?<![\w.])(?:[$€£]\s?)?\d[\d,]*(?:\.\d+)?\s?%?")
-_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]+")
+# Preserve the legacy regex symbol for import compatibility. Core extraction
+# uses the tokenizer below because Python regex word classes exclude marks.
+_WORD_RE = re.compile(r"[^\W\d_][^\W\d_'-]+")
+
+
+def _tokens(text: str) -> list[str]:
+    """Unicode lexical tokens, retaining combining marks and internal joiners."""
+    tokens: list[str] = []
+    current: list[str] = []
+    for char in unicodedata.normalize("NFC", text):
+        if char.isalpha() or (current and (unicodedata.category(char).startswith("M") or char in "'-\u200c\u200d")):
+            current.append(char)
+        else:
+            token = "".join(current).strip("'-\u200c\u200d")
+            if len(token) > 1:
+                tokens.append(token)
+            current = []
+    token = "".join(current).strip("'-\u200c\u200d")
+    if len(token) > 1:
+        tokens.append(token)
+    return tokens
+
+
+def _needs_segmentation(text: str) -> bool:
+    """Conservatively identify scripts whose lexical runs are not word counts."""
+    return any(
+        0x3400 <= ord(c) <= 0x9FFF or 0x20000 <= ord(c) <= 0x323AF
+        or 0x3040 <= ord(c) <= 0x30FF or 0xFF66 <= ord(c) <= 0xFF9D
+        or 0x0E00 <= ord(c) <= 0x0FFF or 0x1780 <= ord(c) <= 0x17FF
+        or 0x1000 <= ord(c) <= 0x109F
+        for c in text
+    )
 
 
 class ContentParser(HTMLParser):
@@ -142,7 +174,20 @@ class ContentParser(HTMLParser):
 
     @property
     def word_count(self) -> int:
-        return len(_WORD_RE.findall(self.text))
+        return len(_tokens(self.text))
+
+    @property
+    def text_measurement(self) -> dict[str, Any]:
+        return {
+            "method": "unicode_lexical_tokens/v1",
+            "word_count_reliable": not _needs_segmentation(self.text),
+            "visible_letter_count": sum(c.isalpha() for c in self.text),
+            "caveats": [
+                "Lexical tokens are a heuristic, not linguistic word segmentation.",
+                "CJK, Thai, Lao, Khmer and Myanmar runs need a language-specific segmenter; word-based comparisons are unavailable.",
+                "Stopword filters are English-only; non-English terms require operator review.",
+            ],
+        }
 
     @property
     def number_count(self) -> int:
@@ -175,7 +220,7 @@ class ContentParser(HTMLParser):
     def top_token_ratio(self) -> tuple[str | None, float]:
         """Most frequent content word and its share of all content words -- a
         keyword-stuffing proxy. Stopwords excluded."""
-        words = [w.lower() for w in _WORD_RE.findall(self.text) if w.lower() not in _STOPWORDS and len(w) > 2]
+        words = [w.casefold() for w in _tokens(self.text) if w.casefold() not in _STOPWORDS and len(w) > 2]
         if not words:
             return None, 0.0
         freq: dict[str, int] = {}
@@ -360,11 +405,11 @@ def content_terms(text: str) -> set[str]:
     """Lowercased content-word set (>=3 chars, stopwords removed). Used for the
     lexical relevance matching in internal_link_recommend and gsc_keyword_expand
     (the free, no-LLM relevance tier)."""
-    return {w.lower() for w in _WORD_RE.findall(text) if len(w) >= 3 and w.lower() not in _STOPWORDS}
+    return {w.casefold() for w in _tokens(text) if len(w) >= 3 and w.casefold() not in _STOPWORDS}
 
 
 def content_entities(text: str) -> set[str]:
     """Stricter token set for surfaced 'entities to cover' (tester F2): >=4 chars
     and a broader stopword list, so the host is not handed 'cover the entity:
     good'. Still lexical (not NER) -- the caveat discloses that."""
-    return {w.lower() for w in _WORD_RE.findall(text) if len(w) >= 4 and w.lower() not in _ENTITY_STOPWORDS}
+    return {w.casefold() for w in _tokens(text) if len(w) >= 4 and w.casefold() not in _ENTITY_STOPWORDS}

@@ -37,7 +37,7 @@ from .errors import ApiError
 # Derived from the package version rather than hardcoded: this string drifted
 # behind the real version for several releases because it was a literal, and a
 # release-gate check does not cover it (see PLAN §11.4.2).
-_USER_AGENT = f"SEOMonster/{__version__} (+https://seomonster.avansaber.com)"
+_USER_AGENT = f"SEOMonster/{__version__} (+https://www.avansaber.com/seomonster/)"
 _DEFAULT_TIMEOUT = 20
 _DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_REDIRECTS = 10

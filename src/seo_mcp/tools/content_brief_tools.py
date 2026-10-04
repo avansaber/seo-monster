@@ -170,11 +170,14 @@ def content_brief_data(arguments: Mapping[str, Any], config: Any, clients: Mappi
             "url": resp.final_url,
             "title": (p.title or "").strip() or None,
             "word_count": wc,
+            "text_measurement": p.text_measurement,
             "h2_h3_count": len(h2h3),
             "schema_types": p.jsonld_types(),
         })
 
     median_words = int(statistics.median(word_counts)) if word_counts else 0
+    if any(not page.get("text_measurement", {}).get("word_count_reliable", True) for page in analyzed):
+        median_words = None
     # entities to cover: terms used by the most competitor pages (document freq).
     entities = [t for t, _ in doc_freq.most_common(20)]
 
@@ -184,6 +187,7 @@ def content_brief_data(arguments: Mapping[str, Any], config: Any, clients: Mappi
         "Entities are document-frequency terms across the analyzed pages (lexical, "
         "not semantic) -- the host should refine which are genuine entities.",
     ]
+    caveats.append("Word targets are unavailable when an analyzed page needs language-specific segmentation; stopwords remain English-only.")
     if source == "own_ranking_pages":
         caveats.insert(0,
             "Analyzed YOUR OWN ranking pages (no competitor_urls given), so this "

@@ -24,7 +24,7 @@
   &nbsp;
   <a href="https://insiders.vscode.dev/redirect/mcp/install?name=seomonster&amp;config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22seo-monster%22%5D%7D"><img src="https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" height="32"></a>
   &nbsp;
-  <a href="https://seomonster.avansaber.com"><img src="https://img.shields.io/badge/Website-seomonster.avansaber.com-555" alt="Website" height="32"></a>
+  <a href="https://www.avansaber.com/seomonster/"><img src="https://img.shields.io/badge/Website-avansaber.com%2Fseomonster-555" alt="Website" height="32"></a>
 </p>
 
 </div>
@@ -70,6 +70,21 @@ You don't open a new tool — you just ask, in plain English, inside **Claude** 
 Run the one-time Google sign-in once — `uvx --from seo-monster seo-monster auth` — then ask your assistant to call **`system_status`** to confirm what's connected. Full per-client setup and credentials are in [Install](#install) and [Auth](#auth).
 
 ## How it works
+
+### Provider requests and local records
+
+Selected tools contact Google Search Console, Indexing, GA4 Data/Admin, Google
+Ads, PageSpeed Insights, CrUX, Cloudflare or IndexNow. Optional research uses
+DataForSEO, Open PageRank, Perplexity, OpenAI, Anthropic or Gemini. Technical
+checks fetch the requested websites and related robots, sitemap, redirect or
+verification URLs. Providers receive the arguments and credentials needed for
+the selected request; optional paid calls can incur provider charges. These
+calls do not add maintainer telemetry.
+
+The engine does not keep a query/result history. The separately installed local
+Workbench stores user-owned evidence and decision records in SQLite and creates
+exports only when requested. Your MCP host controls its own transcripts and
+logs. See [Privacy](PRIVACY.md) for destinations and persistence scopes.
 
 ```mermaid
 flowchart LR
@@ -873,7 +888,7 @@ On failure:
     "service": "gsc",
     "message": "No Google credentials found for Search Console.",
     "remediation": "Configure OAuth ... or a service-account key. See README > Auth.",
-    "docs_url": "https://seomonster.avansaber.com#auth",
+    "docs_url": "https://www.avansaber.com/seomonster/docs/#auth",
     "details": null
   }
 }
@@ -938,4 +953,3 @@ queries, or tool calls. See [PRIVACY.md](PRIVACY.md) for the full statement.
 MIT. See [LICENSE](LICENSE).
 
 <!-- mcp-name: io.github.avansaber/seo-monster -->
-

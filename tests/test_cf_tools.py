@@ -213,7 +213,7 @@ def test_client_error_from_http_extracts_cf_errors():
     from seo_mcp.clients.cloudflare import CfClient
 
     error = CfClient._error_from_http(403, '{"success": false, "errors": [{"code": 9109, "message": "Unauthorized"}]}')
-    assert str(error.code) == "AUTH_INVALID"
+    assert str(error.code) == "SCOPE_INSUFFICIENT"
     assert error.details["cf_errors"][0]["code"] == 9109
 
 
@@ -250,6 +250,8 @@ def _make_settings_client(settings):
     client = CfClient(token="testtoken")
 
     def _raw(method, path, body=None):
+        if "/rulesets/phases/http_config_settings/" in path:
+            return {"success": True, "result": {"id": "fixture-ruleset", "rules": []}}
         if "/settings" in path:
             return _settings_envelope(settings)
         return _zone_envelope()  # the name-filtered zone resolve
@@ -761,7 +763,7 @@ def test_audit_findings_carry_machine_readable_fix_hint(make_config):
     client = _make_settings_client(_BAD_SETTINGS)
     result = cf_tools.cf_settings_audit({}, _cfg(make_config), {"cf": client})
     by_rule = {f["rule_id"]: f for f in result["data"]["findings"]}
-    assert by_rule["cf.ssl_mode"]["fix"] == {"setting": "ssl_mode", "recommended": "strict"}
+    assert "fix" not in by_rule["cf.ssl_mode"]  # Origin readiness is not established by the audit.
     assert by_rule["cf.hsts"]["fix"]["setting"] == "hsts"
     assert by_rule["cf.hsts"]["fix"]["recommended"]["max_age"] == 31536000
 
@@ -773,7 +775,7 @@ def test_cf_9109_remediation_is_scope_specific():
 
     body = '{"success": false, "errors": [{"code": 9109, "message": "Unauthorized to access requested resource"}]}'
     err = CfClient._error_from_http(403, body)
-    assert str(err.code) == "AUTH_INVALID"
+    assert str(err.code) == "SCOPE_INSUFFICIENT"
     assert "Zone Resources" in (err.remediation or "")
 
 

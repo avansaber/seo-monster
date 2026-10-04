@@ -43,6 +43,8 @@ RESEARCH-AND-PROPOSAL.md
 LISTINGS-PLAN.md
 CHANGELOG.md
 PRIVACY.md
+CLAUDE.md
+HANDOFF.md
 
 # Brand and submission drafts (built in marketing/, not part of the server)
 marketing/
@@ -71,3 +73,7 @@ mcp-publisher
 # Local-only scratch. Gitignored, so CI's fresh checkout never sees it, but a
 # local `mcpb pack` would otherwise sweep archive/README.md into the bundle.
 archive/
+
+# Separate package: tested with this repository, but never bundled into the
+# SEOmonster MCP server artifact.
+companion/

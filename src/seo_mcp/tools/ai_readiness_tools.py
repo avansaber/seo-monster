@@ -97,11 +97,17 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
 
     p = parse_content(resp.body_text)
     words = p.word_count
+    measurement = p.text_measurement
+    word_based = measurement["word_count_reliable"]
     h2plus = sum(c for lvl, c in p.heading_levels().items() if lvl >= 2)
 
     # Headline: render-blind heuristic. Little server-rendered text but plenty
     # of scripts => an AI crawler that does not run JS sees ~nothing.
-    rendered_blind = words < _RENDER_BLIND_WORDS and p.script_count >= _RENDER_BLIND_SCRIPTS
+    visible_letters = measurement["visible_letter_count"]
+    rendered_blind = words < _RENDER_BLIND_WORDS and p.script_count >= _RENDER_BLIND_SCRIPTS and word_based
+    render_assessment = "heuristic"
+    if not word_based:
+        render_assessment = "visible_text_observed" if visible_letters >= 1000 else "unavailable"
 
     # Tier-A components, each normalized to 0..1.
     extractable = 0.0 if rendered_blind else (0.6 + 0.4 * min(1.0, h2plus / 3.0))
@@ -121,6 +127,11 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
         "cited_sources": cited_sources,
         "no_keyword_stuffing": no_keyword_stuffing,
     }
+    if not word_based:
+        components.pop("statistics")
+        components.pop("no_keyword_stuffing")
+        if render_assessment == "unavailable":
+            components.pop("extractable")
 
     caveats = [
         "Scores on-page signals with documented causal support (GEO paper, "
@@ -129,6 +140,9 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
         "The render-blindness check is a heuristic (low server-rendered word "
         "count + multiple scripts); confirm with a 'view source' if it flags.",
     ]
+    caveats.extend(measurement["caveats"])
+    if not word_based:
+        caveats.append("Word-based statistics density and stuffing assessment are unavailable for text needing segmentation.")
     if rendered_blind:
         caveats.insert(
             0,
@@ -147,6 +161,8 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
         "status": resp.status,
         "rendered_blind": rendered_blind,
         "word_count": words,
+        "text_measurement": measurement,
+        "render_blind_assessment": render_assessment,
         "readiness": banded_score(components, _WEIGHTS, evidence_tier=TIER_A, caveats=caveats),
         "secondary": {  # Tier B: reported, not scored
             "evidence_tier": "B",
@@ -169,7 +185,10 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
                 "snippets. llms.txt is not consumed by any engine."
             ),
         },
-        "stuffing": {"top_term": top_word, "top_term_ratio": round(top_ratio, 4), "flagged": stuffed},
+        "stuffing": {"top_term": top_word if word_based else None,
+                     "top_term_ratio": round(top_ratio, 4) if word_based else None,
+                     "flagged": stuffed if word_based else None,
+                     "availability": "heuristic" if word_based else "unavailable"},
     })
 
 
