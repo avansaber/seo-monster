@@ -330,9 +330,9 @@ def test_settings_audit_auth_missing_without_client(make_config):
 
 # --- single redirects (cf_list/create/delete_redirect) --------------------
 
-from seo_mcp.clients.errors import ApiError  # noqa: E402
-from seo_mcp.clients.http import HttpResponse  # noqa: E402
-from seo_mcp.errors import ErrorCode  # noqa: E402
+from seo_mcp.clients.errors import ApiError
+from seo_mcp.clients.http import HttpResponse
+from seo_mcp.errors import ErrorCode
 
 
 class _FakeHttp:

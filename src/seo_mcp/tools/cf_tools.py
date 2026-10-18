@@ -18,14 +18,14 @@ a machine-readable `fix` hint to chain audit -> cf_settings_update.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import annotations, preflight_get, require_client
 from ._cf_ssl import ssl_coverage
-
+from ._helpers import annotations, preflight_get, require_client
 
 _SERVICE = "cf"
 _REMEDIATION = (
@@ -1008,9 +1008,9 @@ def cf_bulk_redirect_upsert(arguments, config, clients) -> dict[str, Any]:
             "operation_status": op_status,
             "ruleset_wired": True,
             "notes": [
-                "Items are added asynchronously: they appear in cf_list_redirects immediately, "
+                ("Items are added asynchronously: they appear in cf_list_redirects immediately, "
                 "but the redirect typically takes ~15-30s to start serving at the edge. Do not "
-                "treat an immediate 404 on a source URL as a failed redirect; re-check after a short wait."
+                "treat an immediate 404 on a source URL as a failed redirect; re-check after a short wait.")
             ],
         }
     )
@@ -1234,9 +1234,9 @@ def cf_settings_update(arguments, config, clients) -> dict[str, Any]:
             "post_update_findings": post_findings,
             "advisories": advisories,
             "notes": [
-                "post_update_findings is a re-run of cf_settings_audit scoped to ONLY the settings you "
+                ("post_update_findings is a re-run of cf_settings_audit scoped to ONLY the settings you "
                 "changed (not a full audit). A finding still present here means CF did not apply that change "
-                "as expected, or the value remains sub-optimal; run cf_settings_audit for the full picture."
+                "as expected, or the value remains sub-optimal; run cf_settings_audit for the full picture.")
             ],
         }
     )
@@ -1452,8 +1452,8 @@ def cf_managed_robots(arguments, config, clients) -> dict[str, Any]:
         "before": _managed_robots_view(before), "after": _managed_robots_view(after_cfg),
         "caveat": _MR_CAVEAT,
         "notes": [
-            "after reflects Cloudflare's response to the write; if a field did not change as "
-            "expected, the token may lack Bot Management:Edit or the plan may not support it."
+            ("after reflects Cloudflare's response to the write; if a field did not change as "
+            "expected, the token may lack Bot Management:Edit or the plan may not support it.")
         ],
     })
 

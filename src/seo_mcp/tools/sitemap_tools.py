@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import gzip
 import xml.etree.ElementTree as ET
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."

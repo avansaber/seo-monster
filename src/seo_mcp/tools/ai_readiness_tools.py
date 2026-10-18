@@ -23,7 +23,8 @@ Free, no LLM, no paid API: one HTTP GET + stdlib parse. Fully mockable.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
@@ -134,11 +135,11 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
             components.pop("extractable")
 
     caveats = [
-        "Scores on-page signals with documented causal support (GEO paper, "
+        ("Scores on-page signals with documented causal support (GEO paper, "
         "KDD 2024). It does not measure off-page brand mentions -- the strongest "
-        "known correlate of AI visibility -- which an on-page tool cannot see.",
-        "The render-blindness check is a heuristic (low server-rendered word "
-        "count + multiple scripts); confirm with a 'view source' if it flags.",
+        "known correlate of AI visibility -- which an on-page tool cannot see."),
+        ("The render-blindness check is a heuristic (low server-rendered word "
+        "count + multiple scripts); confirm with a 'view source' if it flags."),
     ]
     caveats.extend(measurement["caveats"])
     if not word_based:

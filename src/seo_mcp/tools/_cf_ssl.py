@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -82,7 +82,7 @@ def ssl_coverage(zone: str, default: Any, ruleset: dict[str, Any] | None, error_
         "unsupported_rule_positions": unsupported,
         "error_code": error_code,
         "source": {"phase": "http_config_settings", "ruleset_id": ruleset.get("id") if ruleset else None,
-                   "observed_at": datetime.now(timezone.utc).isoformat(), "rules": rules,
+                   "observed_at": datetime.now(UTC).isoformat(), "rules": rules,
                    "rule_version": "cf.ssl.coverage/v1", "calculation": "last supported matching SSL setting in provider order"},
         "caveats": [
             "Only exact hostname equality, hostname sets, their simple OR combinations and true are interpreted.",

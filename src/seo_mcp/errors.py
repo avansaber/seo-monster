@@ -14,7 +14,6 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-
 # Base for the ``docs_url`` field. Anchors map to documentation sections.
 # History: v0.4.0 routed this at the GitHub README as an interim (Round-5
 # §10c.iv); v0.5.0 flipped to the brand subdomain. But the live brand site

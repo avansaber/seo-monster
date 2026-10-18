@@ -276,27 +276,14 @@ def parse_content(html: str) -> ContentParser:
 # Small English stopword set for the stuffing proxy + lexical relevance. Kept
 # short on purpose (stdlib-only, no NLTK); good enough for ratio signals.
 _STOPWORDS = frozenset(
-    """a an and are as at be by for from has have how in is it its of on or that the
-    to was were what when where which who will with your you this these those they them
-    their our we us i me my he she his her not but if then than so such can could would
-    should may might do does did done about into over under more most some any all each
-    one two three new best top how-to guide vs via per""".split()
+    ["a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have", "how", "in", "is", "it", "its", "of", "on", "or", "that", "the", "to", "was", "were", "what", "when", "where", "which", "who", "will", "with", "your", "you", "this", "these", "those", "they", "them", "their", "our", "we", "us", "i", "me", "my", "he", "she", "his", "her", "not", "but", "if", "then", "than", "so", "such", "can", "could", "would", "should", "may", "might", "do", "does", "did", "done", "about", "into", "over", "under", "more", "most", "some", "any", "all", "each", "one", "two", "three", "new", "best", "top", "how-to", "guide", "vs", "via", "per"]
 )
 
 # Broader stopword set for surfaced "entities to cover" (tester F2): the raw
 # document-frequency tokens leaked filler like "good / just / same / thank /
 # main / others / thought". Entities use this stricter list + a >=4 length floor.
 _ENTITY_STOPWORDS = _STOPWORDS | frozenset(
-    """good just same thank thanks main other others thought think thing things like
-    also even much many well way ways get got make made use used uses using need needs
-    want wants know knows see look looks find finds help helps great easy simple free
-    less very really actually basically simply first last next back around across within
-    without before after while because however therefore example examples including
-    include includes etc lots people person time times day days year years today here
-    there everything anything something nothing someone everyone able available based
-    given plus minus into onto from with what when where which while only ever never
-    always often sometimes maybe perhaps quite rather still yet else also both either
-    neither each every another such same own""".split()
+    ["good", "just", "same", "thank", "thanks", "main", "other", "others", "thought", "think", "thing", "things", "like", "also", "even", "much", "many", "well", "way", "ways", "get", "got", "make", "made", "use", "used", "uses", "using", "need", "needs", "want", "wants", "know", "knows", "see", "look", "looks", "find", "finds", "help", "helps", "great", "easy", "simple", "free", "less", "very", "really", "actually", "basically", "simply", "first", "last", "next", "back", "around", "across", "within", "without", "before", "after", "while", "because", "however", "therefore", "example", "examples", "including", "include", "includes", "etc", "lots", "people", "person", "time", "times", "day", "days", "year", "years", "today", "here", "there", "everything", "anything", "something", "nothing", "someone", "everyone", "able", "available", "based", "given", "plus", "minus", "into", "onto", "from", "with", "what", "when", "where", "which", "while", "only", "ever", "never", "always", "often", "sometimes", "maybe", "perhaps", "quite", "rather", "still", "yet", "else", "also", "both", "either", "neither", "each", "every", "another", "such", "same", "own"]
 )
 
 # --- chrome / boilerplate heading filter (tester F1) ----------------------
@@ -396,9 +383,7 @@ def is_chrome_heading(text: str) -> bool:
         return True
     if len(words) > 12:                 # a sentence/tagline, not a heading
         return True
-    if "," in t and len(words) >= 7:    # comma-y marketing tagline
-        return True
-    return False
+    return "," in t and len(words) >= 7
 
 
 def content_terms(text: str) -> set[str]:

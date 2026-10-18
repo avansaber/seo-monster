@@ -21,9 +21,10 @@ Design (design doc §6 D2):
 from __future__ import annotations
 
 import statistics
+from collections.abc import Mapping
 from datetime import date, timedelta
 from math import sqrt
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -251,14 +252,14 @@ def rank_change_attribution(arguments: Mapping[str, Any], config: Any, clients: 
         "confounders": confounders,
         "note": note,
         "caveats": [
-            "Observational difference-in-differences, NOT proof of causation. "
-            "The only true causal test is a server-side page-level split test.",
-            "Position/CTR are reported but unreliable when a window overlaps the "
+            ("Observational difference-in-differences, NOT proof of causation. "
+            "The only true causal test is a server-side page-level split test."),
+            ("Position/CTR are reported but unreliable when a window overlaps the "
             "2025 GSC impression bug (to ~2026-04) or the num=100 change "
-            "(2025-09-11); the clicks-based estimate is the trustworthy one.",
-            "Assumes the control pages would have trended like the treated page "
+            "(2025-09-11); the clicks-based estimate is the trustworthy one."),
+            ("Assumes the control pages would have trended like the treated page "
             "absent the change (parallel-trends). A page-type-specific algo "
-            "update can break that -- see confounders.algo_update_note.",
+            "update can break that -- see confounders.algo_update_note."),
         ],
     })
 

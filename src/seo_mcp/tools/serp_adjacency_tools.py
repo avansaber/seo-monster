@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import json
 import urllib.parse
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
@@ -88,7 +89,7 @@ def serp_adjacency_expand(arguments: Mapping[str, Any], config: Any, clients: Ma
 
     try:
         dfs = clients.get("dataforseo")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional providers retain the auth envelope.
         dfs = None
     want_paa = arguments.get("include_paa", dfs is not None)
 
@@ -128,12 +129,12 @@ def serp_adjacency_expand(arguments: Mapping[str, Any], config: Any, clients: Ma
             "paa_related": "dataforseo" if paa_used else ("requested but no DataForSEO key" if want_paa else "not requested"),
         },
         "caveats": [
-            "Autocomplete is an undocumented Google endpoint; treat as best-effort "
-            "and clearly secondary to gsc_keyword_expand.",
-            "PAA / related searches require DataForSEO (no free endpoint); Bing "
-            "autosuggest is unavailable (API retired 2025-08-11).",
-            "net_new_terms are candidates -- validate demand with gsc_keyword_expand "
-            "(owned footprint) or keyword_universe (external volume).",
+            ("Autocomplete is an undocumented Google endpoint; treat as best-effort "
+            "and clearly secondary to gsc_keyword_expand."),
+            ("PAA / related searches require DataForSEO (no free endpoint); Bing "
+            "autosuggest is unavailable (API retired 2025-08-11)."),
+            ("net_new_terms are candidates -- validate demand with gsc_keyword_expand "
+            "(owned footprint) or keyword_universe (external volume)."),
         ],
     })
 

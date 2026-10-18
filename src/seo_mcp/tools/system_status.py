@@ -13,14 +13,14 @@ schema is exposed as a plain dict; ``server.py`` wraps it into an mcp ``Tool``.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from .. import __version__
 from ..auth import google_auth_method, google_configured, required_scopes
 from ..config import Config
 from ..errors import ok
 from ._helpers import annotations
-
 
 TOOL: dict[str, Any] = {
     "name": "system_status",
@@ -156,7 +156,7 @@ def _probe(clients: Mapping[str, Any], key: str, probe: bool) -> bool | None:
         return None
     try:
         client = clients.get(key)
-    except Exception:
+    except Exception:  # noqa: BLE001  # Status reports failed builders and probes without raising.
         # Building the client failed (e.g. missing/!invalid Google auth): the
         # service is configured but not reachable with these credentials.
         return False
@@ -164,7 +164,7 @@ def _probe(clients: Mapping[str, Any], key: str, probe: bool) -> bool | None:
         return None
     try:
         return bool(client.probe())
-    except Exception:
+    except Exception:  # noqa: BLE001  # Status reports failed builders and probes without raising.
         return False
 
 

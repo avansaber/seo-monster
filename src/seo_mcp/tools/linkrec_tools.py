@@ -26,9 +26,10 @@ over the raw position band.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from datetime import date, timedelta
 from html.parser import HTMLParser
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urldefrag, urljoin, urlparse
 
 from ..clients.errors import ApiError
@@ -343,15 +344,15 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
             "per_source_cap": _PER_SOURCE_CAP,
         },
         "caveats": [
-            "Relevance is lexical (query-term overlap), not semantic; review each "
-            "suggestion in context before adding it.",
-            "GSC average position was corrupted by the 2025 impression bug / "
+            ("Relevance is lexical (query-term overlap), not semantic; review each "
+            "suggestion in context before adding it."),
+            ("GSC average position was corrupted by the 2025 impression bug / "
             "num=100 change; when uncertain, trust the impressions + clicks "
-            "demand over the raw position band.",
-            "anchor_already_used flags targets that already have this exact anchor "
+            "demand over the raw position band."),
+            ("anchor_already_used flags targets that already have this exact anchor "
             "elsewhere -- vary the wording to avoid anchor over-optimization. "
             "Never use nofollow on internal links (sculpting has been dead since "
-            "2009).",
+            "2009)."),
         ],
     })
 

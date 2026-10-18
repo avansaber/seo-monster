@@ -34,7 +34,6 @@ from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
 
-
 _SERVICE = "psi"
 _REMEDIATION = "PageSpeed Insights needs no key to work, but a PSI_API_KEY relaxes rate limits."
 

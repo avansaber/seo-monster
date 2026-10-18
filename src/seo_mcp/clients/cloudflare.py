@@ -22,7 +22,6 @@ from ..config import Config
 from ..errors import ErrorCode
 from .errors import ApiError, map_http_status
 
-
 API_BASE = "https://api.cloudflare.com/client/v4"
 _TIMEOUT_SECONDS = 20
 _DYNAMIC_REDIRECT_PHASE = "http_request_dynamic_redirect"

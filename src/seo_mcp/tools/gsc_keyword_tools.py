@@ -23,8 +23,9 @@ Two findings shape the design:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
@@ -197,18 +198,18 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
         "net_new": net_new,
         "filters_applied": {"impressions_min": impressions_min},
         "caveats": [
-            "'none' = no VISIBLE footprint. GSC anonymizes queries with low "
+            ("'none' = no VISIBLE footprint. GSC anonymizes queries with low "
             "volume (~75% of impressions hidden), so a 'net-new' term may "
-            "already get hidden impressions. Treat net-new as scored hypotheses.",
-            "Confidence is sibling-strength only (free, owned-data). "
+            "already get hidden impressions. Treat net-new as scored hypotheses."),
+            ("Confidence is sibling-strength only (free, owned-data). "
             "autocomplete_present and external_volume are null until the SERP / "
-            "DataForSEO clients ship (Wave 3).",
-            "A wider `days` window surfaces more footprint; this is read against "
-            "your own property, not external volume.",
-            "footprint: covered = exact match with impressions; thin = exact match "
+            "DataForSEO clients ship (Wave 3)."),
+            ("A wider `days` window surfaces more footprint; this is read against "
+            "your own property, not external volume."),
+            ("footprint: covered = exact match with impressions; thin = exact match "
             "below impressions_min OR a substring overlap with an owned query; none "
             "= no overlap. net_new = 'none' + 'thin' terms with zero footprint "
-            "impressions (substring coincidence only), ranked by sibling strength.",
+            "impressions (substring coincidence only), ranked by sibling strength."),
         ],
     })
 

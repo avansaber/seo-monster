@@ -11,13 +11,13 @@ neglect; Google's documentation suggests no more than five hops total.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."

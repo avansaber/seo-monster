@@ -28,8 +28,9 @@ non-deterministic: validated by the tester, not by mocks.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Mapping
 from math import sqrt
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -103,11 +104,11 @@ def _domains_of(citations: list[dict[str, Any]]) -> set[str]:
 def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mapping[str, Any]) -> dict[str, Any]:
     try:
         ai = clients.get("ai_engines")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
         ai = None
     try:
         dfs = clients.get("dataforseo")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
         dfs = None
 
     available: list[str] = list(ai.available_engines()) if ai is not None else []
@@ -225,14 +226,14 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
             "appearance": "brand name in answer text OR a cited domain matching brand_domains",
         },
         "caveats": [
-            "Developer-API output is NOT what a logged-in user sees (measured "
+            ("Developer-API output is NOT what a logged-in user sees (measured "
             "ChatGPT API-vs-UI overlap ~24% brands / ~4% sources). This is a "
-            "directional proxy, labeled per engine.",
-            "Google AI Overviews has no API; google_aio uses DataForSEO SERP "
-            "scraping, which is ToS-contested and may be fragile.",
-            "LLM answers are non-deterministic; a single run is uninformative. "
+            "directional proxy, labeled per engine."),
+            ("Google AI Overviews has no API; google_aio uses DataForSEO SERP "
+            "scraping, which is ToS-contested and may be fragile."),
+            ("LLM answers are non-deterministic; a single run is uninformative. "
             "Trust the sampled visibility + CI + volatility, never a point 'rank'. "
-            "Freeze the prompt + competitor set across cycles and date each run.",
+            "Freeze the prompt + competitor set across cycles and date each run."),
             "Increase samples for tighter CIs; >=7 recommended, more for high-volatility engines.",
         ],
     })

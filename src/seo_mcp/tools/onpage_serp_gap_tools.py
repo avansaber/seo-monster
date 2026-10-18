@@ -13,7 +13,8 @@ parity (matching competitors scores low; original data/expertise wins).
 from __future__ import annotations
 
 import statistics
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -36,7 +37,7 @@ def _registrable(host: str) -> str:
     """Strip a leading ``www.`` so Open PageRank resolves a score (tester F6:
     every www-prefixed host returned page_rank null, the bare domain resolved)."""
     h = (host or "").lower()
-    return h[4:] if h.startswith("www.") else h
+    return h.removeprefix("www.")
 
 
 def _fetch_parsed(http: Any, url: str):
@@ -102,7 +103,7 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
             )
         try:
             dfs = clients.get("dataforseo")
-        except Exception:
+        except Exception:  # noqa: BLE001  # Optional evidence failures preserve partial results.
             dfs = None
         if dfs is None:
             return err(
@@ -198,7 +199,7 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
     competitor_authority = None
     try:
         opr = clients.get("openpagerank")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional evidence failures preserve partial results.
         opr = None
     if opr is not None and comp_domains:
         # F6: query Open PageRank with the registrable domain (strip www.), which
@@ -238,13 +239,13 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
         "actions": actions,
         "caveats": [
             "Word comparisons are unavailable for scripts needing segmentation; stopword filters are English-only.",
-            "Gaps are lexical (term/heading overlap), not semantic -- review before "
-            "acting. Entities are document-frequency terms, not verified entities.",
-            "Match-the-competitors is table stakes; the ranking lever in 2026 is "
-            "information gain (something novel), which a gap analysis can't supply.",
+            ("Gaps are lexical (term/heading overlap), not semantic -- review before "
+            "acting. Entities are document-frequency terms, not verified entities."),
+            ("Match-the-competitors is table stakes; the ranking lever in 2026 is "
+            "information gain (something novel), which a gap analysis can't supply."),
         ] + ([
-            "serp_composition flags zero-click risk (AI Overview / UGC dominance): "
-            "a winnable SERP can still be not-worth-winning."
+            ("serp_composition flags zero-click risk (AI Overview / UGC dominance): "
+            "a winnable SERP can still be not-worth-winning.")
         ] if serp_composition else []),
     })
 

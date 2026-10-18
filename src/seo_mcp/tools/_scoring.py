@@ -12,7 +12,8 @@ No new dependency: pure arithmetic over plain dicts, fully unit-testable.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 # Evidence tiers. A = causal / experimental support (e.g. the GEO paper's
 # measured lifts); B = correlational; C = informational only (report, do not
@@ -32,7 +33,7 @@ def _clamp01(x: Any) -> float:
         v = float(x)
     except (TypeError, ValueError):
         return 0.0
-    return 0.0 if v < 0.0 else 1.0 if v > 1.0 else v
+    return 0.0 if v < 0.0 else min(v, 1.0)
 
 
 def band_for(score: float, *, high: float = _BAND_HIGH, moderate: float = _BAND_MODERATE) -> str:

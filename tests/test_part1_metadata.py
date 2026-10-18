@@ -1,12 +1,11 @@
 """Public engine metadata and local coordination-file exclusion contracts."""
 
 import json
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 from seo_mcp import __version__
 from seo_mcp.errors import DOCS_BASE
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = "https://www.avansaber.com/seomonster/"

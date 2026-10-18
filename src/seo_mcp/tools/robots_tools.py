@@ -16,13 +16,13 @@ implements the proper longest-match-wins with Allow-breaks-ties rule.
 from __future__ import annotations
 
 import secrets
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."
@@ -288,9 +288,8 @@ def _pick_group(groups: list[dict[str, Any]], user_agent: str) -> dict[str, Any]
             ua_clean = ua.strip().lower()
             if ua_clean == "*":
                 star = g
-            elif ua_clean and ua_lower.startswith(ua_clean):
-                if specific is None or len(ua_clean) > specific[0]:
-                    specific = (len(ua_clean), g)
+            elif ua_clean and ua_lower.startswith(ua_clean) and (specific is None or len(ua_clean) > specific[0]):
+                specific = (len(ua_clean), g)
     if specific is not None:
         return specific[1]
     return star

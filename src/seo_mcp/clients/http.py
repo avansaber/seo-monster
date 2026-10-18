@@ -33,7 +33,6 @@ from .. import __version__
 from ..errors import ErrorCode
 from .errors import ApiError
 
-
 # Derived from the package version rather than hardcoded: this string drifted
 # behind the real version for several releases because it was a literal, and a
 # release-gate check does not cover it (see PLAN §11.4.2).

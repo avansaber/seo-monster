@@ -6,13 +6,13 @@ not gated behind SEO_MCP_ALLOW_DESTRUCTIVE because the operation is additive
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..clients.indexnow import _host_of
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations, preflight_get, require_client
-
 
 _SERVICE = "indexnow"
 _REMEDIATION = (

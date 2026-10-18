@@ -13,9 +13,14 @@ external testing pass on that version.
 
 ### Fixed
 
+- Keyword-provider domain normalisation removes only a literal www prefix, preserving valid leading letters in domains such as widget.example.
 - Unicode lexical extraction now retains non-Latin letters and combining marks in word counts, content terms, entities and token ratios. Scripts requiring segmentation carry explicit limits instead of producing confident word-based comparisons.
 - AI readiness no longer labels substantial CJK or Thai server-rendered text as render-blind solely because lexical word counts are low. Unsupported stuffing and statistics-density signals remain unavailable.
 - Cloudflare settings auditing reads hostname configuration rules, reports source/rule order and coverage limits, and withholds zone-wide Strict fix hints while origin readiness is unknown. Permission failures retain the observed zone settings with explicit uncertainty.
+
+### Development
+
+- Adopt Ruff 0.17, refresh the development lockfile and preserve the existing provider error boundaries. MCP remains below version 2. New regressions protect the exact registry contracts, stdio handshake and literal domain-prefix handling.
 
 ### Documentation
 

@@ -17,7 +17,7 @@ def test_entries_well_formed():
 
 def test_tokens_unique():
     tokens = crawler_tokens()
-    assert len(tokens) == len(set(t.lower() for t in tokens))
+    assert len(tokens) == len({t.lower() for t in tokens})
 
 
 def test_known_crawlers_present():

@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import statistics
 from collections import Counter
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
@@ -80,7 +81,7 @@ TOOL = {
 def _own_ranking_pages(clients: Mapping[str, Any], config: Any, site: str, query: str, days: int) -> list[str]:
     try:
         gsc = clients.get("gsc")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional SERP failure preserves the first-party fallback.
         gsc = None
     if gsc is None:
         return []
@@ -182,10 +183,10 @@ def content_brief_data(arguments: Mapping[str, Any], config: Any, clients: Mappi
     entities = [t for t, _ in doc_freq.most_common(20)]
 
     caveats = [
-        "Target word count is the top-page MEDIAN -- treat it as a floor, not a "
-        "target; length is a container, not a strategy.",
-        "Entities are document-frequency terms across the analyzed pages (lexical, "
-        "not semantic) -- the host should refine which are genuine entities.",
+        ("Target word count is the top-page MEDIAN -- treat it as a floor, not a "
+        "target; length is a container, not a strategy."),
+        ("Entities are document-frequency terms across the analyzed pages (lexical, "
+        "not semantic) -- the host should refine which are genuine entities."),
     ]
     caveats.append("Word targets are unavailable when an analyzed page needs language-specific segmentation; stopwords remain English-only.")
     if source == "own_ranking_pages":

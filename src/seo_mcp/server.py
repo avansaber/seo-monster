@@ -18,7 +18,8 @@ import asyncio
 import json
 import os
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -74,7 +75,6 @@ from .tools import (
     system_status,
     topic_cluster_tools,
 )
-
 
 server = Server("seo-mcp")
 
@@ -311,8 +311,7 @@ def _legacy_alias_invocation(argv0: str | None) -> bool:
         return False
     base = os.path.basename(argv0)
     # Strip Windows ".exe" / launchers.
-    if base.endswith(".exe"):
-        base = base[:-4]
+    base = base.removesuffix(".exe")
     return base == "seo-mcp"
 
 

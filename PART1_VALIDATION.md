@@ -1,6 +1,6 @@
 # Part 1 Engine safety validation
 
-Local candidate prepared on 2026-10-03. This document describes unreleased engine changes, not a public release or a host-installation claim. Package version remains 0.9.3 until release preparation is approved.
+Engine changes prepared on 2026-10-03; Ruff migration added on 2026-10-18. These changes remain unreleased. Package version remains 0.9.3 until release preparation is approved.
 
 ## Delivered behaviour
 
@@ -28,17 +28,33 @@ Primary documentation checked on 2026-10-03: [Configuration Rules](https://devel
 
 | Item | Local disposition |
 |---|---|
-| Issue 12 | Extraction and downstream regressions implemented; tracker response waits for public delivery approval |
+| Issue 12 | Extraction regressions implemented and tracker reply posted; keep open through main integration and release verification |
 | Issue 11 | Optional provider evaluation remains part 4; no default provider precedence change |
-| Issue 1 | Marketplace acknowledgement is prepared as an owner action, with no production change |
+| Issue 1 | Marketplace discussion answered and closed; no SDK or badge integration |
 | PR 8 | Keep MCP `<2`; the SDK major migration is separate from widening the dependency bound |
-| PR 7 | Keep the tested Ruff pin; Ruff 0.16.0 found 166 lint findings on this candidate tree |
+| PRs 7 and 13 | PR 7 was superseded by 13. This local migration resolves Ruff 0.17 findings; no PR merge is implied |
 | PRs 3 through 6 | Proposed action tags exist upstream; individual historical core jobs passed, informational canaries failed. No merge or workflow upgrade is performed here; fresh candidate workflow acceptance is still required |
 
-GitHub source references: [open issues](https://github.com/avansaber/seo-monster/issues), [MCP proposal](https://github.com/avansaber/seo-monster/pull/8), [Ruff proposal](https://github.com/avansaber/seo-monster/pull/7), and the action proposals [3](https://github.com/avansaber/seo-monster/pull/3), [4](https://github.com/avansaber/seo-monster/pull/4), [5](https://github.com/avansaber/seo-monster/pull/5), [6](https://github.com/avansaber/seo-monster/pull/6). Checked read-only on 2026-10-03. Historical PR checks do not prove the current candidate is merge-ready.
+GitHub source references: [open issues](https://github.com/avansaber/seo-monster/issues), [MCP proposal](https://github.com/avansaber/seo-monster/pull/8), [Ruff proposal](https://github.com/avansaber/seo-monster/pull/13), and the action proposals [3](https://github.com/avansaber/seo-monster/pull/3), [4](https://github.com/avansaber/seo-monster/pull/4), [5](https://github.com/avansaber/seo-monster/pull/5), [6](https://github.com/avansaber/seo-monster/pull/6). Checked read-only on 2026-10-18. Historical PR checks do not prove the current candidate is merge-ready.
 
 ## Remaining public checkpoint
 
 Build and inspect an engine-only candidate without unrelated companion CI hunks or an unavailable companion link. Validate the clean source and exact installed engine wheel, then run two final security scans. Obtain approval before any commit or public push. Confirm public CI and installation afterwards. Registry publication, website metadata deployment and directory submissions each need approval for those acts.
 
 Hosted ChatGPT, local plugin installation in additional hosts and public Workbench packaging remain part 2. Approved business claims, engine configuration precedence and write controls are unchanged.
+
+## Ruff migration validation
+
+The development dependency now supports Ruff 0.17 and rejects other minor lines through required-version. The dependency lockfile resolves Ruff 0.17.1; the supported MCP bound remains below 2 and its locked version is unchanged. Default lint rules remain enabled, with no global or per-file exclusions. Targeted BLE001 comments preserve existing optional-provider, setup, status and preflight failure boundaries.
+
+The migration also corrects literal www-prefix removal in keyword_universe: domains beginning with w retain their leading letters. New offline regressions verify the normalised domains passed to the provider, unchanged lexical word sets, numeric edge behaviour, exact tool/prompt contract hashes, the actual stdio handshake and safe result envelopes. Negative cases prove that schema, prompt, registry and lockfile changes are detected.
+
+Reproduce the engine checkpoint from a clean source checkout:
+
+```sh
+uv sync --frozen --extra dev
+uv run --frozen ruff check --no-cache src tests
+uv run --frozen pytest -q -p no:cacheprovider tests
+```
+
+Tests use synthetic data and the stdio check loads an empty temporary configuration. The server still exposes 70 tools and 13 prompts. SDK-major migration, provider measurement changes and companion distribution are separate work. Artifact validation and publication remain separate gates.

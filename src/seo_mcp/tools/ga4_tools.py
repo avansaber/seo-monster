@@ -11,14 +11,14 @@ The property id comes from the argument or the configured default; both bare
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..clients.ga4 import normalize_property_id
 from ..config import Config
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations, require_client
-
 
 _SERVICE = "ga4"
 _REMEDIATION = (
@@ -484,11 +484,11 @@ def ga4_setup_audit(arguments, config, clients) -> dict[str, Any]:
             "deferred_checks": [],
             "notes": [
                 "Read-only: no configuration is changed.",
-                "Audits measurement hygiene for SEO. It cannot tell you whether "
-                "your key events are the RIGHT business events; that is your context.",
-                "Enhanced-measurement, site-search, and Google Signals checks use "
+                ("Audits measurement hygiene for SEO. It cannot tell you whether "
+                "your key events are the RIGHT business events; that is your context."),
+                ("Enhanced-measurement, site-search, and Google Signals checks use "
                 "the GA4 Admin v1alpha API; they are skipped silently when v1alpha "
-                "is unreachable.",
+                "is unreachable."),
             ],
         }
     )

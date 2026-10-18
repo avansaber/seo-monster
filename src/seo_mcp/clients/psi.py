@@ -20,7 +20,6 @@ from ..config import Config
 from ..errors import ErrorCode
 from .errors import ApiError, map_http_status
 
-
 _ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 _DEFAULT_CATEGORIES = ("performance", "accessibility", "best-practices", "seo")
 _TIMEOUT_SECONDS = 90

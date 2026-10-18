@@ -12,13 +12,19 @@ flag (see cf_tools in a later phase).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Any, Mapping
+from typing import Any
 
-from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ..clients.errors import ApiError
-from ._helpers import annotations, missing_site_error, preflight_get, require_client, resolve_site
-
+from ..errors import DOCS_BASE, ErrorCode, err, ok
+from ._helpers import (
+    annotations,
+    missing_site_error,
+    preflight_get,
+    require_client,
+    resolve_site,
+)
 
 _SERVICE = "gsc"
 _REMEDIATION = (

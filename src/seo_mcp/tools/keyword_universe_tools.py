@@ -16,7 +16,8 @@ running OAuth token lacks it) -- a tester live-setup step, not a dev failure.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -34,7 +35,7 @@ _MAX_COMPETITORS = 5
 # Derivational suffixes (plurals handled separately so makes->make, not mak).
 _GAP_SUFFIXES = ("ements", "ement", "ations", "ation", "izations", "ization", "ings", "ing", "edly", "ed", "ly")
 _GAP_CONNECTIVES = frozenset(
-    "using use uses that with for the a an to of in on and or via by your you it".split()
+    ["using", "use", "uses", "that", "with", "for", "the", "a", "an", "to", "of", "in", "on", "and", "or", "via", "by", "your", "you", "it"]
 )
 
 
@@ -83,7 +84,7 @@ def _domain(value: str) -> str:
     if v.startswith("sc-domain:"):
         return v.split(":", 1)[1]
     p = urlparse(v if "//" in v else f"//{v}")
-    return (p.netloc or p.path).lower().lstrip("www.") or v.lower()
+    return (p.netloc or p.path).lower().removeprefix("www.") or v.lower()
 
 
 TOOL = {
@@ -114,7 +115,7 @@ TOOL = {
 def keyword_universe(arguments: Mapping[str, Any], config: Any, clients: Mapping[str, Any]) -> dict[str, Any]:
     try:
         dfs = clients.get("dataforseo")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional providers retain the auth envelope.
         dfs = None
     gads_configured = bool(getattr(config, "google_ads_developer_token", None) and getattr(config, "google_ads_customer_id", None))
 
@@ -188,12 +189,12 @@ def keyword_universe(arguments: Mapping[str, Any], config: Any, clients: Mapping
         "volume": volume,
         "notes": notes,
         "caveats": [
-            "Competitor gap is the durable value here (no Google product provides "
+            ("Competitor gap is the durable value here (no Google product provides "
             "it). External volume is a degraded directional signal in 2026 "
             "(bucketing + clickstream noise + zero-click erosion) -- a tiebreaker, "
-            "never a gate. Owned GSC impressions beat it.",
-            "Never drop a high-intent zero-volume term just because external "
-            "volume is low or missing.",
+            "never a gate. Owned GSC impressions beat it."),
+            ("Never drop a high-intent zero-volume term just because external "
+            "volume is low or missing."),
         ],
     })
 

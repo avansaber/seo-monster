@@ -14,7 +14,6 @@ from typing import Any
 
 from ..errors import DOCS_BASE, ErrorCode, err
 
-
 # Error codes whose remediation points at the auth docs section.
 _AUTH_CODES = {
     ErrorCode.AUTH_MISSING,

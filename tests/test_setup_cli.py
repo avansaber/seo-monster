@@ -19,7 +19,6 @@ from seo_mcp.config import (
     write_config_toml,
 )
 
-
 # --- config writer / path helpers ----------------------------------------
 
 

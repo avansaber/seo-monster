@@ -14,14 +14,14 @@ which lives in a separate module).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from html.parser import HTMLParser
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."
