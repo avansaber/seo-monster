@@ -54,6 +54,18 @@ def _types() -> Any:
     return t
 
 
+def _invalid_dimension_filter(reason: str) -> ApiError:
+    return ApiError(
+        ErrorCode.INVALID_INPUT,
+        f"Invalid GA4 dimension_filter: {reason}",
+        remediation=(
+            "Omit dimension_filter, or use a simple field/value string filter "
+            "with a supported match_type, or a field/in_list filter. "
+            "Composite filter expressions are not supported."
+        ),
+    )
+
+
 class Ga4Client:
     def __init__(self, analytics_client: Any, default_property: str | None = None) -> None:
         self._analytics = analytics_client
@@ -65,28 +77,51 @@ class Ga4Client:
         """Build a FilterExpression from the documented simple form:
         ``{"field": ..., "value": ..., "match_type": "EXACT"}`` for a string
         filter, or ``{"field": ..., "in_list": [...]}`` for an in-list filter."""
-        if not spec:
+        if spec is None:
             return None
+        if not isinstance(spec, dict) or set(spec) - {"field", "value", "match_type", "in_list", "values"}:
+            raise _invalid_dimension_filter("Use only the supported simple filter keys.")
         field = spec.get("field")
-        if not field:
-            return None
-        t = _types()
-        values = spec.get("in_list") or spec.get("values")
-        if values:
+        if not isinstance(field, str) or not field.strip():
+            raise _invalid_dimension_filter("A non-empty string field is required.")
+        scalar_types = (str, int, float, bool)
+        if "in_list" in spec or "values" in spec:
+            if (
+                ("in_list" in spec and "values" in spec)
+                or "value" in spec
+                or "match_type" in spec
+            ):
+                raise _invalid_dimension_filter("Use one list key without string-filter options.")
+            values = spec["in_list"] if "in_list" in spec else spec["values"]
+            if (
+                not isinstance(values, (list, tuple))
+                or not values
+                or not all(isinstance(value, scalar_types) for value in values)
+            ):
+                raise _invalid_dimension_filter("A list filter requires a non-empty list of scalar values.")
+            t = _types()
             return t.FilterExpression(
                 filter=t.Filter(
                     field_name=field,
                     in_list_filter=t.Filter.InListFilter(values=[str(v) for v in values]),
                 )
             )
-        match_name = str(spec.get("match_type") or "EXACT").upper()
-        match_type = getattr(
-            t.Filter.StringFilter.MatchType, match_name, t.Filter.StringFilter.MatchType.EXACT
-        )
+        if "value" not in spec or not isinstance(spec["value"], scalar_types):
+            raise _invalid_dimension_filter("A string filter requires a scalar value.")
+        match_name = spec.get("match_type", "EXACT")
+        if not isinstance(match_name, str):
+            raise _invalid_dimension_filter("match_type must name a supported string match.")
+        t = _types()
+        try:
+            match_type = t.Filter.StringFilter.MatchType[match_name.upper()]
+        except KeyError:
+            raise _invalid_dimension_filter("Unknown string match type.") from None
+        if match_type == t.Filter.StringFilter.MatchType.MATCH_TYPE_UNSPECIFIED:
+            raise _invalid_dimension_filter("An unspecified string match type is not supported.")
         return t.FilterExpression(
             filter=t.Filter(
                 field_name=field,
-                string_filter=t.Filter.StringFilter(value=str(spec.get("value", "")), match_type=match_type),
+                string_filter=t.Filter.StringFilter(value=str(spec["value"]), match_type=match_type),
             )
         )
 
