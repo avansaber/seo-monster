@@ -77,3 +77,6 @@ archive/
 # Separate package: tested with this repository, but never bundled into the
 # SEOmonster MCP server artifact.
 companion/
+
+# Build-time source inventory guard is not a runtime dependency.
+scripts/

@@ -42,11 +42,11 @@ def _assert_contract(tools, prompts):
 
 def _registry():
     async def collect():
-        tools = await server.list_tools()
-        prompts = await server.list_prompts()
+        tools = await server.list_tools(None, None)
+        prompts = await server.list_prompts(None, None)
         return (
-            [tool.model_dump(mode="json", exclude_none=True) for tool in tools],
-            [prompt.model_dump(mode="json", exclude_none=True) for prompt in prompts],
+            [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in tools.tools],
+            [prompt.model_dump(mode="json", by_alias=True, exclude_none=True) for prompt in prompts.prompts],
         )
 
     return asyncio.run(collect())
@@ -54,7 +54,7 @@ def _registry():
 
 def test_supported_mcp_bound_and_ruff_migration_policy():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    assert "mcp>=1.0.0,<2" in project["project"]["dependencies"]
+    assert "mcp>=2.3.0,<3" in project["project"]["dependencies"]
     assert "ruff>=0.17,<0.18" in project["project"]["optional-dependencies"]["dev"]
     policy = project["tool"]["ruff"]
     assert policy["required-version"] == ">=0.17,<0.18"
@@ -66,17 +66,17 @@ def test_supported_mcp_bound_and_ruff_migration_policy():
 def _assert_locked_tools(lock):
     packages = {package["name"]: package for package in lock["package"]}
     assert packages["ruff"]["version"].startswith("0.17.")
-    assert packages["mcp"]["version"].startswith("1.")
+    assert packages["mcp"]["version"].startswith("2.")
     requirements = packages["seo-monster"]["metadata"]["requires-dist"]
     assert {"name": "ruff", "marker": "extra == 'dev'", "specifier": ">=0.17,<0.18"} in requirements
-    assert {"name": "mcp", "specifier": ">=1.0.0,<2"} in requirements
+    assert {"name": "mcp", "specifier": ">=2.3.0,<3"} in requirements
 
 
 def test_lockfile_matches_supported_linter_and_sdk():
     _assert_locked_tools(tomllib.loads((ROOT / "uv.lock").read_text()))
 
 
-@pytest.mark.parametrize(("package", "version"), [("ruff", "0.15.15"), ("mcp", "2.3.0")])
+@pytest.mark.parametrize(("package", "version"), [("ruff", "0.15.15"), ("mcp", "1.30.0"), ("mcp", "3.0.0")])
 def test_lock_guard_rejects_stale_linter_and_sdk_major_mutations(package, version):
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
     next(item for item in lock["package"] if item["name"] == package)["version"] = version
@@ -147,13 +147,14 @@ def test_stdio_handshake_registry_and_safe_envelopes(tmp_path, launcher):
     initialized, tools, prompts, results = asyncio.run(
         asyncio.wait_for(exercise(), timeout=20),
     )
-    assert initialized.serverInfo.name == "seo-mcp"
+    assert initialized.server_info.name == "seo-mcp"
     _assert_contract(
-        [tool.model_dump(mode="json", exclude_none=True) for tool in tools.tools],
-        [prompt.model_dump(mode="json", exclude_none=True) for prompt in prompts.prompts],
+        [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in tools.tools],
+        [prompt.model_dump(mode="json", by_alias=True, exclude_none=True) for prompt in prompts.prompts],
     )
+    assert results[0].is_error is False
+    assert results[1].is_error is True
     for result in results:
-        assert result.isError is False
         assert sorted(json.loads(result.content[0].text)) == ["data", "error", "ok"]
     observed, rejected = [json.loads(result.content[0].text) for result in results]
     assert observed["ok"] is True and observed["error"] is None

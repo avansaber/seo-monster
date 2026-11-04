@@ -11,6 +11,13 @@ external testing pass on that version.
 
 ## [Unreleased]
 
+### Changed
+
+- The engine requires MCP Python SDK 2.3 or later within major version 2. SDK 1 is no longer supported. Python 3.11 remains the minimum.
+- MCP handlers return typed protocol results and identify the actual engine version. Failed tool operations set the protocol error flag while retaining their JSON error envelope.
+- Tool arguments are validated before configuration or provider initialization. Blocking provider operations use a bounded worker pool; cancellation does not retry an operation or imply rollback.
+- SDK diagnostics and unexpected protocol errors omit request values and exception details. Local coordination records are excluded by source-distribution checks.
+
 ### Security
 
 - onpage_serp_gap fetches SERP-sourced competitor URLs only when every redirect hop resolves to public addresses. Loopback, private, link-local, shared, multicast and cloud-metadata hosts are refused per competitor. URLs supplied by the caller keep the existing behaviour. **(validate)**

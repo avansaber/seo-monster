@@ -138,9 +138,11 @@ def test_get_prompt_returns_user_role_message():
     pytest.importorskip("mcp")
     import asyncio
 
+    from mcp.types import GetPromptRequestParams
+
     from seo_mcp import server
 
-    res = asyncio.run(server.get_prompt("weekly_review", {"days": 7}))
+    res = asyncio.run(server.get_prompt(None, GetPromptRequestParams(name="weekly_review", arguments={"days": "7"})))
     assert res.description
     assert len(res.messages) == 1
     msg = res.messages[0]
@@ -155,9 +157,9 @@ def test_list_prompts_matches_registry():
 
     from seo_mcp import server
 
-    listed = asyncio.run(server.list_prompts())
-    assert {p.name for p in listed} == set(prompts.prompt_names())
-    assert len(listed) == len(prompts.prompt_names())
+    listed = asyncio.run(server.list_prompts(None, None))
+    assert {p.name for p in listed.prompts} == set(prompts.prompt_names())
+    assert len(listed.prompts) == len(prompts.prompt_names())
 
 
 def test_system_status_surfaces_prompt_names(make_config):

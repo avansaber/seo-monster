@@ -63,3 +63,7 @@ smoke.py
 # exactly this reason. Cheap insurance against a future version dropping a
 # live credential into a public repo.
 .mcpregistry*
+
+# Local coordination records never belong in source history.
+CLAUDE.md
+HANDOFF.md

@@ -43,7 +43,8 @@ jobs:
       - name: Reject internal planning docs in tag tree
         run: |
           set -euo pipefail
-          bad=$(git ls-tree -r --name-only HEAD | grep -E '^(RESEARCH-AND-PROPOSAL|LISTINGS-PLAN|PLAN)\.md$|^marketing/|^\.private/' || true)
+          python3 scripts/check_distribution.py
+          bad=$(git ls-tree -r --name-only HEAD | grep -E '^(RESEARCH-AND-PROPOSAL|LISTINGS-PLAN|PLAN|CLAUDE|HANDOFF)\.md$|^marketing/|^\.private/' || true)
           if [ -n "$bad" ]; then
             echo "::error::Internal planning docs found tracked at this tag:"
             echo "$bad"
