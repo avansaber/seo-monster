@@ -1,0 +1,23 @@
+{
+  "format_version": "seomonster-deployment-observation/v1",
+  "observed_at": "2026-08-03T12:00:00Z",
+  "environment": "synthetic-production",
+  "verification_state": "artifact_observed",
+  "source": {
+    "kind": "deployment_receipt",
+    "reference": "synthetic-receipt-001",
+    "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "summary": "A synthetic page revision was reported by the fixture deployment system.",
+  "operations": [
+    {
+      "kind": "content_revision",
+      "target": "https://example.test/evidence",
+      "description": "Applied the separately reviewed synthetic page revision."
+    }
+  ],
+  "rollback_reference": "synthetic-rollback-revision-001",
+  "caveats": [
+    "This fixture records an external observation; the workbench did not perform the change."
+  ]
+}

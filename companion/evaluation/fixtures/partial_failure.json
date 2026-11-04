@@ -1,0 +1,18 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "gsc_search_analytics",
+  "captured_at": "2026-09-02T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "gsc", "status": "degraded", "cost": {"model": "first_party", "currency": "USD", "amount": 0}},
+  "arguments": {"dimensions": ["query", "page"], "data_state": "all"},
+  "result": {
+    "ok": true,
+    "data": {
+      "rows": [
+        {"keys": ["partial seo", "https://example.test/partial"], "clicks": 5, "impressions": 200, "ctr": 0.025, "position": 11}
+      ],
+      "failed": [{"slice": "mobile", "code": "RATE_LIMITED", "message": "Synthetic partial failure"}]
+    },
+    "error": null
+  }
+}

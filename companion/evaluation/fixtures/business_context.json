@@ -1,0 +1,9 @@
+{
+  "audience": "Teams operating related educational websites",
+  "approved_claims": [
+    "Example Test publishes practical evidence-management guidance.",
+    "The documentation site provides implementation references."
+  ],
+  "goals": ["Make approved content easier to discover and extract"],
+  "notes": "These statements are approved source material and are never assigned an automated truth score."
+}

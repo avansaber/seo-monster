@@ -1,0 +1,20 @@
+{
+  "name": "seomonster-workbench",
+  "version": "0.6.0",
+  "description": "Inspect SEO evidence, govern ownership, and review local change observations.",
+  "author": {
+    "name": "AvanSaber Inc."
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "SEOmonster Workbench",
+    "shortDescription": "Inspect SEO evidence and record local decisions.",
+    "longDescription": "Use saved SEOmonster results to inspect recommendations, review cross-site visibility, draft local plans, inspect change observations, and compare outcomes without external execution.",
+    "developerName": "AvanSaber Inc.",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Review my saved SEO opportunities.", "Inspect this deployment observation and its approval alignment.", "Compare this experiment without claiming causation."]
+  },
+  "mcpServers": "./.mcp.json",
+  "license": "MIT"
+}

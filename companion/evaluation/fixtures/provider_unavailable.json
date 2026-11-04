@@ -1,0 +1,13 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "keyword_universe",
+  "captured_at": "2026-09-02T00:00:00Z",
+  "freshness": "unknown",
+  "provider": {"name": "dataforseo", "status": "unavailable", "cost": {"model": "paid", "currency": "USD", "amount": null}},
+  "arguments": {"seeds": ["seo evidence"]},
+  "result": {
+    "ok": false,
+    "data": null,
+    "error": {"code": "AUTH_MISSING", "service": "dataforseo", "message": "The optional paid provider is not configured.", "remediation": "Continue with first-party inputs or configure the provider separately.", "docs_url": null, "details": null}
+  }
+}

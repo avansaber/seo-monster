@@ -1,0 +1,14 @@
+{
+  "version": "2026-09-09.1",
+  "scenarios": [
+    {"name": "striking distance and cannibalization", "fixture": "gsc_baseline.json", "expect": {"minimum_evidence": 3, "minimum_findings": 3, "availability": "observed"}},
+    {"name": "content decay", "fixture": "content_decay.json", "expect": {"minimum_evidence": 1, "minimum_findings": 1, "availability": "observed"}},
+    {"name": "migration and crawl routing", "fixture": "crawl_migration.json", "expect": {"minimum_evidence": 1, "minimum_findings": 1, "availability": "observed"}},
+    {"name": "GA4 cold start", "fixture": "ga4_cold_start.json", "expect": {"minimum_evidence": 1, "minimum_findings": 0, "availability": "unavailable"}},
+    {"name": "missing paid provider", "fixture": "provider_unavailable.json", "expect": {"minimum_evidence": 1, "minimum_findings": 0, "availability": "unavailable"}},
+    {"name": "partial API failure", "fixture": "partial_failure.json", "expect": {"minimum_evidence": 2, "minimum_findings": 1, "availability": "unavailable"}},
+    {"name": "stale AI-citation signal", "fixture": "ai_citation_stale.json", "expect": {"minimum_evidence": 1, "minimum_findings": 0, "availability": "observed"}},
+    {"name": "contradictory AI-citation signals", "fixture": "contradictory_signal.json", "expect": {"minimum_evidence": 1, "minimum_findings": 0, "availability": "contradictory"}},
+    {"name": "malicious fetched SERP content", "fixture": "serp_malicious.json", "expect": {"minimum_evidence": 1, "minimum_findings": 0, "availability": "observed", "untrusted_content": true}}
+  ]
+}

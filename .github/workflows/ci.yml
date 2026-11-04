@@ -74,3 +74,26 @@ jobs:
         run: |
           uv run --no-sync python -c "import importlib.metadata as m; v=m.version('mcp'); print('mcp', v); print('Newer major probed:', int(v.split('.')[0]) > 2)"
           uv run --no-sync pytest -q
+
+  companion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install engine and companion integration dependencies
+        run: |
+          uv python install 3.11
+          uv sync --locked --extra dev --python 3.11
+          uv pip install -e 'companion[mcp,test]'
+          uv pip check
+      - name: Validate independent companion lint
+        run: |
+          uv venv companion/.venv
+          uv pip install --python companion/.venv/bin/python -e 'companion[dev]'
+          companion/.venv/bin/ruff check --isolated companion/src companion/tests companion/scripts
+      - name: Test engine and companion without environment resync
+        run: |
+          uv run --no-sync pytest -q tests companion/tests
+          uv run --no-sync sm-workbench evaluate --fixtures companion/evaluation/fixtures

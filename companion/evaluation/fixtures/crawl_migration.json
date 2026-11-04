@@ -1,0 +1,15 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "redirect_chain_audit",
+  "captured_at": "2026-09-02T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "http", "status": "available", "cost": {"model": "free", "currency": "USD", "amount": 0}},
+  "arguments": {"urls": ["https://example.test/old-guide"]},
+  "result": {
+    "ok": true,
+    "data": {"results": [
+      {"url": "https://example.test/old-guide", "status_chain": [301, 302, 200], "final_url": "https://example.test/archive/guide", "expected_url": "https://example.test/guide"}
+    ]},
+    "error": null
+  }
+}

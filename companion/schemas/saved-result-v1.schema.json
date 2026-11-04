@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seomonster.avansaber.com/schemas/workbench/saved-result-v1.schema.json",
+  "title": "Saved SEOmonster result",
+  "type": "object",
+  "required": ["adapter_version", "tool", "captured_at", "provider", "arguments", "result"],
+  "properties": {
+    "adapter_version": {"const": "seomonster-result/v1"},
+    "tool": {"type": "string", "minLength": 1},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "freshness": {"enum": ["current", "stale", "unknown"]},
+    "provider": {
+      "type": "object",
+      "required": ["name", "status", "cost"],
+      "properties": {
+        "name": {"type": "string"},
+        "status": {"type": "string"},
+        "cost": {
+          "type": "object",
+          "required": ["model", "currency", "amount"],
+          "properties": {
+            "model": {"type": "string"},
+            "currency": {"type": "string"},
+            "amount": {"type": ["number", "null"]}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "arguments": {"type": "object"},
+    "result": {
+      "type": "object",
+      "required": ["ok", "data", "error"],
+      "properties": {
+        "ok": {"type": "boolean"},
+        "data": {},
+        "error": {"type": ["object", "null"]}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
