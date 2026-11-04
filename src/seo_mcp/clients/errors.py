@@ -179,9 +179,26 @@ def map_google_exception(exc: Exception) -> ApiError:
     )
 
 
-def map_http_status(status: int, body: str, *, service: str) -> ApiError:
-    """Map a plain HTTP status (PSI / Cloudflare / CrUX via urllib) to an ApiError."""
+_REDACTED = "[redacted]"
+
+
+def redact_secrets(text: str, secrets: tuple[str, ...] | list[str]) -> str:
+    """Replace each known credential value in ``text``. Upstream error bodies
+    can echo the key a client sent; they are copied into envelope details."""
+    for secret in sorted((s for s in secrets if s), key=len, reverse=True):
+        text = text.replace(secret, _REDACTED)
+    return text
+
+
+def map_http_status(status: int, body: str, *, service: str, secrets: tuple[str, ...] = ()) -> ApiError:
+    """Map a plain HTTP status (PSI / Cloudflare / CrUX via urllib) to an ApiError.
+
+    ``secrets`` are the caller's own credential values; they are redacted from
+    the body before any of it reaches the envelope details."""
+    # Classify before redaction so short credentials cannot alter the markers.
     lowered = body.lower()
+    if secrets:
+        body = redact_secrets(body, secrets)
     # Google's "this API is not enabled for the user's project" path. For
     # googleapiclient-using services (GA4) this surfaces via
     # map_google_exception's SERVICE_DISABLED branch. For urllib-based clients

@@ -11,8 +11,20 @@ external testing pass on that version.
 
 ## [Unreleased]
 
+### Security
+
+- onpage_serp_gap fetches SERP-sourced competitor URLs only when every redirect hop resolves to public addresses. Loopback, private, link-local, shared, multicast and cloud-metadata hosts are refused per competitor. URLs supplied by the caller keep the existing behaviour. **(validate)**
+- Provider-selected page fetches pin validated numeric addresses through every redirect, preserving Host, TLS hostname checks and SNI. This mode refuses proxies, credential-header overrides and write methods. Caller-supplied local/staging fetches retain their existing route. **(validate)**
+- DataForSEO errors use fixed messages and typed status metadata. Free-form HTTP error bodies are omitted, including unrecognised secrets; short-credential redaction and broken error bodies retain safe status mapping. Authentication is not forwarded by urllib redirects. **(validate)**
+
 ### Fixed
 
+- The DataForSEO client returns UPSTREAM_ERROR for non-JSON bodies, read timeouts, dropped connections and structurally wrong responses instead of raising past the safe-error envelope. Malformed individual SERP or keyword entries are skipped. **(validate)**
+- serp_adjacency_expand reports "requested but DataForSEO unavailable" when DataForSEO is configured but every PAA call fails, instead of reporting a missing key.
+- ai_citation_track adds `ai_overview_presence` (shown, not shown, failed) to the google_aio engine row, so a SERP without an AI Overview is distinguishable from an AI Overview that omits the brand. Other engines are unchanged.
+- SERP-derived output now carries a caveat that third-party SERP text is data, not instructions. Results without a SERP provider are unchanged.
+- Missing or wrongly typed SERP containers return an upstream error instead of a confident empty observation. Valid empty lists and explicit zero item counts remain supported. Malformed URLs stay inside safe errors or are skipped before competitor selection and citation parsing. **(validate)**
+- Unknown AI Overview presence is unavailable rather than absent. Those samples are excluded from measurement; all-unavailable Google AIO samples have null visibility and confidence intervals. Unknown zero-click risk remains null. **(validate)**
 - GA4 reports validate dimension filters before requesting data and return INVALID_INPUT for unsupported shapes or match types. Documented string and list filters remain supported.
 - Keyword-provider domain normalisation removes only a literal www prefix, preserving valid leading letters in domains such as widget.example.
 - Unicode lexical extraction now retains non-Latin letters and combining marks in word counts, content terms, entities and token ratios. Scripts requiring segmentation carry explicit limits instead of producing confident word-based comparisons.
