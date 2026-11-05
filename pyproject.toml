@@ -54,25 +54,60 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seo_mcp"]
+# The root .gitignore re-includes these JSON names at any depth; only the
+# tracked root copies belong in a build.
+exclude = ["*/**/.mcp.json", "*/**/manifest.json", "*/**/package.json", "*/**/server.json"]
 
-# Defense in depth: even if an internal planning doc accidentally lands in
-# the working tree, hatchling's sdist target excludes it. The CI workflow
-# (.github/workflows/release.yml) additionally fails any tag push that has
-# these filenames tracked. The .gitignore is the first line of defense.
+# Defense in depth: the source archive is an explicit allowlist, so local
+# tool folders, build output and private notes in a working tree are never
+# swept in. The exclusions below still apply inside allowed paths. The CI
+# workflow builds from a deliberately dirty tree and checks the inventory;
+# the release workflow refuses tracked coordination files.
 [tool.hatch.build.targets.sdist]
+only-include = [
+  ".cursor-plugin/plugin.json",
+  ".github",
+  ".gitignore",
+  ".mcp.json",
+  ".mcpbignore",
+  "assets",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "DESIGN.md",
+  "LICENSE",
+  "llms-install.md",
+  "manifest.json",
+  "PART1_VALIDATION.md",
+  "PRIVACY.md",
+  "pyproject.toml",
+  "README.md",
+  "scripts",
+  "server.json",
+  "src",
+  "tests",
+  "uv.lock",
+]
 exclude = [
+  "*/**/.mcp.json",
+  "*/**/manifest.json",
+  "*/**/package.json",
+  "*/**/server.json",
   "RESEARCH-AND-PROPOSAL.md",
   "LISTINGS-PLAN.md",
   "PLAN.md",
   "CLAUDE.md",
   "HANDOFF.md",
   "marketing/",
+  "marketing/**",
   ".private/",
+  ".private/**",
   ".env",
   ".env.*",
   "20??-??-??-*.txt",
   "archive/",
+  "archive/**",
   "companion/",
+  "companion/**",
 ]
 
 [tool.pytest.ini_options]

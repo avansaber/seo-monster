@@ -120,6 +120,7 @@ jobs:
                    "dist/seo_monster-${v}.tar.gz" \
                    "dist/seo-monster-${v}.mcpb"; do
             test -f "$f" || { echo "missing $f"; exit 1; }
+            python3 -B scripts/check_distribution.py --artifact "$f"
           done
           tmp=$(mktemp -d)
           unzip -q "dist/seo_monster-${v}-py3-none-any.whl" -d "$tmp/wheel"

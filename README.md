@@ -54,6 +54,12 @@ You don't open a new tool — you just ask, in plain English, inside **Claude** 
 - **Read-first, safe by default.** Reads always work; the two routine writes (sitemap submit, indexing request) are on by default; the Cloudflare write tools (cache purge, redirects, settings, managed robots.txt) are gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, and the riskier ones also need a per-call `confirm` token.
 - **Lean.** Standard library + the `mcp` SDK + the Google client libraries; PageSpeed and Cloudflare ride on `urllib`, no extra HTTP dependency.
 
+## Local evidence workbench
+
+[SEOmonster Workbench](companion/README.md) is a separately installed local companion for preserving source evidence, inspecting recommendation calculations, drafting action plans and comparing later observations. Its CLI stores project records in SQLite and supports portable exports, backup/restore and deterministic replay. The optional MCP interface exposes 17 tools for one configured project. Plans and recorded approvals remain separate from execution; the workbench has no external executor.
+
+Start with the [offline fixture workflow](companion/README.md#install-and-run-locally). The CLI needs no provider credentials or paid data. SDK 2 capture requires the matching engine installed from this source checkout. Install the companion from source; the engine's published PyPI quickstart below remains a separate installation route.
+
 ## Quickstart
 
 > [!TIP]
@@ -469,7 +475,7 @@ SEOMonster ships **two install paths**, both fully local:
   to hand-edit MCP config files.
 
 Both paths run the same Python package (`seo_mcp`) and expose the same
-52-tool surface. The difference is only how the host launches the server
+70 tools. The difference is only how the host launches the server
 and how it collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
@@ -479,7 +485,7 @@ flow inside Claude Desktop's MCP subprocess times out before a real user can
 finish; see [Why pre-flight auth?](#why-pre-flight-auth) below).
 
 **1. Install the bundle.** Download
-[`seo-monster-0.2.0.mcpb`](https://github.com/avansaber/seo-monster/releases/latest)
+[the versioned `.mcpb` asset](https://github.com/avansaber/seo-monster/releases/latest)
 from GitHub releases (or, when listed, from the [Claude
 Directory](https://claude.ai/directory)) and double-click it. Claude Desktop
 verifies the bundle, runs `uv` to materialize the Python environment, and
@@ -513,7 +519,7 @@ with `0600` permissions, then exits. This step is the recommended pattern; it
 sidesteps the timeout that Claude Desktop imposes on every tool call.
 
 **3. Start a new chat in Claude Desktop and use the tools.** Click the 🔧
-tools icon in the input box; you should see 52 SEOMonster tools. Try
+tools icon in the input box; you should see 70 SEOMonster tools. Try
 `system_status` first to verify everything is configured.
 
 #### Why pre-flight auth?
@@ -914,10 +920,10 @@ Error codes:
 ```sh
 git clone https://github.com/avansaber/seo-monster
 cd seo-monster
-uv venv && uv pip install -e ".[dev]"
-uv run pytest               # offline test suite
-uv run seo-monster          # run the server over stdio
-uv run seo-monster auth     # one-time OAuth consent (or `uv run seo-mcp auth`)
+uv sync --locked --extra dev
+uv run --no-sync pytest                 # offline test suite
+uv run --no-sync seo-monster            # run the server over stdio
+uv run --no-sync seo-monster auth       # one-time OAuth consent
 ```
 
 The package exposes two console-script aliases: `seo-monster` (canonical,
@@ -930,12 +936,7 @@ use `seo-monster`; the alias will be removed in a future major release.
 Tests are fully offline: they mock at the client layer, so no network and no
 credentials are needed to run them.
 
-> **Server identity note.** Some MCP host UIs display the server name as
-> `seo-mcp` and the version as the `mcp` SDK version (e.g. `1.27.1`). The
-> server-name string is the value we passed to `Server("seo-mcp")` and is kept
-> stable for back-compat; the version readout is a quirk of the SDK
-> (`create_initialization_options()` does not propagate the package version).
-> The package's real version is in `pyproject.toml` and `seo_mcp.__version__`.
+> **SDK 2 source builds.** This checkout requires Python 3.11 or later and MCP Python SDK 2.3 or later within major version 2. The MCP handshake reports the engine package version; the protocol server name remains `seo-mcp`. After updating a source installation, sync its dependencies and restart the MCP host. Published packages and existing installations retain the version they installed until upgraded.
 
 ## Changelog
 

@@ -37,6 +37,25 @@ jobs:
         run: |
           uv run --no-sync ruff check src/ tests/ scripts/
           uv run --no-sync pytest -q
+      - name: Validate engine artifact boundary from a dirty tree
+        run: |
+          # Synthetic files in local-only folders must never reach a build.
+          # Source folders receive only the JSON names that .gitignore re-includes.
+          for d in .private archive marketing build dist venv .config .claude .cursor .credentials node_modules src/seo_mcp tests; do
+            mkdir -p "$d/ci-dirty-plant"
+            for n in .mcp.json manifest.json package.json server.json; do
+              printf '{"synthetic": true}\n' > "$d/ci-dirty-plant/$n"
+            done
+            case "$d" in src/*|tests) ;; *) printf 'synthetic\n' > "$d/ci-dirty-plant/notes.txt" ;; esac
+          done
+          out="$RUNNER_TEMP/engine-dist"
+          uv build --sdist --wheel --out-dir "$out"
+          for artifact in "$out"/*.tar.gz "$out"/*.whl; do
+            python3 -B scripts/check_distribution.py --artifact "$artifact"
+          done
+          if { tar -tzf "$out"/*.tar.gz; unzip -Z1 "$out"/*.whl; } | grep -F ci-dirty-plant; then
+            echo "Local-only files reached an engine artifact."; exit 1
+          fi
 
   supported-sdk:
     runs-on: ubuntu-latest
