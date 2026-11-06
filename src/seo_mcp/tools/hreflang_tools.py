@@ -27,13 +27,13 @@ Checks performed:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from html.parser import HTMLParser
-from typing import Any, Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."
@@ -153,8 +153,8 @@ def hreflang_consistency_check(arguments, config, clients) -> dict[str, Any]:
     # check that target is in per_url and that target also lists A with some
     # hreflang. Mismatches go to findings.
     reciprocity_misses: list[dict[str, Any]] = []
-    by_target: dict[str, set[str]] = {url: set(a["href"] for a in data["alternates"]) for url, data in per_url.items()}
-    by_target_final: dict[str, set[str]] = {data["final_url"]: set(a["href"] for a in data["alternates"]) for url, data in per_url.items() if data["final_url"] != url}
+    by_target: dict[str, set[str]] = {url: {a["href"] for a in data["alternates"]} for url, data in per_url.items()}
+    by_target_final: dict[str, set[str]] = {data["final_url"]: {a["href"] for a in data["alternates"]} for url, data in per_url.items() if data["final_url"] != url}
     by_target.update(by_target_final)
     for src, data in per_url.items():
         for alt in data["alternates"]:

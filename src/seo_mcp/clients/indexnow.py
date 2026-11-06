@@ -40,7 +40,6 @@ from ..config import Config
 from ..errors import ErrorCode
 from .errors import ApiError
 
-
 _ENDPOINT = "https://api.indexnow.org/indexnow"
 _TIMEOUT_SECONDS = 30
 

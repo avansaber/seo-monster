@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seomonster.avansaber.com/schemas/workbench/backup-v1.schema.json",
+  "title": "SEOmonster Workbench self-contained backup",
+  "type": "object",
+  "required": [
+    "format_version", "storage_schema_version", "exported_at", "portfolio", "project_export",
+    "ownership_export", "component_hashes", "restore_policy", "external_execution_available"
+  ],
+  "properties": {
+    "format_version": {"const": "seomonster-workbench-backup/v1"},
+    "storage_schema_version": {"const": 2},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "portfolio": {
+      "type": "object",
+      "required": ["id", "name", "created_at"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "created_at": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "project_export": {
+      "type": "object",
+      "required": ["format_version", "schema_version", "project", "sites", "snapshots", "evidence"],
+      "properties": {
+        "format_version": {"const": "seomonster-workbench-export/v1"},
+        "schema_version": {"const": 1}
+      }
+    },
+    "ownership_export": {
+      "type": "object",
+      "required": ["format_version", "storage_schema_version", "project", "sites", "snapshots", "evidence"],
+      "properties": {
+        "format_version": {"const": "seomonster-workbench-ownership/v1"},
+        "storage_schema_version": {"type": "integer", "minimum": 2},
+        "external_execution_available": {"const": false}
+      }
+    },
+    "component_hashes": {
+      "type": "object",
+      "required": ["project_export_canonical_sha256", "ownership_export_canonical_sha256"],
+      "properties": {
+        "project_export_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ownership_export_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "restore_policy": {
+      "const": {
+        "identity": "preserve_project_and_record_ids",
+        "existing_project": "exact_noop_or_conflict",
+        "merge": "not_available",
+        "external_execution": "not_available"
+      }
+    },
+    "external_execution_available": {"const": false}
+  },
+  "additionalProperties": false
+}

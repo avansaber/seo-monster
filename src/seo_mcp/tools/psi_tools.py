@@ -15,7 +15,6 @@ from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations, require_client
 
-
 _SERVICE = "psi"
 _CATEGORIES = ["performance", "accessibility", "best-practices", "seo"]
 

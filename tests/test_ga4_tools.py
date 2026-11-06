@@ -8,7 +8,6 @@ import pytest
 from seo_mcp.clients.ga4 import normalize_property_id
 from seo_mcp.tools import ga4_tools
 
-
 PROP = "properties/123456789"
 
 

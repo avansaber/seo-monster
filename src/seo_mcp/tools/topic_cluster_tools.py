@@ -21,8 +21,9 @@ volume here -- ranking is by your own impressions.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -165,8 +166,8 @@ def topic_cluster_map(arguments: Mapping[str, Any], config: Any, clients: Mappin
         if n_pages >= 2 and quadrant in ("defend", "optimize"):
             cannibalization.append(entry)
 
-    for q in quadrants:
-        quadrants[q].sort(key=lambda e: e["impressions"], reverse=True)
+    for rows in quadrants.values():
+        rows.sort(key=lambda e: e["impressions"], reverse=True)
 
     missing = quadrants["create"][:limit]
 
@@ -182,15 +183,15 @@ def topic_cluster_map(arguments: Mapping[str, Any], config: Any, clients: Mappin
         "cannibalization": cannibalization[:limit],
         "filters_applied": {"impressions_min": impressions_min, "defend_position": _DEFEND_POS, "optimize_position": _OPTIMIZE_POS},
         "caveats": [
-            "'create' (missing-subtopic) queries are high-demand queries your "
+            ("'create' (missing-subtopic) queries are high-demand queries your "
             "cluster ranks poorly for -- group them into named subtopics and "
             "decide new-page vs improve-existing. This is the semantic step the "
-            "host should do.",
-            "GSC anonymizes ~47% of queries, so 'create' means no VISIBLE strong "
+            "host should do."),
+            ("GSC anonymizes ~47% of queries, so 'create' means no VISIBLE strong "
             "coverage, not none. There is no external volume here -- ranking is "
-            "by your own impressions only.",
-            "Cluster membership is a path-prefix heuristic; verify the cluster "
-            "boundary matches your information architecture.",
+            "by your own impressions only."),
+            ("Cluster membership is a path-prefix heuristic; verify the cluster "
+            "boundary matches your information architecture."),
         ],
     })
 

@@ -21,7 +21,6 @@ from typing import Any
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations
 
-
 _SERVICE = "technical"
 
 # The mandatory, non-negotiable honesty caveat. Returned on every success.

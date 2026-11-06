@@ -1,0 +1,20 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "gsc_search_analytics",
+  "captured_at": "2026-08-01T00:05:00Z",
+  "freshness": "current",
+  "provider": {"name": "gsc", "status": "available", "cost": {"model": "first_party", "currency": "USD", "amount": 0}},
+  "arguments": {"site_url": "sc-domain:docs.example.test", "start_date": "2026-07-01", "end_date": "2026-07-28", "dimensions": ["query", "page"], "data_state": "final"},
+  "result": {
+    "ok": true,
+    "data": {
+      "site_url": "sc-domain:docs.example.test",
+      "data_state": "final",
+      "rows": [
+        {"keys": ["evidence first seo", "https://docs.example.test/evidence-guide"], "clicks": 20, "impressions": 800, "ctr": 0.025, "position": 11.2},
+        {"keys": ["documentation example", "https://docs.example.test/"], "clicks": 55, "impressions": 200, "ctr": 0.275, "position": 3.0}
+      ]
+    },
+    "error": null
+  }
+}

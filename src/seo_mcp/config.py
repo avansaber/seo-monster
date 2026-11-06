@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import os
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
-
+from typing import Any
 
 DEFAULT_CONFIG_PATH = "~/.config/seo-mcp/config.toml"
 DATA_STATE_DEFAULT = "all"

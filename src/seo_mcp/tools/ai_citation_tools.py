@@ -28,8 +28,9 @@ non-deterministic: validated by the tester, not by mocks.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Mapping
 from math import sqrt
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -103,11 +104,11 @@ def _domains_of(citations: list[dict[str, Any]]) -> set[str]:
 def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mapping[str, Any]) -> dict[str, Any]:
     try:
         ai = clients.get("ai_engines")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
         ai = None
     try:
         dfs = clients.get("dataforseo")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
         dfs = None
 
     available: list[str] = list(ai.available_engines()) if ai is not None else []
@@ -141,7 +142,14 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
             text = " ".join(
                 [serp.get("ai_overview_text") or ""] + [str(c.get("title") or "") for c in cits]
             ).strip()
-            return {"answer_text": text, "citations": cits}
+            presence = serp.get("ai_overview_present")
+            # Legacy adapters can establish presence from actual overview data.
+            # Explicit unknown/invalid presence never becomes observed absence.
+            if "ai_overview_present" not in serp and (text or cits):
+                presence = True
+            if type(presence) is not bool:
+                raise ApiError(ErrorCode.UPSTREAM_ERROR, "AI Overview presence is unavailable for this response.")
+            return {"answer_text": text, "citations": cits, "ai_overview_present": presence}
         return ai.query(engine, prompt)
 
     by_engine: list[dict[str, Any]] = []
@@ -157,6 +165,9 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
         e_comp = {c: 0 for c in competitors}
         brand_cite_urls: set[str] = set()
         prompt_volatility: list[float] = []
+        # google_aio only: separates "no AI Overview on the SERP" from "an AI
+        # Overview that omits the brand"; both otherwise read as visibility 0.
+        aio_presence = {"shown": 0, "not_shown": 0, "failed": 0}
         for prompt in prompts:
             domsets: list[set[str]] = []
             for _ in range(samples):
@@ -165,8 +176,10 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
                     r = _run(engine, prompt)
                 except ApiError:
                     failed += 1
+                    aio_presence["failed"] += 1
                     continue
                 e_n += 1
+                aio_presence["shown" if r.get("ai_overview_present") else "not_shown"] += 1
                 text = (r.get("answer_text") or "").lower()
                 cits = r.get("citations") or []
                 doms = _domains_of(cits)
@@ -186,17 +199,23 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
                 prompt_volatility.append(1 - statistics.fmean(sims))
 
         e_total_brands = e_brand + sum(e_comp.values())
-        by_engine.append({
+        engine_row: dict[str, Any] = {
             "engine": engine,
             "responses": e_n,
-            "brand_visibility": {"value": round(e_brand / e_n, 4) if e_n else 0.0, "ci95": _ci95(e_brand, e_n)},
+            "brand_visibility": {
+                "value": round(e_brand / e_n, 4) if e_n else (None if engine == "google_aio" else 0.0),
+                "ci95": _ci95(e_brand, e_n) if e_n or engine != "google_aio" else None,
+            },
             # F7: SoV is null ONLY when there's no data (n==0); with responses but
             # zero brand mentions it's 0.0, consistent across engines.
             "share_of_voice": round(e_brand / e_total_brands, 4) if e_total_brands else (0.0 if e_n else None),
             "competitor_appearances": e_comp,
             "volatility": round(statistics.fmean(prompt_volatility), 4) if prompt_volatility else None,
             "brand_citation_urls": sorted(brand_cite_urls),
-        })
+        }
+        if engine == "google_aio":
+            engine_row["ai_overview_presence"] = aio_presence
+        by_engine.append(engine_row)
         total_brand += e_brand
         total_n += e_n
         for c in competitors:
@@ -213,7 +232,10 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
         "query_count": query_count,
         "failed_samples": failed,
         "overall": {
-            "brand_visibility": {"value": round(total_brand / total_n, 4) if total_n else 0.0, "ci95": _ci95(total_brand, total_n)},
+            "brand_visibility": {
+                "value": round(total_brand / total_n, 4) if total_n else (None if "google_aio" in engines else 0.0),
+                "ci95": _ci95(total_brand, total_n) if total_n or "google_aio" not in engines else None,
+            },
             "share_of_voice": round(total_brand / overall_total_brands, 4) if overall_total_brands else (0.0 if total_n else None),
             "responses": total_n,
         },
@@ -225,16 +247,20 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
             "appearance": "brand name in answer text OR a cited domain matching brand_domains",
         },
         "caveats": [
-            "Developer-API output is NOT what a logged-in user sees (measured "
+            ("Developer-API output is NOT what a logged-in user sees (measured "
             "ChatGPT API-vs-UI overlap ~24% brands / ~4% sources). This is a "
-            "directional proxy, labeled per engine.",
-            "Google AI Overviews has no API; google_aio uses DataForSEO SERP "
-            "scraping, which is ToS-contested and may be fragile.",
-            "LLM answers are non-deterministic; a single run is uninformative. "
+            "directional proxy, labeled per engine."),
+            ("Google AI Overviews has no API; google_aio uses DataForSEO SERP "
+            "scraping, which is ToS-contested and may be fragile."),
+            ("LLM answers are non-deterministic; a single run is uninformative. "
             "Trust the sampled visibility + CI + volatility, never a point 'rank'. "
-            "Freeze the prompt + competitor set across cycles and date each run.",
+            "Freeze the prompt + competitor set across cycles and date each run."),
             "Increase samples for tighter CIs; >=7 recommended, more for high-volatility engines.",
-        ],
+        ] + ([
+            ("google_aio ai_overview_presence counts SERPs with and without an AI Overview, "
+            "so zero visibility from no AI Overview is distinguishable from omission. "
+            "Failed includes unavailable presence; those samples are excluded, and no observations means null visibility and interval."),
+        ] if "google_aio" in engines else []),
     })
 
 

@@ -7,7 +7,6 @@ import pytest
 
 from seo_mcp.tools import gsc_tools
 
-
 SITE = "sc-domain:example.com"
 
 
@@ -88,7 +87,7 @@ def test_search_analytics_uses_explicit_site_and_data_state(make_config, make_gs
     args = {"site_url": "https://other.com/", "data_state": "final", "dimensions": ["page", "query"]}
     result = gsc_tools.gsc_search_analytics(args, _cfg(make_config), {"gsc": client})
     assert result["data"]["site_url"] == "https://other.com/"
-    op, kw = client._service.calls[0]
+    _op, kw = client._service.calls[0]
     assert kw["siteUrl"] == "https://other.com/"
     assert kw["body"]["dataState"] == "final"
     assert kw["body"]["dimensions"] == ["page", "query"]
@@ -822,6 +821,7 @@ def test_gsc_client_inspect_url_is_kwargs_only():
     class into a TypeError. This test pins the keyword-only contract so a
     refactor can't silently break it again."""
     import inspect as inspect_module
+
     from seo_mcp.clients.gsc import GscClient
 
     sig = inspect_module.signature(GscClient.inspect_url)

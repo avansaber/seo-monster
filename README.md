@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/wordmark-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="assets/wordmark-light.svg">
-  <img alt="SEOMonster" src="assets/wordmark-light.svg" width="440">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-light.svg">
+  <img alt="SEOMonster" src="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-light.svg" width="440">
 </picture>
 
 <h3>Don't learn another SEO dashboard. Just ask.</h3>
@@ -14,7 +14,7 @@
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/v/seo-monster?color=2BD9A8&label=pypi" alt="PyPI version"></a>
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/pyversions/seo-monster" alt="Python versions"></a>
   <a href="https://pypi.org/project/seo-monster/"><img src="https://img.shields.io/pypi/dm/seo-monster?color=2BD9A8" alt="Downloads"></a>
-  <a href="https://github.com/avansaber/seo-monster/actions"><img src="https://img.shields.io/badge/tests-575%20passing-2BD9A8" alt="Tests"></a>
+  <a href="https://github.com/avansaber/seo-monster/actions/workflows/ci.yml"><img src="https://github.com/avansaber/seo-monster/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
   <a href="https://github.com/avansaber/seo-monster/stargazers"><img src="https://img.shields.io/github/stars/avansaber/seo-monster?style=flat&color=2BD9A8" alt="GitHub stars"></a>
 </p>
@@ -24,7 +24,7 @@
   &nbsp;
   <a href="https://insiders.vscode.dev/redirect/mcp/install?name=seomonster&amp;config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22seo-monster%22%5D%7D"><img src="https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" height="32"></a>
   &nbsp;
-  <a href="https://seomonster.avansaber.com"><img src="https://img.shields.io/badge/Website-seomonster.avansaber.com-555" alt="Website" height="32"></a>
+  <a href="https://www.avansaber.com/seomonster/"><img src="https://img.shields.io/badge/Website-avansaber.com%2Fseomonster-555" alt="Website" height="32"></a>
 </p>
 
 </div>
@@ -54,6 +54,12 @@ You don't open a new tool — you just ask, in plain English, inside **Claude** 
 - **Read-first, safe by default.** Reads always work; the two routine writes (sitemap submit, indexing request) are on by default; the Cloudflare write tools (cache purge, redirects, settings, managed robots.txt) are gated behind `SEO_MCP_ALLOW_DESTRUCTIVE`, and the riskier ones also need a per-call `confirm` token.
 - **Lean.** Standard library + the `mcp` SDK + the Google client libraries; PageSpeed and Cloudflare ride on `urllib`, no extra HTTP dependency.
 
+## Local evidence workbench
+
+[SEOmonster Workbench](https://github.com/avansaber/seo-monster/blob/v0.10.0/companion/README.md) is a separately installed local companion for preserving source evidence, inspecting recommendation calculations, drafting action plans and comparing later observations. Its CLI stores project records in SQLite and supports portable exports, backup/restore and deterministic replay. The optional MCP interface exposes 17 tools for one configured project. Plans and recorded approvals remain separate from execution; the workbench has no external executor.
+
+Start with the [offline fixture workflow](https://github.com/avansaber/seo-monster/blob/v0.10.0/companion/README.md#install-and-run-locally). The CLI needs no provider credentials or paid data. SDK 2 capture requires SEOmonster 0.10.0 or later, the first engine release on MCP SDK 2. The Workbench itself installs from source; it is not published on PyPI.
+
 ## Quickstart
 
 > [!TIP]
@@ -70,6 +76,21 @@ You don't open a new tool — you just ask, in plain English, inside **Claude** 
 Run the one-time Google sign-in once — `uvx --from seo-monster seo-monster auth` — then ask your assistant to call **`system_status`** to confirm what's connected. Full per-client setup and credentials are in [Install](#install) and [Auth](#auth).
 
 ## How it works
+
+### Provider requests and local records
+
+Selected tools contact Google Search Console, Indexing, GA4 Data/Admin, Google
+Ads, PageSpeed Insights, CrUX, Cloudflare or IndexNow. Optional research uses
+DataForSEO, Open PageRank, Perplexity, OpenAI, Anthropic or Gemini. Technical
+checks fetch the requested websites and related robots, sitemap, redirect or
+verification URLs. Providers receive the arguments and credentials needed for
+the selected request; optional paid calls can incur provider charges. These
+calls do not add maintainer telemetry.
+
+The engine does not keep a query/result history. The separately installed local
+Workbench stores user-owned evidence and decision records in SQLite and creates
+exports only when requested. Your MCP host controls its own transcripts and
+logs. See [Privacy](https://github.com/avansaber/seo-monster/blob/v0.10.0/PRIVACY.md) for destinations and persistence scopes.
 
 ```mermaid
 flowchart LR
@@ -454,7 +475,7 @@ SEOMonster ships **two install paths**, both fully local:
   to hand-edit MCP config files.
 
 Both paths run the same Python package (`seo_mcp`) and expose the same
-52-tool surface. The difference is only how the host launches the server
+70 tools. The difference is only how the host launches the server
 and how it collects credentials.
 
 ### Claude Desktop (recommended): `.mcpb` bundle
@@ -464,7 +485,7 @@ flow inside Claude Desktop's MCP subprocess times out before a real user can
 finish; see [Why pre-flight auth?](#why-pre-flight-auth) below).
 
 **1. Install the bundle.** Download
-[`seo-monster-0.2.0.mcpb`](https://github.com/avansaber/seo-monster/releases/latest)
+[the versioned `.mcpb` asset](https://github.com/avansaber/seo-monster/releases/latest)
 from GitHub releases (or, when listed, from the [Claude
 Directory](https://claude.ai/directory)) and double-click it. Claude Desktop
 verifies the bundle, runs `uv` to materialize the Python environment, and
@@ -498,7 +519,7 @@ with `0600` permissions, then exits. This step is the recommended pattern; it
 sidesteps the timeout that Claude Desktop imposes on every tool call.
 
 **3. Start a new chat in Claude Desktop and use the tools.** Click the 🔧
-tools icon in the input box; you should see 52 SEOMonster tools. Try
+tools icon in the input box; you should see 70 SEOMonster tools. Try
 `system_status` first to verify everything is configured.
 
 #### Why pre-flight auth?
@@ -873,7 +894,7 @@ On failure:
     "service": "gsc",
     "message": "No Google credentials found for Search Console.",
     "remediation": "Configure OAuth ... or a service-account key. See README > Auth.",
-    "docs_url": "https://seomonster.avansaber.com#auth",
+    "docs_url": "https://www.avansaber.com/seomonster/docs/#auth",
     "details": null
   }
 }
@@ -899,10 +920,10 @@ Error codes:
 ```sh
 git clone https://github.com/avansaber/seo-monster
 cd seo-monster
-uv venv && uv pip install -e ".[dev]"
-uv run pytest               # offline test suite
-uv run seo-monster          # run the server over stdio
-uv run seo-monster auth     # one-time OAuth consent (or `uv run seo-mcp auth`)
+uv sync --locked --extra dev
+uv run --no-sync pytest                 # offline test suite
+uv run --no-sync seo-monster            # run the server over stdio
+uv run --no-sync seo-monster auth       # one-time OAuth consent
 ```
 
 The package exposes two console-script aliases: `seo-monster` (canonical,
@@ -915,27 +936,21 @@ use `seo-monster`; the alias will be removed in a future major release.
 Tests are fully offline: they mock at the client layer, so no network and no
 credentials are needed to run them.
 
-> **Server identity note.** Some MCP host UIs display the server name as
-> `seo-mcp` and the version as the `mcp` SDK version (e.g. `1.27.1`). The
-> server-name string is the value we passed to `Server("seo-mcp")` and is kept
-> stable for back-compat; the version readout is a quirk of the SDK
-> (`create_initialization_options()` does not propagate the package version).
-> The package's real version is in `pyproject.toml` and `seo_mcp.__version__`.
+> **SDK 2 source builds.** This checkout requires Python 3.11 or later and MCP Python SDK 2.3 or later within major version 2. The MCP handshake reports the engine package version; the protocol server name remains `seo-mcp`. After updating a source installation, sync its dependencies and restart the MCP host. Published packages and existing installations retain the version they installed until upgraded.
 
 ## Changelog
 
 Release-by-release notes, including the validation checks each version's
-external testing pass should cover, live in [CHANGELOG.md](CHANGELOG.md).
+external testing pass should cover, live in [CHANGELOG.md](https://github.com/avansaber/seo-monster/blob/v0.10.0/CHANGELOG.md).
 
 ## Privacy
 
 SEOMonster runs entirely on your machine and talks only to the upstream APIs
 you configure. The maintainers do not see any of your data, credentials,
-queries, or tool calls. See [PRIVACY.md](PRIVACY.md) for the full statement.
+queries, or tool calls. See [PRIVACY.md](https://github.com/avansaber/seo-monster/blob/v0.10.0/PRIVACY.md) for the full statement.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/avansaber/seo-monster/blob/v0.10.0/LICENSE).
 
 <!-- mcp-name: io.github.avansaber/seo-monster -->
-

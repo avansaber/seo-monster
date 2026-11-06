@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import getpass
 import sys
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from .auth import MissingGoogleAuth, required_scopes
 from .clients.google_auth import run_oauth_consent
@@ -128,7 +128,7 @@ def validate_cloudflare(token: str) -> tuple[str, str]:
             ErrorCode.INVALID_INPUT,
         }
         return ("rejected" if exc.code in rejected else "unreachable"), exc.message
-    except Exception as exc:  # network boundary
+    except Exception as exc:  # noqa: BLE001  # Report unexpected network failures without aborting setup.
         return "unreachable", str(exc)
 
 
@@ -152,9 +152,9 @@ def validate_indexnow(key: str, key_location: str | None) -> tuple[str, str]:
         headers={"User-Agent": f"SEOMonster/{__version__} (+https://seomonster.avansaber.com)"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 (trusted user URL)
+        with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8", "replace").strip()
-    except Exception as exc:  # network boundary
+    except Exception as exc:  # noqa: BLE001  # Report unexpected network failures without aborting setup.
         return "unreachable", f"could not fetch {key_location}: {exc}"
     if body == key.strip():
         return "ok", "key file matches the key"
@@ -278,7 +278,7 @@ def _setup_run(
     # --- convenience defaults (format-checked only; full check needs OAuth) ---
     print("Defaults (optional):")
     gsc_site = _ask_text(ask, "  Default GSC property (sc-domain:example.com or https URL)", gsc_e.get("default_site"))
-    if gsc_site and not (gsc_site.startswith("sc-domain:") or gsc_site.startswith("http")):
+    if gsc_site and not (gsc_site.startswith(("sc-domain:", "http"))):
         _report("GSC property", "warn", "should start with 'sc-domain:' or 'https://'; saved, but verify it")
     sections["gsc"]["default_site"] = gsc_site
 

@@ -1,0 +1,15 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "gsc_compare_periods",
+  "captured_at": "2026-09-01T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "gsc", "status": "available", "cost": {"model": "first_party", "currency": "USD", "amount": 0}},
+  "arguments": {"site_url": "sc-domain:example.test", "dimensions": ["page"], "current_days": 28},
+  "result": {
+    "ok": true,
+    "data": {"rows": [
+      {"keys": ["https://example.test/guide"], "clicks": 55, "previous_clicks": 100, "delta_clicks": -45, "impressions": 2000, "previous_impressions": 2300, "position": 7.5}
+    ]},
+    "error": null
+  }
+}

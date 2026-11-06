@@ -27,8 +27,9 @@ ranking. The host LLM writes the content; this tool decides what to write about.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
@@ -117,8 +118,7 @@ def _body(start: str, end: str, dimensions: list[str], data_state: str) -> dict[
 
 
 def _reference_ctr(bucket: int) -> float:
-    if bucket < 1:
-        bucket = 1
+    bucket = max(bucket, 1)
     return _REFERENCE_CTR.get(bucket, 0.005)
 
 
@@ -214,7 +214,7 @@ def _ga4_landing_value(
         return GA4_VALUE_NO_PROPERTY, None
     try:
         ga4 = clients.get("ga4")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional provider failure must not abort the result.
         return GA4_VALUE_UNREACHABLE, None
     if ga4 is None:
         return GA4_VALUE_UNREACHABLE, None
@@ -234,7 +234,7 @@ def _ga4_landing_value(
                 "match_type": "EXACT",
             },
         )
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional provider failure must not abort the result.
         return GA4_VALUE_UNREACHABLE, None
     out: dict[str, float] = {}
     for row in report.get("rows", []):
@@ -448,10 +448,10 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
                 "ga4_value_status": ga4_value_status,
             },
             "notes": [
-                "Scored from your own Search Console data; ranks by expected "
-                "return on effort, not by guaranteed position.",
-                "The expected-CTR curve is self-calibrated from your buckets "
-                "with at least 5 queries; a reference curve fills sparse buckets.",
+                ("Scored from your own Search Console data; ranks by expected "
+                "return on effort, not by guaranteed position."),
+                ("The expected-CTR curve is self-calibrated from your buckets "
+                "with at least 5 queries; a reference curve fills sparse buckets."),
                 _GA4_VALUE_NOTE[ga4_value_status],
             ],
         }

@@ -16,7 +16,8 @@ returns the canonical sub-dict every TOOL declares.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..auth import MissingGoogleAuth
 from ..config import Config
@@ -98,7 +99,7 @@ def preflight_get(clients: Mapping[str, Any], url: str) -> tuple[int | None, str
     sitemap or key file look unreachable (FEEDBACK §12c.ii)."""
     try:
         http = clients.get("http")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Keep preflight failures inside the existing result boundary.
         http = None
     if http is None:
         return None
@@ -108,7 +109,7 @@ def preflight_get(clients: Mapping[str, Any], url: str) -> tuple[int | None, str
         resp = http.fetch(url, method="GET", follow_redirects=True, max_bytes=65536)
     except ApiError as exc:
         return None, "", exc.message
-    except Exception as exc:  # pre-flight must never crash the actual write
+    except Exception as exc:  # noqa: BLE001  # Keep preflight failures inside the existing result boundary.
         return None, "", str(exc)
     return resp.status, resp.body_text, None
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from .config import Config
 
-
 # OAuth scopes requested by default. Sitemap submit and indexing request are
 # available by default (un-gated), so the standard consent includes the
 # writable webmasters scope and the indexing scope plus GA4 read. A read-only

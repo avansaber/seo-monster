@@ -1,0 +1,19 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "ai_citation_track",
+  "captured_at": "2026-09-02T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "ai_engines", "status": "contradictory", "cost": {"model": "mixed", "currency": "USD", "amount": 0.04}},
+  "arguments": {"prompts": ["evidence first seo"], "brand": "Example Test"},
+  "result": {
+    "ok": true,
+    "data": {
+      "observations": [
+        {"engine": "engine-a", "mentioned": true},
+        {"engine": "engine-b", "mentioned": false}
+      ],
+      "aggregate": null
+    },
+    "error": null
+  }
+}

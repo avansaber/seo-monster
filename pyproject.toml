@@ -3,7 +3,7 @@
 # "seo_mcp". The earlier "seo-monster-mcp 0.1.0" release was renamed to drop
 # the redundant -mcp suffix in favor of the cleaner brand name.
 name = "seo-monster"
-version = "0.9.3"
+version = "0.10.0"
 description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
 license = { text = "MIT" }
@@ -21,7 +21,8 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
 ]
 dependencies = [
-    "mcp>=1.0.0,<2",
+    "mcp>=2.3.0,<3",
+    "jsonschema>=4.20,<5",
     "google-api-python-client>=2.0.0",
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
@@ -32,7 +33,7 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
-    "ruff>=0.15,<0.16",
+    "ruff>=0.17,<0.18",
 ]
 
 [project.scripts]
@@ -42,32 +43,71 @@ seo-monster = "seo_mcp.server:main"
 seo-mcp = "seo_mcp.server:main"
 
 [project.urls]
-Homepage = "https://seomonster.avansaber.com"
-Documentation = "https://seomonster.avansaber.com"
+Homepage = "https://www.avansaber.com/seomonster/"
+Documentation = "https://www.avansaber.com/seomonster/docs/"
 Repository = "https://github.com/avansaber/seo-monster"
 Issues = "https://github.com/avansaber/seo-monster/issues"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seo_mcp"]
+# The root .gitignore re-includes these JSON names at any depth; only the
+# tracked root copies belong in a build.
+exclude = ["*/**/.mcp.json", "*/**/manifest.json", "*/**/package.json", "*/**/server.json"]
 
-# Defense in depth: even if an internal planning doc accidentally lands in
-# the working tree, hatchling's sdist target excludes it. The CI workflow
-# (.github/workflows/release.yml) additionally fails any tag push that has
-# these filenames tracked. The .gitignore is the first line of defense.
+# Defense in depth: the source archive is an explicit allowlist, so local
+# tool folders, build output and private notes in a working tree are never
+# swept in. The exclusions below still apply inside allowed paths. The CI
+# workflow builds from a deliberately dirty tree and checks the inventory;
+# the release workflow refuses tracked coordination files.
 [tool.hatch.build.targets.sdist]
+only-include = [
+  ".cursor-plugin/plugin.json",
+  ".github",
+  ".gitignore",
+  ".mcp.json",
+  ".mcpbignore",
+  "assets",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "DESIGN.md",
+  "LICENSE",
+  "llms-install.md",
+  "manifest.json",
+  "PART1_VALIDATION.md",
+  "PRIVACY.md",
+  "pyproject.toml",
+  "README.md",
+  "scripts",
+  "server.json",
+  "src",
+  "tests",
+  "uv.lock",
+]
 exclude = [
+  "*/**/.mcp.json",
+  "*/**/manifest.json",
+  "*/**/package.json",
+  "*/**/server.json",
   "RESEARCH-AND-PROPOSAL.md",
   "LISTINGS-PLAN.md",
   "PLAN.md",
+  "CLAUDE.md",
+  "HANDOFF.md",
   "marketing/",
+  "marketing/**",
   ".private/",
+  ".private/**",
   ".env",
   ".env.*",
   "20??-??-??-*.txt",
+  "archive/",
+  "archive/**",
+  "companion/",
+  "companion/**",
 ]
 
 [tool.pytest.ini_options]
@@ -75,3 +115,6 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+required-version = ">=0.17,<0.18"

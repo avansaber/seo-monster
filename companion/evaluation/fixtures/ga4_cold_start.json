@@ -1,0 +1,9 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "ga4_run_report",
+  "captured_at": "2026-09-01T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "ga4", "status": "available", "cost": {"model": "first_party", "currency": "USD", "amount": 0}},
+  "arguments": {"property_id": "properties/000000", "dimensions": ["landingPage"], "metrics": ["sessions"]},
+  "result": {"ok": true, "data": {"rows": [], "row_count": 0}, "error": null}
+}

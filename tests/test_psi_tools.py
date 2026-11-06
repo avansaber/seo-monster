@@ -10,7 +10,6 @@ from seo_mcp.clients.psi import PsiClient
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import psi_tools
 
-
 PSI_WITH_FIELD = {
     "lighthouseResult": {
         "categories": {

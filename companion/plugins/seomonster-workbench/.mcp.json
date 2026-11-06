@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "seomonster-workbench": {"command": "sm-workbench-mcp", "args": []}
+  }
+}

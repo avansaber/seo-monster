@@ -23,13 +23,13 @@ for.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from html.parser import HTMLParser
-from typing import Any, Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "technical"
 _REMEDIATION = "No setup needed; the HTTP client is built in."
@@ -333,9 +333,7 @@ def _has_field(entity: dict[str, Any], field: str) -> bool:
     value = entity.get(field)
     if value is None:
         return False
-    if isinstance(value, (list, dict, str)) and len(value) == 0:
-        return False
-    return True
+    return not (isinstance(value, (list, dict, str)) and len(value) == 0)
 
 
 TOOLS = [TOOL_INSPECT, TOOL_VALIDATE]

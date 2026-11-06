@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "seomonster-workbench",
+  "version": "0.6.0",
+  "description": "Inspect SEO evidence, govern ownership, and review local change observations.",
+  "author": {"name": "AvanSaber Inc."},
+  "license": "MIT",
+  "keywords": ["seo", "evidence", "portfolio", "ownership", "experiments", "mcp"]
+}

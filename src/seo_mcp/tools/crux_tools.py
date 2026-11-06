@@ -10,12 +10,12 @@ by metric name, each with a parallel ``p75`` list aligned with ``periods``.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import ANNOT_READ, require_client
-
 
 _SERVICE = "crux"
 _REMEDIATION = (

@@ -14,7 +14,6 @@ import tomllib
 
 import pytest
 
-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVER_PATH = os.path.join(REPO_ROOT, "src", "seo_mcp", "server.py")
 PYPROJECT_PATH = os.path.join(REPO_ROOT, "pyproject.toml")
@@ -243,7 +242,6 @@ def test_version_stamps_agree():
     there, which is how the MCP registry entry drifted.
     """
     import json
-
     import tomllib as _tomllib
 
     from seo_mcp import __version__

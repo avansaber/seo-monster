@@ -24,7 +24,6 @@ from typing import Any
 from ..auth import MissingGoogleAuth
 from ..config import Config
 
-
 # Chmods applied when the OAuth consent flow writes the cached token. The token
 # is refresh-capable, so it has the value of a long-lived credential for the
 # requested scopes; keep it user-readable only.

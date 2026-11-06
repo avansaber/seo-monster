@@ -3,13 +3,18 @@ name: Release
 # Tag-driven release workflow. Pushing a tag of the form `v*` (e.g. v0.1.3)
 # causes this workflow to:
 #   1. Verify the tag's version matches pyproject.toml / __init__.py / manifest.json.
-#   2. Run the offline test suite.
-#   3. Build the wheel + sdist + .mcpb bundle.
-#   4. Scan all three artifacts for credentials / PII / real local paths.
-#   5. Attach the three artifacts to the corresponding GitHub release (creating
+#   2. Run the offline test suite in the locked environment.
+#   3. Build the wheel + sdist (pinned hatchling) and the .mcpb bundle (pinned packer).
+#   4. Refuse unless the annotated tag binds the checked-out tree and the canonical
+#      identity of all three artifacts, before any extraction or upload.
+#   5. Scan all three artifacts for credentials / PII / real local paths.
+#   6. Attach the three artifacts to the corresponding GitHub release (creating
 #      the release if it does not exist).
-#   6. Publish the wheel + sdist to PyPI via Trusted Publishing (OIDC) when the
+#   7. Publish the wheel + sdist to PyPI via Trusted Publishing (OIDC) when the
 #      repo variable PYPI_PUBLISH_ENABLED is 'true' (active since v0.6.0).
+#
+# Validation steps print fixed messages and counts only. A rejected artifact or
+# tag can carry private text, so its member names and contents are never echoed.
 
 on:
   push:
@@ -43,11 +48,18 @@ jobs:
       - name: Reject internal planning docs in tag tree
         run: |
           set -euo pipefail
-          bad=$(git ls-tree -r --name-only HEAD | grep -E '^(RESEARCH-AND-PROPOSAL|LISTINGS-PLAN|PLAN)\.md$|^marketing/|^\.private/' || true)
-          if [ -n "$bad" ]; then
-            echo "::error::Internal planning docs found tracked at this tag:"
-            echo "$bad"
-            echo
+          python3 scripts/check_distribution.py
+          tracked=$(mktemp)
+          git ls-tree -r --name-only HEAD > "$tracked"
+          # grep status 1 means no match; 2 or more is a detector error and refuses.
+          status=0
+          bad=$(grep -cE '^(RESEARCH-AND-PROPOSAL|LISTINGS-PLAN|PLAN|CLAUDE|HANDOFF)\.md$|^marketing/|^\.private/' "$tracked") || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "::error::planning-document check could not complete; refusing to release"
+            exit 1
+          fi
+          if [ "$bad" != 0 ]; then
+            echo "::error::$bad internal planning path(s) are tracked at this tag; names withheld."
             echo "Move them under ~/.local/share/seo-monster-private/ or a local .private/ directory and retag."
             exit 1
           fi
@@ -72,25 +84,24 @@ jobs:
           sj=$(python3 -c "import json; print(json.load(open('server.json'))['version'])")
           sjp=$(python3 -c "import json; d=json.load(open('server.json')); print(','.join(sorted({p['version'] for p in d.get('packages', [])})) or d['version'])")
           tag="$TAG_VERSION"
-          echo "tag=$tag  pyproject=$py  __init__=$init  manifest=$mf  server.json=$sj  server.json/packages=$sjp"
           [ "$py" = "$tag" ] && [ "$init" = "$tag" ] && [ "$mf" = "$tag" ] && [ "$sj" = "$tag" ] && [ "$sjp" = "$tag" ] || {
             echo "version stamps disagree with the tag; refusing to release"
             exit 1
           }
+          echo "all five version stamps match the tag"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
 
-      - name: Install Python 3.11 + project deps (dev extras for pytest)
+      - name: Install Python 3.11 + locked project deps (dev extras for pytest)
         run: |
           uv python install 3.11
-          uv venv
-          uv pip install -e ".[dev]"
+          uv sync --locked --extra dev --python 3.11
 
       - name: Run the offline test suite
-        run: uv run pytest -q
+        run: uv run --no-sync pytest -q
 
       - name: Build wheel + sdist
         run: uv build
@@ -105,8 +116,20 @@ jobs:
         env:
           TAG_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          npx -y @anthropic-ai/mcpb@latest pack . \
+          # Exact packer version that built the scanned bundle.
+          npx -y @anthropic-ai/mcpb@2.1.2 pack . \
             "dist/seo-monster-${TAG_VERSION}.mcpb"
+
+      - name: Verify release identity against the annotated tag
+        # Runs before extraction and before every upload. The annotated tag
+        # message carries the reviewed tree and the canonical digests of the
+        # double-scanned artifacts (format seomonster-release-identity/1). A
+        # lightweight tag, another target, any malformed line, unexpected dist
+        # content, disallowed archive metadata or digest drift refuses the
+        # release with a fixed reason. The tag name arrives through env:.
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: python3 -B scripts/check_distribution.py --verify-tag="$TAG_NAME" --dist dist
 
       - name: Security scan (no credentials / PII / real local paths in any artifact)
         # Tag passed via `env:` for the same injection reason as above.
@@ -118,19 +141,31 @@ jobs:
           for f in "dist/seo_monster-${v}-py3-none-any.whl" \
                    "dist/seo_monster-${v}.tar.gz" \
                    "dist/seo-monster-${v}.mcpb"; do
-            test -f "$f" || { echo "missing $f"; exit 1; }
+            test -f "$f" || { echo "a versioned release artifact is missing"; exit 1; }
+            python3 -B scripts/check_distribution.py --artifact "$f"
           done
           tmp=$(mktemp -d)
-          unzip -q "dist/seo_monster-${v}-py3-none-any.whl" -d "$tmp/wheel"
-          tar xzf "dist/seo_monster-${v}.tar.gz" -C "$tmp/"
-          unzip -q "dist/seo-monster-${v}.mcpb" -d "$tmp/mcpb"
+          {
+            unzip -q "dist/seo_monster-${v}-py3-none-any.whl" -d "$tmp/wheel" &&
+            tar xzf "dist/seo_monster-${v}.tar.gz" -C "$tmp/" &&
+            unzip -q "dist/seo-monster-${v}.mcpb" -d "$tmp/mcpb"
+          } >/dev/null 2>&1 || { echo "release artifacts could not be extracted for scanning"; exit 1; }
           # Note: the PEM-header pattern uses [A-Z ]+ rather than .* so the
           # regex does not match a literal occurrence of itself inside this
-          # workflow YAML when the sdist is included in the scan.
-          if grep -rIE \
-            'AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]{20,}|1//0[0-9A-Za-z_-]{20,}|-----BEGIN [A-Z ]+PRIVATE KEY-----|Bearer [A-Za-z0-9_-]{30,}|pypi-AgE[A-Za-z0-9_-]{50,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}' \
-            "$tmp" 2>/dev/null; then
-            echo "LEAK: real credential pattern found in an artifact"
+          # workflow YAML when the sdist is included in the scan. Matches are
+          # counted, never printed, so a leak cannot reach the public log.
+          pattern='AIza[0-9A-Za-z_-]{35}|ya29\.[0-9A-Za-z_-]{20,}|1//0[0-9A-Za-z_-]{20,}|-----BEGIN [A-Z ]+PRIVATE KEY-----|Bearer [A-Za-z0-9_-]{30,}|pypi-AgE[A-Za-z0-9_-]{50,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}'
+          # Detector status 1 means no match; 2 or more is an error, never a clean result.
+          hits=$(mktemp)
+          status=0
+          grep -rIlE "$pattern" "$tmp" > "$hits" 2>/dev/null || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "credential scan could not complete; refusing to release"
+            exit 1
+          fi
+          leaks=$(wc -l < "$hits" | tr -d ' ')
+          if [ "$leaks" != 0 ]; then
+            echo "LEAK: real credential pattern found in $leaks extracted file(s); contents withheld"
             exit 1
           fi
           # Round 6 §11b.ii companion fix: defense-in-depth against private
@@ -139,7 +174,9 @@ jobs:
           # already protected because git ls-tree never sees gitignored
           # files; this is the safety net for any artifact that bypassed
           # that path (e.g. if pyproject's sdist-exclude were ever removed).
-          forbidden_paths=$(find "$tmp" \( \
+          found=$(mktemp)
+          status=0
+          find "$tmp" \( \
             -path '*/.private/*' \
             -o -path '*/marketing/*' \
             -o -name 'PLAN.md' \
@@ -147,10 +184,14 @@ jobs:
             -o -name 'LISTINGS-PLAN.md' \
             -o -name 'EMAIL_DRAFT.md' \
             -o -name 'SUBMISSION_GUIDE.md' \
-            \) 2>/dev/null)
-          if [ -n "$forbidden_paths" ]; then
-            echo "LEAK: private planning / submission paths found in an artifact:"
-            echo "$forbidden_paths"
+            \) > "$found" 2>/dev/null || status=$?
+          if [ "$status" != 0 ]; then
+            echo "private-path scan could not complete; refusing to release"
+            exit 1
+          fi
+          forbidden_paths=$(wc -l < "$found" | tr -d ' ')
+          if [ "$forbidden_paths" != 0 ]; then
+            echo "LEAK: $forbidden_paths private planning / submission path(s) found in an artifact; names withheld"
             exit 1
           fi
           echo "all three artifacts CLEAN (credentials + private paths)"

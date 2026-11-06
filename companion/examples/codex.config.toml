@@ -1,0 +1,12 @@
+# Copy this server table into a trusted project's .codex/config.toml.
+# Install companion[mcp] first; replace command with its absolute path if the host PATH needs it.
+[mcp_servers.seomonster-workbench]
+command = "sm-workbench-mcp"
+args = []
+startup_timeout_sec = 20
+tool_timeout_sec = 30
+
+# Optional operator-selected database and project (never copied into a public plugin).
+# [mcp_servers.seomonster-workbench.env]
+# SM_WORKBENCH_DB = "/absolute/path/to/workbench.db"
+# SM_WORKBENCH_PROJECT = "portfolio-review"

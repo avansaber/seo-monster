@@ -10,7 +10,6 @@ import pytest
 
 from seo_mcp.tools.system_status import group_tools, handle
 
-
 # --- direct handler tests (no mcp needed) ---------------------------------
 
 

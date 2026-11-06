@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 from seo_mcp.clients.errors import ApiError
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import budget_tools

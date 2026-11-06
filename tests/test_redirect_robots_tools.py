@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 from seo_mcp.clients.errors import ApiError
 from seo_mcp.clients.http import HttpResponse, RedirectHop
 from seo_mcp.errors import ErrorCode

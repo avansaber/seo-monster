@@ -1,0 +1,9 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "ai_citation_track",
+  "captured_at": "2026-05-01T00:00:00Z",
+  "freshness": "stale",
+  "provider": {"name": "ai_engines", "status": "available", "cost": {"model": "mixed", "currency": "USD", "amount": 0.08}},
+  "arguments": {"prompts": ["evidence first seo"], "brand": "Example Test", "samples": 7},
+  "result": {"ok": true, "data": {"share_of_voice": 0.29, "confidence_interval_95": [0.08, 0.58], "samples": 7}, "error": null}
+}

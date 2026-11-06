@@ -33,7 +33,6 @@ from ..config import Config
 from ..errors import ErrorCode
 from .errors import ApiError, map_http_status
 
-
 _ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryHistoryRecord"
 # Current single-window record (vs the 25-week history time series above).
 _RECORD_ENDPOINT = "https://chromeuxreport.googleapis.com/v1/records:queryRecord"
@@ -124,9 +123,7 @@ class CruxHistoryClient:
         lower = body.lower()
         if status == 404:
             return True
-        if status == 400 and ("insufficient data" in lower or "chrome ux report" in lower):
-            return True
-        return False
+        return bool(status == 400 and ("insufficient data" in lower or "chrome ux report" in lower))
 
     def probe(self) -> bool:
         """Cheap reachability check: post an obviously-invalid request and

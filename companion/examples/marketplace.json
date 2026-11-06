@@ -1,0 +1,10 @@
+{
+  "name": "seomonster-local",
+  "interface": {"displayName": "SEOmonster Local"},
+  "plugins": [{
+    "name": "seomonster-workbench",
+    "source": {"source": "local", "path": "./plugins/seomonster-workbench"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+    "category": "Productivity"
+  }]
+}

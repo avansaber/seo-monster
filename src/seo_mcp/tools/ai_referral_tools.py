@@ -22,13 +22,14 @@ AI referral.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.ga4 import normalize_property_id
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import annotations
 from . import robots_tools
+from ._helpers import annotations
 from .ai_crawlers import AI_CRAWLERS
 
 _SERVICE = "ai"
@@ -102,7 +103,7 @@ def _ga4_referral(clients: Mapping[str, Any], property_id: str | None, days: int
         return None, "GA4 referral not run: no property_id configured or passed."
     try:
         ga4 = clients.get("ga4")
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional referral evidence remains unavailable on failure.
         ga4 = None
     if ga4 is None:
         return None, "GA4 referral not run: no GA4 client / credentials available."
@@ -124,7 +125,7 @@ def _ga4_referral(clients: Mapping[str, Any], property_id: str | None, days: int
             end_date="today",
             row_limit=1,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # Optional referral evidence remains unavailable on failure.
         return None, f"GA4 referral not run: report failed ({type(exc).__name__})."
 
     by_engine: dict[str, dict[str, float]] = {}
@@ -229,14 +230,14 @@ def ai_referral_overview(arguments: Mapping[str, Any], config: Any, clients: Map
     blocked_search = [c["crawler"] for c in (coverage or []) if c["category"] == "search" and not c["allowed"]]
 
     caveats = [
-        "AI referral traffic UNDERCOUNTS badly: ~70% of AI-app referrals arrive "
+        ("AI referral traffic UNDERCOUNTS badly: ~70% of AI-app referrals arrive "
         "as Direct/dark (copy-paste, stripped referrers, in-app webviews). Treat "
-        "by_source as a floor, not the total AI influence.",
-        "AI-Overview / AI-Mode clicks count as Organic Search in GA4, not as AI "
-        "referral -- they are NOT in by_source.",
-        "The native ai-assistant channel is forward-only and its recognized host "
+        "by_source as a floor, not the total AI influence."),
+        ("AI-Overview / AI-Mode clicks count as Organic Search in GA4, not as AI "
+        "referral -- they are NOT in by_source."),
+        ("The native ai-assistant channel is forward-only and its recognized host "
         "list is volatile (Claude dropped, Perplexity absent), so the source "
-        "regex is the retroactive backstop.",
+        "regex is the retroactive backstop."),
     ]
     if blocked_search:
         caveats.insert(0, f"robots.txt blocks AI search crawlers that could cite you: {', '.join(blocked_search)}.")

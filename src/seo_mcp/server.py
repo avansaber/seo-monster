@@ -16,20 +16,31 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from contextlib import asynccontextmanager
+from copy import deepcopy
+from functools import partial
+from typing import Any
 
+from jsonschema import Draft202012Validator, ValidationError
+from mcp import MCPError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolResult,
     GetPromptResult,
+    ListPromptsResult,
+    ListToolsResult,
     Prompt,
     PromptMessage,
     TextContent,
     Tool,
 )
 
+from . import __version__
 from . import prompts as prompts_module
 from .clients.ai_engines import build_ai_engines_client
 from .clients.cloudflare import build_cf_client
@@ -74,10 +85,6 @@ from .tools import (
     system_status,
     topic_cluster_tools,
 )
-
-
-server = Server("seo-mcp")
-
 
 # Tool schema dicts, one per registered tool. Tool modules expose plain dicts
 # (import-light, testable without mcp); the server wraps them into mcp Tools.
@@ -237,56 +244,154 @@ def dispatch(
     return handler(arguments, config, clients)
 
 
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    """Advertise the currently-registered tools.
+class SafeDiagnostics(logging.Filter):
+    """Keep SDK diagnostics useful without reflecting request or exception data."""
 
-    Uses ``Tool.model_validate`` so the nested ``annotations`` sub-dict is
-    parsed into a ``ToolAnnotations`` instance per the MCP 2025-03-26 spec.
-    """
-    return [Tool.model_validate(d) for d in _TOOL_DEFS]
-
-
-@server.list_prompts()
-async def list_prompts() -> list[Prompt]:
-    """Advertise the workflow prompts the host can invoke.
-
-    Prompts are named, parameterized recipes that chain existing tools (see
-    ``prompts.py``). They replace the parent-session's idea of monolithic
-    ``post_deploy_verify`` / ``pre_deploy_check`` tools, which would have
-    sacrificed composability for convenience.
-    """
-    return [Prompt.model_validate(p) for p in prompts_module.PROMPTS]
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == "mcp" or record.name.startswith(("mcp.", "httpx2", "httpcore2")):
+            record.msg = "MCP diagnostic; request and exception values omitted."
+            record.args = ()
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
 
 
-@server.get_prompt()
-async def get_prompt(name: str, arguments: dict[str, Any] | None = None) -> GetPromptResult:
-    """Render a prompt's body for the host.
+def _configure_diagnostics() -> None:
+    logging.basicConfig()
+    policy = SafeDiagnostics()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(policy)
+    for value in logging.Logger.manager.loggerDict.values():
+        if isinstance(value, logging.Logger):
+            for handler in value.handlers:
+                handler.addFilter(policy)
 
-    Each prompt returns a single user-role message with the workflow
-    instructions templated against the user-supplied arguments. The host's
-    LLM reads this message and executes the steps by calling the tools the
-    workflow names.
-    """
-    body = prompts_module.render(name, arguments)
-    return GetPromptResult(
-        description=next(
-            (p["description"] for p in prompts_module.PROMPTS if p["name"] == name),
-            None,
-        ),
-        messages=[
-            PromptMessage(role="user", content=TextContent(type="text", text=body)),
-        ],
+
+def _tool_schema(name: str) -> Mapping[str, Any] | None:
+    return deepcopy(next((item["inputSchema"] for item in _TOOL_DEFS if item["name"] == name), None))
+
+
+def _failure(code: ErrorCode, message: str) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(err(code, "general", message)))],
+        is_error=True,
     )
 
 
-@server.call_tool()
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    """MCP entry point: resolve config + clients, dispatch, serialize."""
+def _serialize_result(result: Any) -> CallToolResult:
+    if not isinstance(result, dict) or set(result) != {"ok", "data", "error"}:
+        raise ValueError("Invalid result envelope")
+    if type(result["ok"]) is not bool:
+        raise ValueError("Invalid success marker")
+    if result["ok"]:
+        if result["error"] is not None:
+            raise ValueError("Inconsistent success envelope")
+    elif result["data"] is not None or not isinstance(result["error"], dict):
+        raise ValueError("Inconsistent failure envelope")
+    elif (
+        result["error"].get("code") not in {str(code) for code in ErrorCode}
+        or not isinstance(result["error"].get("message"), str)
+    ):
+        raise ValueError("Invalid failure details")
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(result, indent=2, allow_nan=False))],
+        is_error=not result["ok"],
+    )
+
+
+async def list_tools(ctx, params) -> ListToolsResult:
+    """Return the complete engine catalog with protocol annotations."""
+    return ListToolsResult(tools=[Tool.model_validate(item) for item in _TOOL_DEFS])
+
+
+async def list_prompts(ctx, params) -> ListPromptsResult:
+    """Return the engine's parameterized workflow prompts."""
+    return ListPromptsResult(prompts=[Prompt.model_validate(item) for item in prompts_module.PROMPTS])
+
+
+async def get_prompt(ctx, params) -> GetPromptResult:
+    """Render a known prompt without reflecting malformed input in errors."""
+    try:
+        body = prompts_module.render(params.name, params.arguments)
+        return GetPromptResult(
+            description=next(p["description"] for p in prompts_module.PROMPTS if p["name"] == params.name),
+            messages=[PromptMessage(role="user", content=TextContent(type="text", text=body))],
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Prompt request failed.", exc_info=False)
+        raise MCPError(-32602, "Invalid prompt or arguments.") from None
+
+
+@asynccontextmanager
+async def _lifespan(instance):
+    yield {"provider_gate": asyncio.Semaphore(4)}
+
+
+def _execute(name: str, arguments: dict[str, Any]) -> CallToolResult:
     config = load_config()
     clients = build_clients(config)
-    result = dispatch(name, arguments or {}, config, clients)
-    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    return _serialize_result(dispatch(name, arguments, config, clients))
+
+
+async def call_tool(ctx, params) -> CallToolResult:
+    """Validate first, then dispatch once within the bounded worker pool."""
+    try:
+        schema = _tool_schema(params.name)
+        arguments = {} if params.arguments is None else params.arguments
+        if schema is None or not isinstance(arguments, dict):
+            return _failure(ErrorCode.INVALID_INPUT, "Invalid tool or arguments.")
+        Draft202012Validator(schema).validate(arguments)
+        json.dumps(arguments, allow_nan=False)
+    except (ValidationError, ValueError, TypeError, RecursionError):
+        return _failure(ErrorCode.INVALID_INPUT, "Invalid tool or arguments.")
+    try:
+        async with ctx.lifespan_context["provider_gate"]:
+            worker = asyncio.create_task(asyncio.to_thread(partial(_execute, params.name, arguments)))
+            try:
+                return await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                # A running provider request cannot be undone. Hold its slot until it finishes.
+                while not worker.done():
+                    try:
+                        await asyncio.shield(worker)
+                    except asyncio.CancelledError:
+                        continue
+                    except Exception:
+                        logging.getLogger(__name__).exception("Cancelled provider request ended.", exc_info=False)
+                        break
+                if worker.done() and not worker.cancelled():
+                    worker.exception()
+                raise
+    except Exception:
+        logging.getLogger(__name__).exception("Tool request failed.", exc_info=False)
+        return _failure(ErrorCode.UPSTREAM_ERROR, "Tool operation could not be completed.")
+
+
+async def _safe_request(ctx, call_next):
+    try:
+        return await call_next(ctx)
+    except MCPError as exc:
+        code = exc.code if exc.code in {-32700, -32600, -32601, -32602, -32603} else -32603
+        raise MCPError(code, "Protocol request could not be completed.") from None
+    except (ValidationError, ValueError, TypeError):
+        if ctx.method == "tools/call":
+            return _failure(ErrorCode.INVALID_INPUT, "Invalid tool request.")
+        raise MCPError(-32602, "Invalid protocol request.") from None
+    except Exception:
+        logging.getLogger(__name__).exception("Protocol request failed.", exc_info=False)
+        if ctx.method == "tools/call":
+            return _failure(ErrorCode.UPSTREAM_ERROR, "Tool request could not be completed.")
+        raise MCPError(-32603, "Protocol request could not be completed.") from None
+
+
+server = Server(
+    "seo-mcp", version=__version__, lifespan=_lifespan,
+    get_tool_input_schema=_tool_schema,
+    on_list_tools=list_tools, on_call_tool=call_tool,
+    on_list_prompts=list_prompts, on_get_prompt=get_prompt,
+)
+server.middleware.insert(0, _safe_request)
 
 
 async def _async_main() -> None:
@@ -311,8 +416,7 @@ def _legacy_alias_invocation(argv0: str | None) -> bool:
         return False
     base = os.path.basename(argv0)
     # Strip Windows ".exe" / launchers.
-    if base.endswith(".exe"):
-        base = base[:-4]
+    base = base.removesuffix(".exe")
     return base == "seo-mcp"
 
 
@@ -345,6 +449,7 @@ def main() -> None:
     we never confuse an MCP host that launches the server with no extra
     arguments with a user typing a CLI command.
     """
+    _configure_diagnostics()
     _warn_if_legacy_alias(sys.argv[0] if sys.argv else None)
     argv = sys.argv[1:]
     if argv and argv[0] == "auth":

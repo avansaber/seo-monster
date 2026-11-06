@@ -1,0 +1,21 @@
+{
+  "adapter_version": "seomonster-result/v1",
+  "tool": "gsc_search_analytics",
+  "captured_at": "2026-08-01T00:00:00Z",
+  "freshness": "current",
+  "provider": {"name": "gsc", "status": "available", "cost": {"model": "first_party", "currency": "USD", "amount": 0}},
+  "arguments": {"site_url": "sc-domain:example.test", "start_date": "2026-07-01", "end_date": "2026-07-28", "dimensions": ["query", "page"], "data_state": "final"},
+  "result": {
+    "ok": true,
+    "data": {
+      "site_url": "sc-domain:example.test",
+      "data_state": "final",
+      "rows": [
+        {"keys": ["evidence first seo", "https://example.test/evidence"], "clicks": 42, "impressions": 1200, "ctr": 0.035, "position": 8.4},
+        {"keys": ["evidence first seo", "https://example.test/guides/evidence"], "clicks": 12, "impressions": 500, "ctr": 0.024, "position": 16.0},
+        {"keys": ["example test", "https://example.test/"], "clicks": 300, "impressions": 420, "ctr": 0.7143, "position": 1.2}
+      ]
+    },
+    "error": null
+  }
+}

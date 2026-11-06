@@ -1,0 +1,42 @@
+*.db
+*.db-shm
+*.db-wal
+dist/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Narrow exceptions to the parent repository's credential-oriented *.json rule.
+# Keep only reviewed schemas, synthetic fixtures and plugin metadata trackable.
+!/schemas/saved-result-v1.schema.json
+!/schemas/export-v1.schema.json
+!/schemas/ownership-v1.schema.json
+!/schemas/backup-v1.schema.json
+!/schemas/backup-v2.schema.json
+!/schemas/change-ledger-v1.schema.json
+!/evaluation/contracts/seomonster-0.9.3.json
+!/evaluation/fixtures/ai_citation_stale.json
+!/evaluation/fixtures/business_context.json
+!/evaluation/fixtures/content_decay.json
+!/evaluation/fixtures/deployment_observation.json
+!/evaluation/fixtures/contradictory_signal.json
+!/evaluation/fixtures/crawl_migration.json
+!/evaluation/fixtures/ga4_cold_start.json
+!/evaluation/fixtures/gsc_baseline.json
+!/evaluation/fixtures/gsc_outcome.json
+!/evaluation/fixtures/gsc_portfolio_site_b.json
+!/evaluation/fixtures/partial_failure.json
+!/evaluation/fixtures/provider_unavailable.json
+!/evaluation/fixtures/scenario_manifest.json
+!/evaluation/fixtures/serp_malicious.json
+!/examples/marketplace.json
+!/plugins/seomonster-workbench/plugin.json
+!/plugins/seomonster-workbench/mcp.json
+!/plugins/seomonster-workbench/.codex-plugin/plugin.json
+
+# SDK 2 capture contract is part of the distributable fixture set.
+!/evaluation/contracts/seomonster-sdk2-v1.json
+
+# Local implementation and coordination notes stay outside distribution.
+/docs/IMPLEMENTATION_REPORT.md

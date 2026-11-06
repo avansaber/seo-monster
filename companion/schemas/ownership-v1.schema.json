@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seomonster.avansaber.com/schemas/workbench/ownership-v1.schema.json",
+  "title": "SEOmonster Workbench ownership export",
+  "type": "object",
+  "required": [
+    "format_version", "storage_schema_version", "exported_at", "project", "sites",
+    "ownership_assignments", "ownership_conflicts", "ownership_decisions", "ownership_action_plans",
+    "evidence", "snapshots", "external_execution_available", "semantics"
+  ],
+  "properties": {
+    "format_version": {"const": "seomonster-workbench-ownership/v1"},
+    "storage_schema_version": {"type": "integer", "minimum": 2},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "project": {"type": "object"},
+    "sites": {"type": "array", "items": {"$ref": "#/$defs/site"}},
+    "ownership_assignments": {"type": "array", "items": {"$ref": "#/$defs/assignment"}},
+    "ownership_conflicts": {"type": "array", "items": {"$ref": "#/$defs/conflict"}},
+    "ownership_decisions": {"type": "array", "items": {"$ref": "#/$defs/decision"}},
+    "ownership_action_plans": {"type": "array", "items": {"$ref": "#/$defs/plan"}},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+    "snapshots": {"type": "array", "items": {"$ref": "#/$defs/snapshot"}},
+    "external_execution_available": {"const": false},
+    "semantics": {
+      "type": "object",
+      "required": ["ownership", "resolution", "execution", "topics"],
+      "properties": {
+        "ownership": {"type": "string", "minLength": 1},
+        "resolution": {"type": "string", "minLength": 1},
+        "execution": {"type": "string", "minLength": 1},
+        "topics": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "site": {
+      "type": "object",
+      "required": ["id", "portfolio_id", "canonical_url", "name"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "portfolio_id": {"type": "string", "minLength": 1},
+        "canonical_url": {"type": "string", "pattern": "^https://"}, "name": {"type": "string", "minLength": 1}
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "required": ["id", "project_id", "key_type", "normalized_key", "owner_site_id", "owner_url", "role",
+        "source", "basis_evidence_ids", "provenance", "created_at", "supersedes_id"],
+      "properties": {
+        "key_type": {"enum": ["query", "topic"]},
+        "role": {"enum": ["primary", "supporting", "intent_variant", "accepted_overlap"]},
+        "source": {"const": "human_declared"},
+        "basis_evidence_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "supersedes_id": {"type": ["string", "null"]}
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "required": ["id", "project_id", "key_type", "evidence_ids", "observed_pages", "observed_sites",
+        "measurement_scope", "impact", "confidence", "caveats", "rule_id", "rule_version", "calculation",
+        "detected_at", "active"],
+      "properties": {
+        "key_type": {"const": "query"},
+        "impact": {"enum": ["high", "medium", "low", "unavailable"]},
+        "confidence": {"enum": ["high", "medium", "low", "unavailable"]},
+        "evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+        "observed_pages": {"type": "array", "minItems": 2, "items": {"type": "object"}},
+        "observed_sites": {"type": "array", "minItems": 2, "items": {"type": "string"}, "uniqueItems": true},
+        "active": {"type": "boolean"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["id", "project_id", "conflict_id", "decision", "state", "participant_pages", "primary_url",
+        "page_roles", "decided_at", "actor_assertion", "input_evidence_ids", "provenance", "supersedes_id",
+        "external_execution_available"],
+      "properties": {
+        "decision": {"enum": ["accept", "differentiate", "consolidate", "route"]},
+        "state": {"enum": ["pending", "recorded"]},
+        "actor_assertion": {"enum": ["agent_draft", "local_operator_assertion"]},
+        "participant_pages": {"type": "array", "minItems": 2, "items": {"type": "string"}, "uniqueItems": true},
+        "input_evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+        "external_execution_available": {"const": false}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["id", "project_id", "conflict_id", "decision_id", "state", "created_at", "dependencies",
+        "steps", "rollback_notes", "external_execution_available"],
+      "properties": {
+        "state": {"const": "draft"},
+        "dependencies": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "steps": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["external_write"],
+          "properties": {"external_write": {"const": false}}}},
+        "external_execution_available": {"const": false}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "project_id", "snapshot_id", "observed_at", "availability", "provenance"],
+      "properties": {"availability": {"enum": ["observed", "unavailable", "contradictory"]}}
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["id", "project_id", "tool", "captured_at", "provider", "arguments", "envelope", "raw",
+        "content_hash", "source_locator", "adapter_version", "freshness", "caveats"]
+    }
+  },
+  "additionalProperties": false
+}

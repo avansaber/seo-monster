@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seomonster.avansaber.com/schemas/workbench/export-v1.schema.json",
+  "title": "SEOmonster Workbench portable export",
+  "type": "object",
+  "required": [
+    "format_version",
+    "schema_version",
+    "exported_at",
+    "project",
+    "sites",
+    "snapshots",
+    "evidence",
+    "findings",
+    "recommendations",
+    "decisions",
+    "action_plans",
+    "experiments",
+    "semantics"
+  ],
+  "properties": {
+    "format_version": {"const": "seomonster-workbench-export/v1"},
+    "schema_version": {"const": 1},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "project": {"type": "object"},
+    "sites": {"type": "array", "items": {"type": "object"}},
+    "snapshots": {"type": "array", "items": {"type": "object"}},
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "findings": {"type": "array", "items": {"type": "object"}},
+    "recommendations": {"type": "array", "items": {"type": "object"}},
+    "decisions": {"type": "array", "items": {"type": "object"}},
+    "action_plans": {"type": "array", "items": {"type": "object"}},
+    "experiments": {"type": "array", "items": {"type": "object"}},
+    "semantics": {
+      "type": "object",
+      "required": ["approved_business_context", "analytical_provenance", "causality", "execution"]
+    }
+  },
+  "additionalProperties": false
+}

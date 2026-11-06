@@ -133,6 +133,6 @@ def build_ga4_admin_client(config: Config) -> Ga4AdminClient:
     service = build("analyticsadmin", "v1beta", credentials=creds, cache_discovery=False)
     try:
         alpha = build("analyticsadmin", "v1alpha", credentials=creds, cache_discovery=False)
-    except Exception:
+    except Exception:  # noqa: BLE001  # Optional alpha discovery must not block the stable client.
         alpha = None  # v1alpha checks degrade gracefully if discovery is unavailable
     return Ga4AdminClient(service, alpha)

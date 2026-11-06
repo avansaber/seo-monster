@@ -1,107 +1,121 @@
 name: CI
 
-# Lightweight push / PR gate: run the offline test suite and the ruff linter.
-# The tag-driven release workflow (release.yml) re-runs the tests before it
-# publishes, but this catches regressions and lint drift at PR/push time so
-# they never reach a tag. No secrets, no network: the suite is fully mocked.
-
 on:
   push:
     branches: ['**']
-    tags-ignore: ['v*']   # release.yml owns tag pushes; don't double-run there
+    tags-ignore: ['v*']
   pull_request:
-  # mcp 2.0.0 (2026-07-28) broke the published package and nobody noticed for a
-  # month, because CI only fires on push and there were no pushes for 69 days.
-  #
-  # Note what this schedule does and does not buy. The `test` job runs
-  # `uv run pytest`, which syncs from uv.lock first -- so it exercises the
-  # LOCKED mcp, not whatever the ecosystem has moved to. On its own this cron
-  # would therefore have stayed green through the 2.x break indefinitely. The
-  # control that actually detects this particular drift is the mcp-canary job
-  # below -- Dependabot deliberately ignores mcp majors (see dependabot.yml),
-  # and pyproject pins <2 anyway, so neither can surface a 2.x break. The cron
-  # only ensures the canary runs without waiting for someone to push.
-  #
-  # NOTE: GitHub disables scheduled workflows after 60 days of repository
-  # inactivity, so this schedule is best-effort. Dependabot
-  # (.github/dependabot.yml) is what keeps the repo active enough for it to
-  # survive -- that, rather than detecting mcp drift, is the role it plays here.
   schedule:
-    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  # Match release.yml: opt the pinned JS actions onto Node 24 ahead of the
-  # 2026-06-16 cutover that removes the deprecated Node 20 runtime.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Preserve the existing required check name.
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-
-      - name: Install Python 3.11 + project deps (dev extras for pytest)
+      - name: Install locked Python 3.11 environment
         run: |
           uv python install 3.11
-          uv venv
-          uv pip install -e ".[dev]"
+          uv sync --locked --extra dev --python 3.11
+      - name: Check source inventory and resolved dependencies
+        run: |
+          uv run --no-sync python scripts/check_distribution.py
+          uv pip check
+          uv run --no-sync python -c "import importlib.metadata as m; assert m.version('mcp') == '2.3.0'; print('mcp', m.version('mcp'))"
+      - name: Lint and test engine
+        run: |
+          uv run --no-sync ruff check src/ tests/ scripts/
+          uv run --no-sync pytest -q
+      - name: Validate engine artifact boundary from a dirty tree
+        run: |
+          # Synthetic files in local-only folders must never reach a build.
+          # Source folders receive only the JSON names that .gitignore re-includes.
+          for d in .private archive marketing build dist venv .config .claude .cursor .credentials node_modules src/seo_mcp tests; do
+            mkdir -p "$d/ci-dirty-plant"
+            for n in .mcp.json manifest.json package.json server.json; do
+              printf '{"synthetic": true}\n' > "$d/ci-dirty-plant/$n"
+            done
+            case "$d" in src/*|tests) ;; *) printf 'synthetic\n' > "$d/ci-dirty-plant/notes.txt" ;; esac
+          done
+          out="$RUNNER_TEMP/engine-dist"
+          uv build --sdist --wheel --out-dir "$out"
+          for artifact in "$out"/*.tar.gz "$out"/*.whl; do
+            python3 -B scripts/check_distribution.py --artifact "$artifact"
+          done
+          if { tar -tzf "$out"/*.tar.gz; unzip -Z1 "$out"/*.whl; } | grep -F ci-dirty-plant; then
+            echo "Local-only files reached an engine artifact."; exit 1
+          fi
+          # Canonical member identity (path, type, mode, size, sha256) of the
+          # dirty-tree build; compare with the digests of the scanned artifacts.
+          python3 -B scripts/check_distribution.py --canonical "$out"/*.tar.gz "$out"/*.whl
 
-      - name: Lint (ruff)
-        run: uv run ruff check src/ tests/
+  supported-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install Python 3.14 with newest supported SDK
+        run: |
+          uv python install 3.14
+          uv sync --locked --extra dev --python 3.14
+          uv pip install --upgrade --refresh 'mcp>=2.3.0,<3'
+          uv pip check
+      - name: Report actual SDK and test without resync
+        run: |
+          uv run --no-sync python -c "import importlib.metadata as m; print('mcp', m.version('mcp')); assert m.version('mcp').split('.')[0] == '2'"
+          uv run --no-sync pytest -q
 
-      - name: Test (offline suite)
-        run: uv run pytest -q
-
-  # Early-warning leg: install the newest mcp regardless of our pin and run the
-  # suite against it. Allowed to fail -- it exists to tell us when the pin is
-  # ready to be lifted, not to block PRs. Flag rationale is on the install step
-  # below.
+  # Latest ecosystem SDK is informational; it may still be the supported major.
   mcp-canary:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-
-      - name: Install Python 3.11 + project deps
+      - name: Install engine and latest ecosystem SDK
         run: |
           uv python install 3.11
-          uv venv
-          uv pip install -e ".[dev]"
+          uv sync --locked --extra dev --python 3.11
+          uv pip install --upgrade --refresh mcp
+      - name: Report actual ecosystem SDK and test without resync
+        run: |
+          uv run --no-sync python -c "import importlib.metadata as m; v=m.version('mcp'); print('mcp', v); print('Newer major probed:', int(v.split('.')[0]) > 2)"
+          uv run --no-sync pytest -q
 
-      - name: Force the newest mcp, ignoring our pin
-        # Deliberately NOT --no-deps: mcp 2.x introduces new requirements
-        # (mcp-types, httpx2, ...), and skipping them makes the suite die with
-        # ModuleNotFoundError while silently skipping 12 tests -- which hides
-        # the actual incompatibility behind a packaging artifact. Installing
-        # deps properly surfaces the real signal: 11 failures with
-        # `AttributeError: 'Server' object has no attribute 'list_tools'`.
-        # --refresh defeats the setup-uv cache.
-        run: uv pip install --upgrade --refresh "mcp>=2"
-
-      # --no-sync is load-bearing on both commands. Plain `uv run` re-syncs the
-      # environment from uv.lock before executing, which silently reinstalls
-      # the pinned mcp and reverts the upgrade above -- the canary then tests
-      # the pinned version and reports success, which is worse than having no
-      # canary at all. Verified: after forcing mcp 2.1.1, `uv run` reported
-      # 1.27.1; `uv run --no-sync` reported 2.1.1.
-      - name: Report the resolved mcp version
-        run: uv run --no-sync python -c "import importlib.metadata as m; print('mcp', m.version('mcp'))"
-
-      - name: Test against unpinned mcp (informational)
-        run: uv run --no-sync pytest -q
+  companion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install engine and companion integration dependencies
+        run: |
+          uv python install 3.11
+          uv sync --locked --extra dev --python 3.11
+          uv pip install -e 'companion[mcp,test]'
+          uv pip check
+      - name: Validate independent companion lint
+        run: |
+          uv venv companion/.venv
+          uv pip install --python companion/.venv/bin/python -e 'companion[dev]'
+          companion/.venv/bin/ruff check --isolated companion/src companion/tests companion/scripts
+      - name: Test engine and companion without environment resync
+        run: |
+          uv run --no-sync pytest -q tests companion/tests
+          uv run --no-sync sm-workbench evaluate --fixtures companion/evaluation/fixtures

@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-
 # Prompt definitions. Each dict mirrors the mcp.types.Prompt shape:
 # name, description, arguments (list of {name, description, required}).
 PROMPTS: list[dict[str, Any]] = [

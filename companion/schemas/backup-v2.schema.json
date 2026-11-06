@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seomonster.avansaber.com/schemas/workbench/backup-v2.schema.json",
+  "title": "SEOmonster Workbench self-contained backup v2",
+  "type": "object",
+  "required": ["format_version", "storage_schema_version", "exported_at", "portfolio", "project_export", "ownership_export", "change_ledger_export", "component_hashes", "restore_policy", "external_execution_available"],
+  "properties": {
+    "format_version": {"const": "seomonster-workbench-backup/v2"},
+    "storage_schema_version": {"const": 3},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "portfolio": {
+      "type": "object", "required": ["id", "name", "created_at"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "name": {"type": "string", "minLength": 1}, "created_at": {"type": "string", "format": "date-time"}},
+      "additionalProperties": false
+    },
+    "project_export": {"$ref": "#/$defs/projectExport"},
+    "ownership_export": {"$ref": "#/$defs/ownershipExport"},
+    "change_ledger_export": {"$ref": "#/$defs/changeLedger"},
+    "component_hashes": {
+      "type": "object",
+      "required": ["project_export_canonical_sha256", "ownership_export_canonical_sha256", "change_ledger_export_canonical_sha256"],
+      "properties": {
+        "project_export_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ownership_export_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "change_ledger_export_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
+    "restore_policy": {"const": {"identity": "preserve_project_and_record_ids", "existing_project": "exact_noop_or_conflict", "merge": "not_available", "external_execution": "not_available"}},
+    "external_execution_available": {"const": false}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "project": {
+      "type": "object", "required": ["id", "portfolio_id", "name", "created_at", "business_context", "claim_policy"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "portfolio_id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1}, "created_at": {"type": "string", "format": "date-time"},
+        "business_context": {"type": "object"}, "claim_policy": {"const": "approved_source_material_no_automated_truth_score"}
+      }, "additionalProperties": false
+    },
+    "projectExport": {
+      "type": "object",
+      "required": ["format_version", "schema_version", "exported_at", "project", "sites", "snapshots", "evidence", "findings", "recommendations", "decisions", "action_plans", "experiments", "semantics"],
+      "properties": {
+        "format_version": {"const": "seomonster-workbench-export/v1"}, "schema_version": {"const": 1},
+        "exported_at": {"type": "string", "format": "date-time"}, "project": {"$ref": "#/$defs/project"},
+        "sites": {"type": "array", "items": {"type": "object"}}, "snapshots": {"type": "array", "items": {"type": "object"}},
+        "evidence": {"type": "array", "items": {"type": "object"}}, "findings": {"type": "array", "items": {"type": "object"}},
+        "recommendations": {"type": "array", "items": {"type": "object"}}, "decisions": {"type": "array", "items": {"type": "object"}},
+        "action_plans": {"type": "array", "items": {"type": "object"}}, "experiments": {"type": "array", "items": {"type": "object"}},
+        "semantics": {"type": "object"}
+      }, "additionalProperties": false
+    },
+    "ownershipExport": {
+      "type": "object",
+      "required": ["format_version", "storage_schema_version", "exported_at", "project", "sites", "ownership_assignments", "ownership_conflicts", "ownership_decisions", "ownership_action_plans", "evidence", "snapshots", "external_execution_available", "semantics"],
+      "properties": {
+        "format_version": {"const": "seomonster-workbench-ownership/v1"}, "storage_schema_version": {"type": "integer", "minimum": 2},
+        "exported_at": {"type": "string", "format": "date-time"}, "project": {"$ref": "#/$defs/project"},
+        "sites": {"type": "array", "items": {"type": "object"}}, "ownership_assignments": {"type": "array", "items": {"type": "object"}},
+        "ownership_conflicts": {"type": "array", "items": {"type": "object"}}, "ownership_decisions": {"type": "array", "items": {"type": "object"}},
+        "ownership_action_plans": {"type": "array", "items": {"type": "object"}}, "evidence": {"type": "array", "items": {"type": "object"}},
+        "snapshots": {"type": "array", "items": {"type": "object"}}, "external_execution_available": {"const": false},
+        "semantics": {"type": "object"}
+      }, "additionalProperties": false
+    },
+    "step": {
+      "type": "object", "required": ["id", "kind", "mode", "description", "dependencies", "external_write"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "kind": {"type": "string", "minLength": 1},
+        "mode": {"enum": ["preview", "recommendation"]}, "description": {"type": "string", "minLength": 1},
+        "dependencies": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}, "external_write": {"const": false}
+      }, "additionalProperties": false
+    },
+    "plan": {
+      "type": "object", "required": ["id", "project_id", "recommendation_id", "state", "created_at", "dependencies", "steps", "rollback_notes", "external_execution_available"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "project_id": {"type": "string", "minLength": 1},
+        "recommendation_id": {"type": "string", "minLength": 1}, "state": {"enum": ["draft", "approved"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "dependencies": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}},
+        "rollback_notes": {"type": "string", "minLength": 1}, "external_execution_available": {"const": false}
+      }, "additionalProperties": false
+    },
+    "decision": {
+      "type": "object", "required": ["id", "project_id", "recommendation_id", "state", "decided_at", "note"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "project_id": {"type": "string", "minLength": 1},
+        "recommendation_id": {"type": "string", "minLength": 1}, "state": {"enum": ["pending", "approved"]},
+        "decided_at": {"type": "string", "format": "date-time"}, "note": {"type": ["string", "null"]}
+      }, "additionalProperties": false
+    },
+    "source": {
+      "type": "object", "required": ["kind", "reference", "artifact_sha256"],
+      "properties": {
+        "kind": {"enum": ["operator_attestation", "deployment_receipt", "version_control"]},
+        "reference": {"type": "string", "minLength": 1, "maxLength": 500},
+        "artifact_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }, "additionalProperties": false
+    },
+    "operation": {
+      "type": "object", "required": ["kind", "target", "description"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1, "maxLength": 100},
+        "target": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "description": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }, "additionalProperties": false
+    },
+    "approval": {
+      "type": "object", "required": ["state", "approval_decision_ids", "derived_at_import"],
+      "properties": {
+        "state": {"enum": ["approval_timestamp_precedes_observation", "no_preceding_approval_timestamp"]},
+        "approval_decision_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "derived_at_import": {"const": true}
+      }, "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["id", "project_id", "plan_id", "observed_at", "recorded_at", "environment", "verification_state", "source", "summary", "operations", "rollback_reference", "caveats", "plan_snapshot", "plan_snapshot_hash", "approval_snapshot", "approval_snapshot_hash", "observation_hash", "record_hash", "external_execution_available"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "project_id": {"type": "string", "minLength": 1}, "plan_id": {"type": "string", "minLength": 1},
+        "observed_at": {"type": "string", "format": "date-time"}, "recorded_at": {"type": "string", "format": "date-time"},
+        "environment": {"type": "string", "minLength": 1, "maxLength": 100}, "verification_state": {"enum": ["reported", "artifact_observed", "postcondition_verified"]},
+        "source": {"$ref": "#/$defs/source"}, "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "operations": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/operation"}},
+        "rollback_reference": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "caveats": {"type": "array", "maxItems": 100, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+        "plan_snapshot": {"$ref": "#/$defs/plan"}, "plan_snapshot_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "approval_snapshot": {"$ref": "#/$defs/approval"}, "approval_snapshot_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "observation_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "record_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "external_execution_available": {"const": false}
+      }, "additionalProperties": false
+    },
+    "changeLedger": {
+      "type": "object",
+      "required": ["format_version", "storage_schema_version", "exported_at", "project", "action_plans", "decisions", "deployment_observations", "external_execution_available", "semantics"],
+      "properties": {
+        "format_version": {"const": "seomonster-workbench-change-ledger/v1"}, "storage_schema_version": {"type": "integer", "minimum": 3},
+        "exported_at": {"type": "string", "format": "date-time"}, "project": {"$ref": "#/$defs/project"},
+        "action_plans": {"type": "array", "items": {"$ref": "#/$defs/plan"}},
+        "decisions": {"type": "array", "items": {"$ref": "#/$defs/decision"}},
+        "deployment_observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+        "external_execution_available": {"const": false},
+        "semantics": {
+          "type": "object", "required": ["observation", "verification", "approval", "causality"],
+          "properties": {
+            "observation": {"type": "string", "minLength": 1}, "verification": {"type": "string", "minLength": 1},
+            "approval": {"type": "string", "minLength": 1}, "causality": {"type": "string", "minLength": 1}
+          }, "additionalProperties": false
+        }
+      }, "additionalProperties": false
+    }
+  }
+}
