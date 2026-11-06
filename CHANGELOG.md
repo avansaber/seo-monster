@@ -9,6 +9,36 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
+## [0.10.1] - 2026-11-06
+
+### Upgrade
+
+- Upgrading an existing environment to 0.10.1, for example with `pip install --upgrade seo-monster`, replaces older copies of the dependencies below, because the package now declares them as minimum versions. The Claude Desktop `.mcpb` bundle installs the same versions from its updated lockfile.
+- Tools, prompts, configuration and result envelopes are unchanged. Python 3.11 or later and MCP Python SDK 2.3 or later, below version 3, remain required.
+
+### Security
+
+- The lockfile and the published package metadata now require versions outside the affected ranges of 43 published GitHub security advisories against transitive dependencies of 0.10.0. This entry does not assess whether any advisory was reachable through SEOMonster. One PyJWT advisory (GHSA-gvp8-978c-rx2q) lists no patched release; its affected range ends at 2.13.0, below the new minimum.
+
+  | Package | 0.10.0 lock | 0.10.1 lock and minimum | Advisories |
+  |---|---|---|---|
+  | anyio | 4.13.0 | 4.14.2 | GHSA-5p39-cfhj-2xmp, GHSA-82r6-8w77-94w6 |
+  | certifi | 2026.5.20 | 2026.10.18 | GHSA-6q48-6c7w-9gw2 |
+  | cryptography | 48.0.0 | 50.0.0 | GHSA-537c-gmf6-5ccf, GHSA-g6cj-pr64-35w5, GHSA-jwv3-5hgf-82ww, GHSA-m2h6-j472-rp4c |
+  | httplib2 | 0.31.2 | 0.32.0 | GHSA-j5g9-f88f-gfj3 |
+  | oauthlib | 3.3.1 | 4.0.1 | GHSA-3jp2-3mrg-2vxc, GHSA-7984-qgvg-3j9c, GHSA-hj66-6f7g-4r5v, GHSA-xpv3-w29h-x7cv |
+  | pyasn1 | 0.6.3 | 0.6.5 | GHSA-2qm8-x737-gmw5, GHSA-8ppf-4f7h-5ppj, GHSA-9m75-vc3g-4x39, GHSA-fm9c-5rcf-2q5p, GHSA-hm4w-wwcw-mr6r, GHSA-m4p7-r5rc-7g4j, GHSA-mm57-4v3p-rchx |
+  | pyjwt | 2.13.0 | 2.15.0 | GHSA-2gx3-rcp4-g85q, GHSA-42vr-xj54-vc7v, GHSA-8wjv-2p76-3863, GHSA-9j54-fg26-wv3r, GHSA-9v7f-9g4p-ffgj, GHSA-ffc3-869f-jxw9, GHSA-gvp8-978c-rx2q, GHSA-hxm8-2xgr-2p9m, GHSA-jwrc-g2q2-pq5p, GHSA-p4g4-x82p-q773, GHSA-pxh4-856f-4h89, GHSA-r6x4-923q-g947, GHSA-w2cx-738m-mc7w, GHSA-w6j9-cwv2-h6wq, GHSA-x33g-cr3x-6449 |
+  | python-multipart | 0.0.29 | 0.0.31 | GHSA-5rvq-cxj2-64vf, GHSA-6jv3-5f52-599m, GHSA-v9pg-7xvm-68hf, GHSA-vffw-93wf-4j4q |
+  | starlette | 1.1.0 | 1.3.1 | GHSA-82w8-qh3p-5jfq, GHSA-jp82-jpqv-5vv3 |
+  | urllib3 | 2.7.0 | 2.8.0 | GHSA-8988-9cw3-xx77, GHSA-gh4c-6fx4-qh6g, GHSA-vxq7-64xx-v4gw |
+
+- No other locked dependency changed. The optional Workbench source package applies the same minimums in the extras that reach these packages; its CLI still installs without dependencies.
+
+### Development
+
+- `scripts/check_dependency_advisories.py` checks exact locked or installed versions, and the declared minimum versions, against a dated advisory snapshot. It refuses clearance when advisory data is unavailable, stale, future-dated, malformed or contradictory, when an inventory is missing, contradictory or not covered by the snapshot, and when any critical or high range matches. A missing patched version stays unknown. A replay fixture of public GitHub Advisory Database facts (CC BY 4.0) protects these rules offline; it is not a current clearance.
+
 ## [0.10.0] - 2026-11-05
 
 ### Upgrade

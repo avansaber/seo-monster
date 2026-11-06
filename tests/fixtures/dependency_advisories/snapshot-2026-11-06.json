@@ -1,0 +1,773 @@
+{
+ "advisories": [
+  {
+   "affected": "< 4.14.2",
+   "first_patched": "4.14.2",
+   "id": "GHSA-5p39-cfhj-2xmp",
+   "package": "anyio",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-5p39-cfhj-2xmp"
+  },
+  {
+   "affected": "< 4.14.2",
+   "first_patched": "4.14.2",
+   "id": "GHSA-82r6-8w77-94w6",
+   "package": "anyio",
+   "severity": "critical",
+   "url": "https://github.com/advisories/GHSA-82r6-8w77-94w6"
+  },
+  {
+   "affected": ">= 2019.03.09, < 2026.10.18",
+   "first_patched": "2026.10.18",
+   "id": "GHSA-6q48-6c7w-9gw2",
+   "package": "certifi",
+   "severity": "critical",
+   "url": "https://github.com/advisories/GHSA-6q48-6c7w-9gw2"
+  },
+  {
+   "affected": ">= 0.5.0, < 48.0.1",
+   "first_patched": "48.0.1",
+   "id": "GHSA-537c-gmf6-5ccf",
+   "package": "cryptography",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-537c-gmf6-5ccf"
+  },
+  {
+   "affected": ">= 44.0.0, < 50.0.0",
+   "first_patched": "50.0.0",
+   "id": "GHSA-g6cj-pr64-35w5",
+   "package": "cryptography",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-g6cj-pr64-35w5"
+  },
+  {
+   "affected": ">= 42.0.0, < 49.0.0",
+   "first_patched": "49.0.0",
+   "id": "GHSA-jwv3-5hgf-82ww",
+   "package": "cryptography",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-jwv3-5hgf-82ww"
+  },
+  {
+   "affected": ">= 45.0.0, < 49.0.0",
+   "first_patched": "49.0.0",
+   "id": "GHSA-m2h6-j472-rp4c",
+   "package": "cryptography",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-m2h6-j472-rp4c"
+  },
+  {
+   "affected": "< 0.32.0",
+   "first_patched": "0.32.0",
+   "id": "GHSA-j5g9-f88f-gfj3",
+   "package": "httplib2",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-j5g9-f88f-gfj3"
+  },
+  {
+   "affected": ">= 3.3.0, < 4.0.1",
+   "first_patched": "4.0.1",
+   "id": "GHSA-3jp2-3mrg-2vxc",
+   "package": "oauthlib",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-3jp2-3mrg-2vxc"
+  },
+  {
+   "affected": "< 4.0.0",
+   "first_patched": "4.0.0",
+   "id": "GHSA-7984-qgvg-3j9c",
+   "package": "oauthlib",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-7984-qgvg-3j9c"
+  },
+  {
+   "affected": ">= 0.6.1, <= 3.3.1",
+   "first_patched": "4.0.0",
+   "id": "GHSA-hj66-6f7g-4r5v",
+   "package": "oauthlib",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-hj66-6f7g-4r5v"
+  },
+  {
+   "affected": ">= 3.0.0, < 4.0.0",
+   "first_patched": "4.0.0",
+   "id": "GHSA-xpv3-w29h-x7cv",
+   "package": "oauthlib",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-xpv3-w29h-x7cv"
+  },
+  {
+   "affected": "<= 0.6.4",
+   "first_patched": "0.6.5",
+   "id": "GHSA-2qm8-x737-gmw5",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-2qm8-x737-gmw5"
+  },
+  {
+   "affected": "<= 0.6.3",
+   "first_patched": "0.6.4",
+   "id": "GHSA-8ppf-4f7h-5ppj",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-8ppf-4f7h-5ppj"
+  },
+  {
+   "affected": "<= 0.6.4",
+   "first_patched": "0.6.5",
+   "id": "GHSA-9m75-vc3g-4x39",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-9m75-vc3g-4x39"
+  },
+  {
+   "affected": ">= 0.3.3, < 0.6.5",
+   "first_patched": "0.6.5",
+   "id": "GHSA-fm9c-5rcf-2q5p",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-fm9c-5rcf-2q5p"
+  },
+  {
+   "affected": "<= 0.6.3",
+   "first_patched": "0.6.4",
+   "id": "GHSA-hm4w-wwcw-mr6r",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-hm4w-wwcw-mr6r"
+  },
+  {
+   "affected": "< 0.6.4",
+   "first_patched": "0.6.4",
+   "id": "GHSA-m4p7-r5rc-7g4j",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-m4p7-r5rc-7g4j"
+  },
+  {
+   "affected": "<= 0.6.4",
+   "first_patched": "0.6.5",
+   "id": "GHSA-mm57-4v3p-rchx",
+   "package": "pyasn1",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-mm57-4v3p-rchx"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-2gx3-rcp4-g85q",
+   "package": "pyjwt",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-2gx3-rcp4-g85q"
+  },
+  {
+   "affected": ">= 2.0.0a1, <= 2.14.0",
+   "first_patched": "2.15.0",
+   "id": "GHSA-42vr-xj54-vc7v",
+   "package": "PyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-42vr-xj54-vc7v"
+  },
+  {
+   "affected": ">= 2.13.0, < 2.14.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-8wjv-2p76-3863",
+   "package": "pyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-8wjv-2p76-3863"
+  },
+  {
+   "affected": ">= 2.13.0, < 2.14.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-9j54-fg26-wv3r",
+   "package": "PyJWT",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-9j54-fg26-wv3r"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-9v7f-9g4p-ffgj",
+   "package": "PyJWT",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-9v7f-9g4p-ffgj"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-ffc3-869f-jxw9",
+   "package": "PyJWT",
+   "severity": "critical",
+   "url": "https://github.com/advisories/GHSA-ffc3-869f-jxw9"
+  },
+  {
+   "affected": ">= 2.11.0, <= 2.13.0",
+   "first_patched": null,
+   "id": "GHSA-gvp8-978c-rx2q",
+   "package": "PyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-gvp8-978c-rx2q"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-hxm8-2xgr-2p9m",
+   "package": "PyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-hxm8-2xgr-2p9m"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-jwrc-g2q2-pq5p",
+   "package": "pyjwt",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-jwrc-g2q2-pq5p"
+  },
+  {
+   "affected": ">= 2.4.0, < 2.14.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-p4g4-x82p-q773",
+   "package": "pyjwt",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-p4g4-x82p-q773"
+  },
+  {
+   "affected": "<= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-pxh4-856f-4h89",
+   "package": "pyjwt",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-pxh4-856f-4h89"
+  },
+  {
+   "affected": "= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-r6x4-923q-g947",
+   "package": "PyJWT",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-r6x4-923q-g947"
+  },
+  {
+   "affected": "= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-w2cx-738m-mc7w",
+   "package": "PyJWT",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-w2cx-738m-mc7w"
+  },
+  {
+   "affected": ">= 2.9.0, <= 2.13.0",
+   "first_patched": "2.14.0",
+   "id": "GHSA-w6j9-cwv2-h6wq",
+   "package": "PyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-w6j9-cwv2-h6wq"
+  },
+  {
+   "affected": ">= 2.1.0, <= 2.14.0",
+   "first_patched": "2.15.0",
+   "id": "GHSA-x33g-cr3x-6449",
+   "package": "PyJWT",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-x33g-cr3x-6449"
+  },
+  {
+   "affected": "< 0.0.30",
+   "first_patched": "0.0.30",
+   "id": "GHSA-5rvq-cxj2-64vf",
+   "package": "python-multipart",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-5rvq-cxj2-64vf"
+  },
+  {
+   "affected": "< 0.0.30",
+   "first_patched": "0.0.30",
+   "id": "GHSA-6jv3-5f52-599m",
+   "package": "python-multipart",
+   "severity": "low",
+   "url": "https://github.com/advisories/GHSA-6jv3-5f52-599m"
+  },
+  {
+   "affected": "< 0.0.31",
+   "first_patched": "0.0.31",
+   "id": "GHSA-v9pg-7xvm-68hf",
+   "package": "python-multipart",
+   "severity": "low",
+   "url": "https://github.com/advisories/GHSA-v9pg-7xvm-68hf"
+  },
+  {
+   "affected": "< 0.0.30",
+   "first_patched": "0.0.30",
+   "id": "GHSA-vffw-93wf-4j4q",
+   "package": "python-multipart",
+   "severity": "low",
+   "url": "https://github.com/advisories/GHSA-vffw-93wf-4j4q"
+  },
+  {
+   "affected": ">= 0.4.1, < 1.3.1",
+   "first_patched": "1.3.1",
+   "id": "GHSA-82w8-qh3p-5jfq",
+   "package": "starlette",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-82w8-qh3p-5jfq"
+  },
+  {
+   "affected": "< 1.3.0",
+   "first_patched": "1.3.0",
+   "id": "GHSA-jp82-jpqv-5vv3",
+   "package": "Starlette",
+   "severity": "low",
+   "url": "https://github.com/advisories/GHSA-jp82-jpqv-5vv3"
+  },
+  {
+   "affected": ">= 1.26.0, < 2.8.0",
+   "first_patched": "2.8.0",
+   "id": "GHSA-8988-9cw3-xx77",
+   "package": "urllib3",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-8988-9cw3-xx77"
+  },
+  {
+   "affected": ">= 2.6.2, < 2.8.0",
+   "first_patched": "2.8.0",
+   "id": "GHSA-gh4c-6fx4-qh6g",
+   "package": "urllib3",
+   "severity": "medium",
+   "url": "https://github.com/advisories/GHSA-gh4c-6fx4-qh6g"
+  },
+  {
+   "affected": ">= 1.10.3, < 2.8.0",
+   "first_patched": "2.8.0",
+   "id": "GHSA-vxq7-64xx-v4gw",
+   "package": "urllib3",
+   "severity": "high",
+   "url": "https://github.com/advisories/GHSA-vxq7-64xx-v4gw"
+  }
+ ],
+ "format": "seomonster-advisory-snapshot/1",
+ "note": "Public advisory facts at retrieved_at, for offline replay. This is not a current clearance; query the sources again before any release.",
+ "queries": [
+  {
+   "advisories": [],
+   "package": "annotated-types",
+   "version": "0.7.0"
+  },
+  {
+   "advisories": [
+    "GHSA-5p39-cfhj-2xmp",
+    "GHSA-82r6-8w77-94w6"
+   ],
+   "package": "anyio",
+   "version": "4.13.0"
+  },
+  {
+   "advisories": [],
+   "package": "anyio",
+   "version": "4.14.2"
+  },
+  {
+   "advisories": [],
+   "package": "attrs",
+   "version": "26.1.0"
+  },
+  {
+   "advisories": [],
+   "package": "certifi",
+   "version": "2026.10.18"
+  },
+  {
+   "advisories": [
+    "GHSA-6q48-6c7w-9gw2"
+   ],
+   "package": "certifi",
+   "version": "2026.5.20"
+  },
+  {
+   "advisories": [],
+   "package": "cffi",
+   "version": "2.0.0"
+  },
+  {
+   "advisories": [],
+   "package": "charset-normalizer",
+   "version": "3.4.7"
+  },
+  {
+   "advisories": [],
+   "package": "click",
+   "version": "8.4.1"
+  },
+  {
+   "advisories": [],
+   "package": "colorama",
+   "version": "0.4.6"
+  },
+  {
+   "advisories": [
+    "GHSA-537c-gmf6-5ccf",
+    "GHSA-g6cj-pr64-35w5",
+    "GHSA-jwv3-5hgf-82ww",
+    "GHSA-m2h6-j472-rp4c"
+   ],
+   "package": "cryptography",
+   "version": "48.0.0"
+  },
+  {
+   "advisories": [],
+   "package": "cryptography",
+   "version": "50.0.0"
+  },
+  {
+   "advisories": [],
+   "package": "google-analytics-data",
+   "version": "0.22.0"
+  },
+  {
+   "advisories": [],
+   "package": "google-api-core",
+   "version": "2.30.3"
+  },
+  {
+   "advisories": [],
+   "package": "google-api-python-client",
+   "version": "2.196.0"
+  },
+  {
+   "advisories": [],
+   "package": "google-auth",
+   "version": "2.53.0"
+  },
+  {
+   "advisories": [],
+   "package": "google-auth-httplib2",
+   "version": "0.4.0"
+  },
+  {
+   "advisories": [],
+   "package": "google-auth-oauthlib",
+   "version": "1.4.0"
+  },
+  {
+   "advisories": [],
+   "package": "googleapis-common-protos",
+   "version": "1.75.0"
+  },
+  {
+   "advisories": [],
+   "package": "grpcio",
+   "version": "1.80.0"
+  },
+  {
+   "advisories": [],
+   "package": "grpcio-status",
+   "version": "1.80.0"
+  },
+  {
+   "advisories": [],
+   "package": "h11",
+   "version": "0.16.0"
+  },
+  {
+   "advisories": [],
+   "package": "httpcore2",
+   "version": "2.16.0"
+  },
+  {
+   "advisories": [
+    "GHSA-j5g9-f88f-gfj3"
+   ],
+   "package": "httplib2",
+   "version": "0.31.2"
+  },
+  {
+   "advisories": [],
+   "package": "httplib2",
+   "version": "0.32.0"
+  },
+  {
+   "advisories": [],
+   "package": "httpx2",
+   "version": "2.16.0"
+  },
+  {
+   "advisories": [],
+   "package": "httpx2-jsfetch",
+   "version": "1.0"
+  },
+  {
+   "advisories": [],
+   "package": "idna",
+   "version": "3.20"
+  },
+  {
+   "advisories": [],
+   "package": "iniconfig",
+   "version": "2.3.0"
+  },
+  {
+   "advisories": [],
+   "package": "jsonschema",
+   "version": "4.26.0"
+  },
+  {
+   "advisories": [],
+   "package": "jsonschema-specifications",
+   "version": "2025.9.1"
+  },
+  {
+   "advisories": [],
+   "package": "mcp",
+   "version": "2.3.0"
+  },
+  {
+   "advisories": [],
+   "package": "mcp-types",
+   "version": "2.3.0"
+  },
+  {
+   "advisories": [
+    "GHSA-3jp2-3mrg-2vxc",
+    "GHSA-7984-qgvg-3j9c",
+    "GHSA-hj66-6f7g-4r5v",
+    "GHSA-xpv3-w29h-x7cv"
+   ],
+   "package": "oauthlib",
+   "version": "3.3.1"
+  },
+  {
+   "advisories": [],
+   "package": "oauthlib",
+   "version": "4.0.1"
+  },
+  {
+   "advisories": [],
+   "package": "opentelemetry-api",
+   "version": "1.45.2"
+  },
+  {
+   "advisories": [],
+   "package": "packaging",
+   "version": "26.2"
+  },
+  {
+   "advisories": [],
+   "package": "pluggy",
+   "version": "1.6.0"
+  },
+  {
+   "advisories": [],
+   "package": "proto-plus",
+   "version": "1.28.0"
+  },
+  {
+   "advisories": [],
+   "package": "protobuf",
+   "version": "6.33.6"
+  },
+  {
+   "advisories": [
+    "GHSA-2qm8-x737-gmw5",
+    "GHSA-8ppf-4f7h-5ppj",
+    "GHSA-9m75-vc3g-4x39",
+    "GHSA-fm9c-5rcf-2q5p",
+    "GHSA-hm4w-wwcw-mr6r",
+    "GHSA-m4p7-r5rc-7g4j",
+    "GHSA-mm57-4v3p-rchx"
+   ],
+   "package": "pyasn1",
+   "version": "0.6.3"
+  },
+  {
+   "advisories": [],
+   "package": "pyasn1",
+   "version": "0.6.5"
+  },
+  {
+   "advisories": [],
+   "package": "pyasn1-modules",
+   "version": "0.4.2"
+  },
+  {
+   "advisories": [],
+   "package": "pycparser",
+   "version": "3.0"
+  },
+  {
+   "advisories": [],
+   "package": "pydantic",
+   "version": "2.13.4"
+  },
+  {
+   "advisories": [],
+   "package": "pydantic-core",
+   "version": "2.46.4"
+  },
+  {
+   "advisories": [],
+   "package": "pygments",
+   "version": "2.20.0"
+  },
+  {
+   "advisories": [
+    "GHSA-2gx3-rcp4-g85q",
+    "GHSA-42vr-xj54-vc7v",
+    "GHSA-8wjv-2p76-3863",
+    "GHSA-9j54-fg26-wv3r",
+    "GHSA-9v7f-9g4p-ffgj",
+    "GHSA-ffc3-869f-jxw9",
+    "GHSA-gvp8-978c-rx2q",
+    "GHSA-hxm8-2xgr-2p9m",
+    "GHSA-jwrc-g2q2-pq5p",
+    "GHSA-p4g4-x82p-q773",
+    "GHSA-pxh4-856f-4h89",
+    "GHSA-r6x4-923q-g947",
+    "GHSA-w2cx-738m-mc7w",
+    "GHSA-w6j9-cwv2-h6wq",
+    "GHSA-x33g-cr3x-6449"
+   ],
+   "package": "pyjwt",
+   "version": "2.13.0"
+  },
+  {
+   "advisories": [],
+   "package": "pyjwt",
+   "version": "2.15.0"
+  },
+  {
+   "advisories": [],
+   "package": "pyparsing",
+   "version": "3.3.2"
+  },
+  {
+   "advisories": [],
+   "package": "pytest",
+   "version": "9.0.3"
+  },
+  {
+   "advisories": [],
+   "package": "pytest-asyncio",
+   "version": "1.4.0"
+  },
+  {
+   "advisories": [
+    "GHSA-5rvq-cxj2-64vf",
+    "GHSA-6jv3-5f52-599m",
+    "GHSA-v9pg-7xvm-68hf",
+    "GHSA-vffw-93wf-4j4q"
+   ],
+   "package": "python-multipart",
+   "version": "0.0.29"
+  },
+  {
+   "advisories": [],
+   "package": "python-multipart",
+   "version": "0.0.31"
+  },
+  {
+   "advisories": [],
+   "package": "pywin32",
+   "version": "311"
+  },
+  {
+   "advisories": [],
+   "package": "referencing",
+   "version": "0.37.0"
+  },
+  {
+   "advisories": [],
+   "package": "requests",
+   "version": "2.34.2"
+  },
+  {
+   "advisories": [],
+   "package": "requests-oauthlib",
+   "version": "2.0.0"
+  },
+  {
+   "advisories": [],
+   "package": "rpds-py",
+   "version": "0.30.0"
+  },
+  {
+   "advisories": [],
+   "package": "ruff",
+   "version": "0.17.1"
+  },
+  {
+   "advisories": [],
+   "package": "sse-starlette",
+   "version": "3.4.4"
+  },
+  {
+   "advisories": [
+    "GHSA-82w8-qh3p-5jfq",
+    "GHSA-jp82-jpqv-5vv3"
+   ],
+   "package": "starlette",
+   "version": "1.1.0"
+  },
+  {
+   "advisories": [],
+   "package": "starlette",
+   "version": "1.3.1"
+  },
+  {
+   "advisories": [],
+   "package": "truststore",
+   "version": "0.10.5"
+  },
+  {
+   "advisories": [],
+   "package": "typing-extensions",
+   "version": "4.15.0"
+  },
+  {
+   "advisories": [],
+   "package": "typing-inspection",
+   "version": "0.4.2"
+  },
+  {
+   "advisories": [],
+   "package": "uritemplate",
+   "version": "4.2.0"
+  },
+  {
+   "advisories": [
+    "GHSA-8988-9cw3-xx77",
+    "GHSA-gh4c-6fx4-qh6g",
+    "GHSA-vxq7-64xx-v4gw"
+   ],
+   "package": "urllib3",
+   "version": "2.7.0"
+  },
+  {
+   "advisories": [],
+   "package": "urllib3",
+   "version": "2.8.0"
+  },
+  {
+   "advisories": [],
+   "package": "uvicorn",
+   "version": "0.48.0"
+  }
+ ],
+ "retrieved_at": "2026-11-06T18:24:46Z",
+ "rule_version": 1,
+ "sources": [
+  {
+   "license": "CC BY 4.0",
+   "license_url": "https://github.com/github/advisory-database/blob/main/LICENSE.md",
+   "name": "GitHub Advisory Database",
+   "url": "https://github.com/advisories",
+   "use": "advisory identifiers, package names, severities, affected ranges and first-patched versions"
+  },
+  {
+   "license": "not reproduced; only identifiers returned by exact-version queries are recorded",
+   "name": "OSV",
+   "url": "https://osv.dev",
+   "use": "exact name and version queries, recorded as GitHub advisory identifiers through OSV aliases"
+  }
+ ],
+ "status": "complete"
+}
