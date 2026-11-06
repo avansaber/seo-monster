@@ -9,7 +9,12 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
-## [Unreleased]
+## [0.10.0] - 2026-11-05
+
+### Upgrade
+
+- This release requires MCP Python SDK 2.3 or later, below version 3, and Python 3.11 or later. SDK 1 is no longer supported; environments that pin `mcp<2` must lift that pin before upgrading.
+- `uvx seo-monster`, pip installs and the Claude Desktop `.mcpb` bundle resolve SDK 2 on upgrade. The MCP handshake reports the installed package version. The 70 tools and 13 prompts keep their names; failed tool calls also set the protocol error flag.
 
 ### Changed
 
@@ -40,12 +45,13 @@ external testing pass on that version.
 
 ### Development
 
-- Adopt Ruff 0.17, refresh the development lockfile and preserve the existing provider error boundaries. MCP remains below version 2. New regressions protect the exact registry contracts, stdio handshake and literal domain-prefix handling.
+- Adopt Ruff 0.17, refresh the development lockfile and preserve the existing provider error boundaries. New regressions protect the exact registry contracts, stdio handshake and literal domain-prefix handling.
+- Release builds use the locked development environment, hatchling 1.33.0 and MCPB packer 2.1.2. Before any GitHub or PyPI upload, the release workflow refuses unless the annotated tag binds the checked-out tree and the canonical member identity of the wheel, sdist and bundle. Release validation steps report fixed messages and counts, never rejected content.
 
 ### Documentation
 
 - Canonical website metadata, Cursor version metadata and provider/privacy disclosures are reconciled with the current engine. Tool inputs, names, prompts, envelopes, configuration precedence and external-write controls remain unchanged.
-- These changes are local and unreleased. Package versions and publication are not advanced by this entry.
+- README file and image links point at this release tag so they resolve on PyPI.
 
 ## [0.9.3] - 2026-08-28 (hotfix: unbreak fresh installs)
 

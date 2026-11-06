@@ -56,6 +56,9 @@ jobs:
           if { tar -tzf "$out"/*.tar.gz; unzip -Z1 "$out"/*.whl; } | grep -F ci-dirty-plant; then
             echo "Local-only files reached an engine artifact."; exit 1
           fi
+          # Canonical member identity (path, type, mode, size, sha256) of the
+          # dirty-tree build; compare with the digests of the scanned artifacts.
+          python3 -B scripts/check_distribution.py --canonical "$out"/*.tar.gz "$out"/*.whl
 
   supported-sdk:
     runs-on: ubuntu-latest

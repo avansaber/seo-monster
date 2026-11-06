@@ -1,6 +1,6 @@
 # Privacy
 
-> Updated: 2026-10-03. Covers the SEOMonster 0.9.3 engine and the local unreleased Part 1 changes. Optional Workbench persistence is described separately below.
+> Updated: 2026-11-05. Covers the SEOMonster 0.10.0 engine. Optional Workbench persistence is described separately below.
 
 SEOMonster is a local, open-source MCP server. **AvanSaber Inc. does not collect
 or store your usage, credentials, queries, or tool calls.** The engine stores

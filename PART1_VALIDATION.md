@@ -1,6 +1,6 @@
 # Part 1 Engine safety validation
 
-Engine changes prepared on 2026-10-03; Ruff migration added on 2026-10-18. These changes remain unreleased. Package version remains 0.9.3 until release preparation is approved.
+Engine changes prepared on 2026-10-03; Ruff migration added on 2026-10-18. These changes ship in SEOMonster 0.10.0.
 
 ## Delivered behaviour
 
