@@ -5,6 +5,8 @@
 !server.json
 !.cursor-plugin/plugin.json
 !.mcp.json
+# Public advisory replay fixtures only; credential names below stay ignored.
+!/tests/fixtures/dependency_advisories/*.json
 sa.json
 client_secret*.json
 token*.json

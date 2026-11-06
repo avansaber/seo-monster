@@ -3,7 +3,7 @@
 # "seo_mcp". The earlier "seo-monster-mcp 0.1.0" release was renamed to drop
 # the redundant -mcp suffix in favor of the cleaner brand name.
 name = "seo-monster"
-version = "0.10.0"
+version = "0.10.1"
 description = "SEOMonster: an MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, and Cloudflare. User-credential-driven, read-first."
 readme = "README.md"
 license = { text = "MIT" }
@@ -27,12 +27,28 @@ dependencies = [
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
     "google-analytics-data>=0.18.0",
+    # Security floors for transitive runtime dependencies. Installers keep an existing
+    # version that still satisfies the requirements, so these floors are what move a
+    # reused environment past the known affected ranges; the lock alone cannot.
+    # Each floor is the highest first-patched release across the GitHub advisories
+    # replayed in tests/test_dependency_advisories.py.
+    "anyio>=4.14.2",
+    "certifi>=2026.10.18",
+    "cryptography>=50.0.0",
+    "httplib2>=0.32.0",
+    "oauthlib>=4.0.1",
+    "pyasn1>=0.6.5",
+    "pyjwt>=2.15.0",
+    "python-multipart>=0.0.31",
+    "starlette>=1.3.1",
+    "urllib3>=2.8.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "packaging>=24",  # scripts/check_dependency_advisories.py
     "ruff>=0.17,<0.18",
 ]
 

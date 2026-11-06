@@ -6,13 +6,13 @@
     "url": "https://github.com/avansaber/seo-monster",
     "source": "github"
   },
-  "version": "0.10.0",
+  "version": "0.10.1",
   "websiteUrl": "https://www.avansaber.com/seomonster/",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "seo-monster",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "transport": {
         "type": "stdio"
       },

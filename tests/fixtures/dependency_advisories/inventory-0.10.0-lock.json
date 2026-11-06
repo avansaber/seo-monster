@@ -1,0 +1,246 @@
+{
+ "kind": "lock",
+ "packages": [
+  {
+   "name": "annotated-types",
+   "version": "0.7.0"
+  },
+  {
+   "name": "anyio",
+   "version": "4.13.0"
+  },
+  {
+   "name": "attrs",
+   "version": "26.1.0"
+  },
+  {
+   "name": "certifi",
+   "version": "2026.5.20"
+  },
+  {
+   "name": "cffi",
+   "version": "2.0.0"
+  },
+  {
+   "name": "charset-normalizer",
+   "version": "3.4.7"
+  },
+  {
+   "name": "click",
+   "version": "8.4.1"
+  },
+  {
+   "name": "colorama",
+   "version": "0.4.6"
+  },
+  {
+   "name": "cryptography",
+   "version": "48.0.0"
+  },
+  {
+   "name": "google-analytics-data",
+   "version": "0.22.0"
+  },
+  {
+   "name": "google-api-core",
+   "version": "2.30.3"
+  },
+  {
+   "name": "google-api-python-client",
+   "version": "2.196.0"
+  },
+  {
+   "name": "google-auth",
+   "version": "2.53.0"
+  },
+  {
+   "name": "google-auth-httplib2",
+   "version": "0.4.0"
+  },
+  {
+   "name": "google-auth-oauthlib",
+   "version": "1.4.0"
+  },
+  {
+   "name": "googleapis-common-protos",
+   "version": "1.75.0"
+  },
+  {
+   "name": "grpcio",
+   "version": "1.80.0"
+  },
+  {
+   "name": "grpcio-status",
+   "version": "1.80.0"
+  },
+  {
+   "name": "h11",
+   "version": "0.16.0"
+  },
+  {
+   "name": "httpcore2",
+   "version": "2.16.0"
+  },
+  {
+   "name": "httplib2",
+   "version": "0.31.2"
+  },
+  {
+   "name": "httpx2",
+   "version": "2.16.0"
+  },
+  {
+   "name": "httpx2-jsfetch",
+   "version": "1.0"
+  },
+  {
+   "name": "idna",
+   "version": "3.20"
+  },
+  {
+   "name": "iniconfig",
+   "version": "2.3.0"
+  },
+  {
+   "name": "jsonschema",
+   "version": "4.26.0"
+  },
+  {
+   "name": "jsonschema-specifications",
+   "version": "2025.9.1"
+  },
+  {
+   "name": "mcp",
+   "version": "2.3.0"
+  },
+  {
+   "name": "mcp-types",
+   "version": "2.3.0"
+  },
+  {
+   "name": "oauthlib",
+   "version": "3.3.1"
+  },
+  {
+   "name": "opentelemetry-api",
+   "version": "1.45.2"
+  },
+  {
+   "name": "packaging",
+   "version": "26.2"
+  },
+  {
+   "name": "pluggy",
+   "version": "1.6.0"
+  },
+  {
+   "name": "proto-plus",
+   "version": "1.28.0"
+  },
+  {
+   "name": "protobuf",
+   "version": "6.33.6"
+  },
+  {
+   "name": "pyasn1",
+   "version": "0.6.3"
+  },
+  {
+   "name": "pyasn1-modules",
+   "version": "0.4.2"
+  },
+  {
+   "name": "pycparser",
+   "version": "3.0"
+  },
+  {
+   "name": "pydantic",
+   "version": "2.13.4"
+  },
+  {
+   "name": "pydantic-core",
+   "version": "2.46.4"
+  },
+  {
+   "name": "pygments",
+   "version": "2.20.0"
+  },
+  {
+   "name": "pyjwt",
+   "version": "2.13.0"
+  },
+  {
+   "name": "pyparsing",
+   "version": "3.3.2"
+  },
+  {
+   "name": "pytest",
+   "version": "9.0.3"
+  },
+  {
+   "name": "pytest-asyncio",
+   "version": "1.4.0"
+  },
+  {
+   "name": "python-multipart",
+   "version": "0.0.29"
+  },
+  {
+   "name": "pywin32",
+   "version": "311"
+  },
+  {
+   "name": "referencing",
+   "version": "0.37.0"
+  },
+  {
+   "name": "requests",
+   "version": "2.34.2"
+  },
+  {
+   "name": "requests-oauthlib",
+   "version": "2.0.0"
+  },
+  {
+   "name": "rpds-py",
+   "version": "0.30.0"
+  },
+  {
+   "name": "ruff",
+   "version": "0.17.1"
+  },
+  {
+   "name": "sse-starlette",
+   "version": "3.4.4"
+  },
+  {
+   "name": "starlette",
+   "version": "1.1.0"
+  },
+  {
+   "name": "truststore",
+   "version": "0.10.5"
+  },
+  {
+   "name": "typing-extensions",
+   "version": "4.15.0"
+  },
+  {
+   "name": "typing-inspection",
+   "version": "0.4.2"
+  },
+  {
+   "name": "uritemplate",
+   "version": "4.2.0"
+  },
+  {
+   "name": "urllib3",
+   "version": "2.7.0"
+  },
+  {
+   "name": "uvicorn",
+   "version": "0.48.0"
+  }
+ ],
+ "source": "registry packages of uv.lock at the public v0.10.0 tag"
+}

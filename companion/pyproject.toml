@@ -9,9 +9,16 @@ authors = [{ name = "AvanSaber Inc." }]
 dependencies = []
 
 [project.optional-dependencies]
-mcp = ["mcp>=2.3.0,<3", "jsonschema>=4.20,<5", "pydantic>=2.12,<3", "uvicorn>=0.31.1,<1"]
-test = ["pytest>=7", "httpx>=0.27,<1", "httpx2>=2.10.0"]
-dev = ["pytest>=7", "httpx>=0.27,<1", "httpx2>=2.10.0", "ruff>=0.15,<0.16"]
+# The CLI keeps no dependencies. Security floors (anyio, certifi, cryptography, pyjwt,
+# python-multipart, starlette) appear only in the extras that reach those packages.
+mcp = [
+    "mcp>=2.3.0,<3", "jsonschema>=4.20,<5", "pydantic>=2.12,<3", "uvicorn>=0.31.1,<1",
+    "anyio>=4.14.2", "cryptography>=50.0.0", "pyjwt>=2.15.0", "python-multipart>=0.0.31", "starlette>=1.3.1",
+]
+test = ["pytest>=7", "httpx>=0.27,<1", "httpx2>=2.10.0", "anyio>=4.14.2", "certifi>=2026.10.18"]
+dev = [
+    "pytest>=7", "httpx>=0.27,<1", "httpx2>=2.10.0", "ruff>=0.15,<0.16", "anyio>=4.14.2", "certifi>=2026.10.18",
+]
 
 [project.scripts]
 seomonster-workbench = "seomonster_workbench.cli:main"

@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-light.svg">
-  <img alt="SEOMonster" src="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.0/assets/wordmark-light.svg" width="440">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.1/assets/wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.1/assets/wordmark-light.svg">
+  <img alt="SEOMonster" src="https://raw.githubusercontent.com/avansaber/seo-monster/v0.10.1/assets/wordmark-light.svg" width="440">
 </picture>
 
 <h3>Don't learn another SEO dashboard. Just ask.</h3>
@@ -56,9 +56,9 @@ You don't open a new tool — you just ask, in plain English, inside **Claude** 
 
 ## Local evidence workbench
 
-[SEOmonster Workbench](https://github.com/avansaber/seo-monster/blob/v0.10.0/companion/README.md) is a separately installed local companion for preserving source evidence, inspecting recommendation calculations, drafting action plans and comparing later observations. Its CLI stores project records in SQLite and supports portable exports, backup/restore and deterministic replay. The optional MCP interface exposes 17 tools for one configured project. Plans and recorded approvals remain separate from execution; the workbench has no external executor.
+[SEOmonster Workbench](https://github.com/avansaber/seo-monster/blob/v0.10.1/companion/README.md) is a separately installed local companion for preserving source evidence, inspecting recommendation calculations, drafting action plans and comparing later observations. Its CLI stores project records in SQLite and supports portable exports, backup/restore and deterministic replay. The optional MCP interface exposes 17 tools for one configured project. Plans and recorded approvals remain separate from execution; the workbench has no external executor.
 
-Start with the [offline fixture workflow](https://github.com/avansaber/seo-monster/blob/v0.10.0/companion/README.md#install-and-run-locally). The CLI needs no provider credentials or paid data. SDK 2 capture requires SEOmonster 0.10.0 or later, the first engine release on MCP SDK 2. The Workbench itself installs from source; it is not published on PyPI.
+Start with the [offline fixture workflow](https://github.com/avansaber/seo-monster/blob/v0.10.1/companion/README.md#install-and-run-locally). The CLI needs no provider credentials or paid data. SDK 2 capture requires SEOmonster 0.10.0 or later, the first engine release on MCP SDK 2. The Workbench itself installs from source; it is not published on PyPI.
 
 ## Quickstart
 
@@ -90,7 +90,7 @@ calls do not add maintainer telemetry.
 The engine does not keep a query/result history. The separately installed local
 Workbench stores user-owned evidence and decision records in SQLite and creates
 exports only when requested. Your MCP host controls its own transcripts and
-logs. See [Privacy](https://github.com/avansaber/seo-monster/blob/v0.10.0/PRIVACY.md) for destinations and persistence scopes.
+logs. See [Privacy](https://github.com/avansaber/seo-monster/blob/v0.10.1/PRIVACY.md) for destinations and persistence scopes.
 
 ```mermaid
 flowchart LR
@@ -941,16 +941,16 @@ credentials are needed to run them.
 ## Changelog
 
 Release-by-release notes, including the validation checks each version's
-external testing pass should cover, live in [CHANGELOG.md](https://github.com/avansaber/seo-monster/blob/v0.10.0/CHANGELOG.md).
+external testing pass should cover, live in [CHANGELOG.md](https://github.com/avansaber/seo-monster/blob/v0.10.1/CHANGELOG.md).
 
 ## Privacy
 
 SEOMonster runs entirely on your machine and talks only to the upstream APIs
 you configure. The maintainers do not see any of your data, credentials,
-queries, or tool calls. See [PRIVACY.md](https://github.com/avansaber/seo-monster/blob/v0.10.0/PRIVACY.md) for the full statement.
+queries, or tool calls. See [PRIVACY.md](https://github.com/avansaber/seo-monster/blob/v0.10.1/PRIVACY.md) for the full statement.
 
 ## License
 
-MIT. See [LICENSE](https://github.com/avansaber/seo-monster/blob/v0.10.0/LICENSE).
+MIT. See [LICENSE](https://github.com/avansaber/seo-monster/blob/v0.10.1/LICENSE).
 
 <!-- mcp-name: io.github.avansaber/seo-monster -->
