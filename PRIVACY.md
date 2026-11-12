@@ -1,6 +1,6 @@
 # Privacy
 
-> Updated: 2026-11-06. Covers the SEOMonster 0.10.1 engine. Optional Workbench persistence is described separately below.
+> Updated: 2026-11-11. Covers the SEOMonster 0.10.1 engine. Optional Workbench persistence is described separately below.
 
 SEOMonster is a local, open-source MCP server. **AvanSaber Inc. does not collect
 or store your usage, credentials, queries, or tool calls.** The engine stores
@@ -43,9 +43,12 @@ not telemetry to the maintainers.
 | Cloudflare API v4 | The query you build, plus the Bearer API token you configured. | The Cloudflare API token you generated and pasted into `CF_API_TOKEN` (or the `.mcpb` form). |
 | IndexNow endpoint (`api.indexnow.org`) | The URLs to notify and your IndexNow key. | The IndexNow key you generated and configured. |
 | DataForSEO (`api.dataforseo.com`) | Keyword/SERP arguments, location/language options and configured credentials. | Your optional provider account; calls may incur provider charges. |
+| SerpBase (`api.serpbase.dev`) | Search query, country, language, device and API key. | Your optional provider account; calls may consume credits and provider logs may retain queries. |
 | Open PageRank (`openpagerank.com`) | Requested domains and the configured API key. | Your optional provider account and key. |
 | Perplexity, OpenAI, Anthropic and Gemini | Requested prompts, model/options and configured API credentials; answer and citation data return to your local tool. | Your optional engine accounts; usage may incur provider charges. |
 | Requested websites and discovered crawl/SERP URLs | HTTP page, robots, sitemap, redirect and IndexNow verification requests; the destination can see the request and user agent. | URLs selected by you or followed by the requested workflow, subject to the HTTP client's checks. |
+
+SerpBase's [privacy policy](https://serpbase.dev/privacy) does not offer customer-configurable zero retention, a per-request logging opt-out or self-service query-log deletion.
 
 The AI provider destinations are `api.perplexity.ai`, `api.openai.com`,
 `api.anthropic.com` and `generativelanguage.googleapis.com`. Provider payloads

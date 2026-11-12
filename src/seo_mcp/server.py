@@ -53,6 +53,7 @@ from .clients.http import build_http_client
 from .clients.indexnow import build_indexnow_client
 from .clients.openpagerank import build_openpagerank_client
 from .clients.psi import build_psi_client
+from .clients.serpbase import build_serpbase_client
 from .config import Config, load_config
 from .errors import ErrorCode, err
 from .tools import (
@@ -175,6 +176,7 @@ _CLIENT_BUILDERS: dict[str, Any] = {
     "http": lambda _config: build_http_client(),
     "crux": build_crux_client,
     "dataforseo": build_dataforseo_client,
+    "serpbase": build_serpbase_client,
     "openpagerank": build_openpagerank_client,
     "ai_engines": build_ai_engines_client,
 }
