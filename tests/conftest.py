@@ -17,6 +17,12 @@ import pytest
 from seo_mcp.config import Config, load_config
 
 
+@pytest.fixture(autouse=True)
+def isolate_website_proxy_detection(monkeypatch):
+    """Keep website fetch tests independent of the host proxy configuration."""
+    monkeypatch.setattr("urllib.request.getproxies", dict)
+
+
 @pytest.fixture
 def fake_env() -> Callable[..., dict[str, str]]:
     """Factory for an env mapping. Pass keyword overrides; only non-None values
@@ -449,7 +455,7 @@ def make_cf_client():
     from seo_mcp.clients.cloudflare import CfClient
 
     def _make(responses: dict[str, Any]) -> Any:
-        client = CfClient(token="testtoken")
+        client = CfClient(token="synthetic_cf_token")
         transport = FakeCfTransport(responses)
         client._raw_request = transport
         client._transport = transport  # expose for assertions

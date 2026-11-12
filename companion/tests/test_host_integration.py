@@ -19,7 +19,7 @@ from seomonster_workbench.engine import Workbench
 from seomonster_workbench.mcp_server import LocalHTTPGuard, create_server
 
 
-TOKEN = "offline-fixture-token-32-characters-only"
+TOKEN = "synthetic_workbench_token_0123456789abcdef"
 ROOT = Path(__file__).resolve().parents[1]
 WRITE_RECORD_TOOLS = {"wb_project_create", "wb_capture_ingest", "wb_plan_draft", "wb_experiment_start", "wb_experiment_compare"}
 WRITE_RECORD_TOOLS |= {"wb_ownership_decision_draft", "wb_ownership_plan_draft"}

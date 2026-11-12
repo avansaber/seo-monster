@@ -32,7 +32,7 @@ _LAB_METRICS = (
 # can return null even for high-traffic URLs. We surface it when present but do
 # not depend on it (field_data_available stays honest). The durable source of
 # field Core Web Vitals is the dedicated CrUX API, exposed by crux_snapshot
-# (current p75) and crux_history (trend). See PLAN Part 6b A2.
+# (current p75) and crux_history (trend).
 _FIELD_DATA_NOTE = (
     "Field (CrUX) data here comes from PageSpeed Insights' loadingExperience, "
     "which Google is deprecating in the PSI API (it can be null even for "

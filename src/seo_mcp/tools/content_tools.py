@@ -6,7 +6,7 @@ a transparent opportunity score and flags cannibalization. This is the "rules"
 layer: SEOMonster contributes the scoring rules and the data fusion; the host
 LLM turns the ranked candidates into a brief / outline / draft (later layers).
 
-Design notes (see .private/RULESETS-content-and-audit.md §1 and PLAN Part 6c):
+Design notes:
 
 - No new client or dependency: it calls ``GscClient.search_analytics`` three
   times (query rows current window, query rows prior window, query x page rows

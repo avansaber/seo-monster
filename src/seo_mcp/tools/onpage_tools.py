@@ -139,8 +139,8 @@ def _fetch_html(client, url: str):
     if not (200 <= resp.status < 300):
         raise ApiError(
             ErrorCode.UPSTREAM_ERROR,
-            f"Fetch of {url!r} returned HTTP {resp.status}.",
-            details={"status": resp.status, "final_url": resp.final_url},
+            f"Website fetch returned HTTP {resp.status}.",
+            details={"status": resp.status, "final_url": "[redacted]"},
         )
     return resp, _parse(resp.body_text)
 

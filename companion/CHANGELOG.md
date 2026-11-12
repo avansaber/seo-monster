@@ -13,9 +13,9 @@
 - Added an append-only deployment-observation ledger for changes performed outside the workbench. Local operator imports preserve source metadata, verification assertion, operations, rollback reference, caveats, an exact plan snapshot, and derived approval-timestamp alignment; no deploy or external-write capability was added.
 - Added CLI record/inspect/export commands and one read-only fixed-project MCP inspection tool. Observation import remains operator-CLI-only; the MCP registry is seventeen tools: ten reads and seven local-record writes.
 - Added `seomonster-workbench-change-ledger/v1`, SQLite migration 3, and `seomonster-workbench-backup/v2`. Current backups include the change ledger while legacy backup/v1 remains validated and restorable.
-- Simulation rejected immutable plan revision work for this increment because the compatibility-preserved approval flow mutates plan and recommendation state. Plan revisioning requires an event-source contract rather than a second competing truth.
+- Immutable plan revision is not supported; the approval flow updates plan and recommendation state.
 - Added adversarial simulations for pre-approval observations, late approval, frozen plan history, idempotency, unsafe inputs, cross-project scope, tamper detection, missing-database side effects, backup v2 replay, and legacy backup v1 restore.
-- Fixed independent-review findings by validating SQLite rows on inspection/idempotent import, allowing one source observation to link to multiple plans, labeling approval as unattested timestamp order, and reporting decisions attached to transitive dependent plans during rule replay.
+- Validated SQLite rows on inspection/idempotent import, allowed one source observation to link to multiple plans, labeled approval as unattested timestamp order, and reported decisions attached to transitive dependent plans during rule replay.
 
 ## 0.5.0 - 2026-09-12
 
@@ -23,9 +23,9 @@
 - Added dependency-impact reporting for decisions, action plans, and experiments that would require review before any future rule migration. No replay apply or migration capability exists.
 - Kept human recommendation state outside analytical comparison so approval is preserved and does not appear as rule drift; malformed workflow state and corrupted snapshot identity are rejected.
 - Added CLI and accurately read-only fixed-project MCP surfaces. The Workbench registry is now sixteen tools: nine reads and seven local-record writes; no approval or external executor was added.
-- Evaluated GA4 property-to-site binding and deferred it after simulation showed unresolved many-to-many property scope, missing hostname dimensions, supersession, portability, backup, and safe rule-migration requirements. Property ID alone is not treated as site evidence.
+- GA4 property-to-site binding is not supported. Property ID alone is not treated as site evidence.
 - Added adversarial simulations for deterministic/non-mutating replay, same-ID tampering, version churn, human approval preservation, dependency impact, corrupted/missing/cross-project snapshots, invalid workflow state, malformed stored provenance, unavailable GA4 signals, CLI behavior, and stdio/HTTP contract parity.
-- Fixed independent-review findings: replay now reports ownership assignments, conflicts, decisions, and plans that depend on affected evidence, and CLI preview refuses a nonexistent database without creating or migrating a file.
+- Replay reports ownership assignments, conflicts, decisions, and plans that depend on affected evidence, and CLI preview refuses a nonexistent database without creating or migrating a file.
 
 ## 0.4.0 - 2026-09-12
 
@@ -43,7 +43,7 @@
 - Added a separate `seomonster-workbench-ownership/v1` portable export and SQLite migration 2 while keeping `seomonster-workbench-export/v1` at schema version 1.
 - Added seven ownership CLI commands and five MCP tools. MCP may create only pending decision drafts; final ownership assignments and decisions remain operator CLI actions.
 - Expanded regression and host workflow tests for participant changes, migration, Unicode normalization, unavailable data, write gates, schema validation, CLI flow, and stdio/HTTP parity.
-- Fixed resolved-date alias comparability, zero-row snapshot supersession, parallel current decisions, superseded-decision planning, and incomplete ownership export reference validation found by independent Web-growth probes.
+- Fixed resolved-date alias comparability, zero-row snapshot supersession, parallel current decisions, superseded-decision planning, and incomplete ownership export reference validation.
 
 ## 0.2.0 - 2026-09-09
 
@@ -54,7 +54,7 @@
 - Corrected normalization of real GSC comparison and GA4 tabular results. Preserved original captures.
 - Added transactional mutation, runtime provenance validation, explicit plan-revision refusal, non-overwriting exports, broader privacy guards and immutable experiment outcomes.
 - Expanded offline regression, host transport and packaging tests; pinned complete engine tool/prompt metadata digests in addition to registration names.
-- Addressed independent Web-growth review: project-site capture gates, repo-relative Git packaging checks, exact export byte checksums and compatible-outcome selection.
+- Added project-site capture gates, repo-relative Git packaging checks, exact export byte checksums and compatible-outcome selection.
 - Corrected GSC apex Domain-property acceptance for configured subdomains such as `www`, retaining exact page-host checks and rejecting unconfigured sibling/spoof hosts.
 
 ## 0.1.0 - 2026-09-09

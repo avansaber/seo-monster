@@ -92,8 +92,8 @@ def ai_citation_readiness(arguments: Mapping[str, Any], config: Any, clients: Ma
         return err(
             ErrorCode.UPSTREAM_ERROR,
             _SERVICE,
-            f"Fetch of {url!r} returned HTTP {resp.status}.",
-            details={"status": resp.status, "final_url": resp.final_url},
+            f"Website fetch returned HTTP {resp.status}.",
+            details={"status": resp.status, "final_url": "[redacted]"},
         )
 
     p = parse_content(resp.body_text)

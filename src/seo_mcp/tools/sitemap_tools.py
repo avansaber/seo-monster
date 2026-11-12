@@ -14,7 +14,9 @@ fetch.
 from __future__ import annotations
 
 import gzip
+import io
 import xml.etree.ElementTree as ET
+import zlib
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
@@ -41,8 +43,11 @@ def _decode_body(resp) -> str:
     body = resp.body_bytes
     if resp.final_url.endswith(".gz") or "gzip" in ctype:
         try:
-            body = gzip.decompress(body)
-        except OSError:
+            with gzip.GzipFile(fileobj=io.BytesIO(body)) as stream:
+                body = stream.read(_MAX_BYTES + 1)
+            if len(body) > _MAX_BYTES:
+                raise ApiError(ErrorCode.INVALID_INPUT, "Decompressed sitemap exceeds the size limit.")
+        except (OSError, EOFError, zlib.error):
             # Not actually gzipped; fall through with raw bytes.
             pass
     try:
@@ -119,17 +124,17 @@ def sitemap_validate(arguments, config, clients) -> dict[str, Any]:
             ErrorCode.UPSTREAM_ERROR,
             _SERVICE,
             f"Sitemap fetch returned HTTP {resp.status}.",
-            details={"status": resp.status, "sitemap_url": sitemap_url},
+            details={"status": resp.status, "sitemap_url": "[redacted]"},
         )
-    text = _decode_body(resp)
     try:
+        text = _decode_body(resp)
         kind, entries = _parse_sitemap(text)
     except ET.ParseError as exc:
         return err(
             ErrorCode.INVALID_INPUT,
             _SERVICE,
             f"Sitemap XML parse error: {exc}",
-            details={"sitemap_url": sitemap_url},
+            details={"sitemap_url": "[redacted]"},
         )
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
@@ -208,8 +213,8 @@ def sitemap_health(arguments, config, clients) -> dict[str, Any]:
         resp = client.fetch(sitemap_url, max_bytes=_MAX_BYTES + 1024)
     except ApiError as exc:
         return exc.to_envelope(_SERVICE)
-    text = _decode_body(resp)
     try:
+        text = _decode_body(resp)
         kind, entries = _parse_sitemap(text)
     except (ET.ParseError, ApiError) as exc:
         msg = exc if isinstance(exc, ApiError) else err(ErrorCode.INVALID_INPUT, _SERVICE, f"Sitemap parse error: {exc}")

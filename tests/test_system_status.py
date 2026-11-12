@@ -58,7 +58,7 @@ def test_oauth_wins_when_both_present(make_config):
 
 
 def test_psi_api_key_method_when_key_present(make_config):
-    cfg = make_config(PSI_API_KEY="AIzaKEY")
+    cfg = make_config(PSI_API_KEY="synthetic_psi_key_env")
     psi = handle({}, cfg, {}, ["system_status"])["data"]["services"]["psi"]
     assert psi["auth_method"] == "api_key"
 
@@ -97,7 +97,7 @@ def test_config_source_is_env_when_no_file(make_config):
 
 def test_config_source_reports_toml_path(tmp_path, make_config):
     path = tmp_path / "seomonster.toml"
-    path.write_text('[gsc]\ndefault_site = "sc-domain:from-toml.com"\n')
+    path.write_text('[gsc]\ndefault_site = "sc-domain:synthetic-site-e.example"\n')
     cfg = make_config(config_path=str(path))
     data = handle({}, cfg, {}, ["system_status"])["data"]
     assert data["config_source"] == str(path)

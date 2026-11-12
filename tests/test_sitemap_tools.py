@@ -99,6 +99,16 @@ def test_sitemap_validate_handles_gzip(make_config):
     assert result["data"]["entry_count"] == 3
 
 
+def test_gzip_expansion_is_bounded_for_both_sitemap_tools(make_config, monkeypatch):
+    monkeypatch.setattr(sitemap_tools, "_MAX_BYTES", 128)
+    url = "https://example.com/sitemap.xml.gz"
+    http = FakeHttpClient({url: _gz_response("A" * 1024)})
+    for handler in (sitemap_tools.sitemap_validate, sitemap_tools.sitemap_health):
+        result = handler({"sitemap_url": url}, make_config(), _clients_with(http))
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_INPUT"
+
+
 def test_sitemap_validate_bad_xml(make_config):
     http = FakeHttpClient({"https://example.com/sitemap.xml": _xml_response("<not-valid")})
     result = sitemap_tools.sitemap_validate({"sitemap_url": "https://example.com/sitemap.xml"}, make_config(), _clients_with(http))

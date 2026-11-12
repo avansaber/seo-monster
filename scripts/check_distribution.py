@@ -46,7 +46,7 @@ def forbidden_artifact_member(name: str) -> bool:
         "\\" in name or ":" in name
         or path.is_absolute() or ".." in path.parts or forbidden(name)
         or bool(set(path.parts) & {"companion", "archive", ".git"})
-        or path.name == "IMPLEMENTATION_REPORT.md"
+        or path.name in {"IMPLEMENTATION_REPORT.md", "PART1_VALIDATION.md"}
     )
 
 

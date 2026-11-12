@@ -211,7 +211,7 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
         return err(ErrorCode.INVALID_INPUT, _SERVICE, "start_url is required.", docs_url=DOCS_BASE + "technical")
     parsed = urlparse(start_url)
     if not parsed.scheme or not parsed.netloc:
-        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"start_url must be absolute, got {start_url!r}.")
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "start_url must be absolute.")
 
     site = resolve_site(arguments, config)
     if not site:

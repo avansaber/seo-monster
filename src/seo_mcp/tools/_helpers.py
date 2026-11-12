@@ -104,13 +104,14 @@ def preflight_get(clients: Mapping[str, Any], url: str) -> tuple[int | None, str
     if http is None:
         return None
     from ..clients.errors import ApiError
+    from ..clients.http import safe_public_fetch_error
 
     try:
         resp = http.fetch(url, method="GET", follow_redirects=True, max_bytes=65536)
     except ApiError as exc:
-        return None, "", exc.message
-    except Exception as exc:  # noqa: BLE001  # Keep preflight failures inside the existing result boundary.
-        return None, "", str(exc)
+        return None, "", safe_public_fetch_error(exc)
+    except Exception:  # noqa: BLE001  # Keep unexpected failures inside the result boundary.
+        return None, "", "preflight fetch failed"
     return resp.status, resp.body_text, None
 
 

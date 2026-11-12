@@ -138,24 +138,18 @@ def validate_indexnow(key: str, key_location: str | None) -> tuple[str, str]:
     key file is per-host and the host may not be known at setup time."""
     if not key_location:
         return "skipped", "no key-file URL given; validated on first submit"
-    import urllib.error
-    import urllib.request
+    from .clients.errors import ApiError
+    from .clients.http import HttpClient, safe_public_fetch_error
 
-    from . import __version__
-
-    # Send the project's branded User-Agent. Cloudflare's Browser Integrity
-    # Check 403s the default Python-urllib UA (CF error 1010), which would make
-    # every IndexNow key file hosted behind CF look unreachable on first setup
-    # (tester FEEDBACK §12c.ii). Branded UAs are not blocked.
-    req = urllib.request.Request(
-        key_location,
-        headers={"User-Agent": f"SEOMonster/{__version__} (+https://seomonster.avansaber.com)"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read().decode("utf-8", "replace").strip()
-    except Exception as exc:  # noqa: BLE001  # Report unexpected network failures without aborting setup.
-        return "unreachable", f"could not fetch {key_location}: {exc}"
+        resp = HttpClient(timeout=15).fetch(key_location, max_bytes=65536)
+        if not 200 <= resp.status < 300:
+            return "unreachable", f"key-file request returned HTTP {resp.status}"
+        body = resp.body_bytes.decode("utf-8", "replace").strip()
+    except ApiError as exc:
+        return "unreachable", safe_public_fetch_error(exc)
+    except Exception:  # noqa: BLE001  # Keep setup errors free of URLs and credentials.
+        return "unreachable", "could not fetch the key file"
     if body == key.strip():
         return "ok", "key file matches the key"
     return "rejected", "key-file body does not equal the key"

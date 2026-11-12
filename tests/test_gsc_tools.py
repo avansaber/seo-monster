@@ -49,8 +49,8 @@ def test_list_properties_writable_false_for_restricted(make_config, make_gsc_cli
         **gsc_payloads,
         "sites_list": {
             "siteEntry": [
-                {"siteUrl": "sc-domain:x.com", "permissionLevel": "siteRestrictedUser"},
-                {"siteUrl": "sc-domain:y.com", "permissionLevel": "siteUnverifiedUser"},
+                {"siteUrl": "sc-domain:synthetic-site-c.example", "permissionLevel": "siteRestrictedUser"},
+                {"siteUrl": "sc-domain:synthetic-site-d.example", "permissionLevel": "siteUnverifiedUser"},
             ]
         },
     }

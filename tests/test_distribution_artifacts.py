@@ -53,7 +53,7 @@ def test_clean_engine_artifact_inventory_is_accepted(tmp_path, suffix):
 @pytest.mark.parametrize("member", [
     "companion/plugins/seomonster-workbench/.mcp.json",
     ".private/fixture/.mcp.json", "archive/fixture/.mcp.json", "marketing/fixture/.mcp.json",
-    "docs/IMPLEMENTATION_REPORT.md", "HANDOFF.md", "CLAUDE.md", "../outside.py",
+    "docs/IMPLEMENTATION_REPORT.md", "HANDOFF.md", "CLAUDE.md", "PART1_VALIDATION.md", "../outside.py",
 ])
 def test_artifact_inventory_refuses_private_or_companion_members(tmp_path, suffix, member):
     path = tmp_path / ("engine" + suffix)
@@ -140,6 +140,10 @@ def test_regular_unix_files_and_directories_are_accepted(tmp_path, suffix):
 def test_engine_builds_use_a_source_allowlist_and_drop_nested_negated_json():
     targets = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["hatch"]["build"]["targets"]
     allowlist = targets["sdist"]["only-include"]
+    assert "PART1_VALIDATION.md" not in allowlist
+    assert "PART1_VALIDATION.md" in targets["sdist"]["exclude"]
+    ignored = (ROOT / ".mcpbignore").read_text().splitlines()
+    assert "PART1_VALIDATION.md" in ignored
     roots = {PurePosixPath(entry).parts[0] for entry in allowlist}
     assert not roots & {"companion", "archive", "marketing", ".private", ".claude", ".cursor", ".config",
                         ".credentials", "build", "dist", "venv", ".venv", "node_modules"}
@@ -876,6 +880,15 @@ def test_readme_file_and_image_links_resolve_on_pypi_at_the_release_tag():
     assert "https://github.com/avansaber/seo-monster/releases/latest" in targets
 
 
+def test_public_release_text_omits_private_planning_references():
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    for pattern in (r"\.private/[a-z][a-z0-9-]+/", r"\bPLAN Part \d", r"\bFEEDBACK Round"):
+        assert not re.search(pattern, changelog, re.IGNORECASE)
+    for name in ("content_tools.py", "psi_tools.py"):
+        text = (ROOT / "src" / "seo_mcp" / "tools" / name).read_text()
+        assert not re.search(r"\.private/|\bPLAN Part \d", text, re.IGNORECASE)
+
+
 def test_release_facts_name_the_current_version():
     version = project_version()
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
@@ -889,7 +902,16 @@ def test_release_facts_name_the_current_version():
     assert "### Upgrade" in section
     privacy = (ROOT / "PRIVACY.md").read_text().splitlines()[2]
     assert f"SEOMonster {version} engine" in privacy and "unreleased" not in privacy.lower()
-    assert "unreleased" not in (ROOT / "PART1_VALIDATION.md").read_text().lower()
+    local_validation = ROOT / "PART1_VALIDATION.md"
+    if local_validation.exists():
+        assert "unreleased" not in local_validation.read_text().lower()
+
+
+def test_release_facts_work_without_excluded_local_validation(tmp_path, monkeypatch):
+    for name in ("pyproject.toml", "uv.lock", "CHANGELOG.md", "PRIVACY.md"):
+        shutil.copyfile(ROOT / name, tmp_path / name)
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    test_release_facts_name_the_current_version()
 
 
 def local_header_cases():

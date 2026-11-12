@@ -8,7 +8,7 @@ from seo_mcp.tools import cf_tools
 
 
 def _cfg(make_config, **extra):
-    return make_config(CF_API_TOKEN="testtoken", CF_ZONE="example.com", **extra)
+    return make_config(CF_API_TOKEN="synthetic_cf_token", CF_ZONE="example.com", **extra)
 
 
 # --- auth gating ----------------------------------------------------------
@@ -52,7 +52,7 @@ def test_zone_info_uses_default_zone(make_config, make_cf_client, cf_payloads):
 def test_zone_info_missing_zone_invalid_input(make_config, make_cf_client, cf_payloads):
     client = make_cf_client(cf_payloads)
     # No zone arg and no CF_ZONE configured.
-    cfg = make_config(CF_API_TOKEN="testtoken")
+    cfg = make_config(CF_API_TOKEN="synthetic_cf_token")
     result = cf_tools.cf_zone_info({}, cfg, {"cf": client})
     assert result["error"]["code"] == "INVALID_INPUT"
     assert client._transport.calls == []  # never resolved
@@ -247,7 +247,7 @@ def _settings_envelope(settings):
 def _make_settings_client(settings):
     from seo_mcp.clients.cloudflare import CfClient
 
-    client = CfClient(token="testtoken")
+    client = CfClient(token="synthetic_cf_token")
 
     def _raw(method, path, body=None):
         if "/rulesets/phases/http_config_settings/" in path:
@@ -641,7 +641,7 @@ _HSTS_ON = [
 def _make_settings_update_client(before, after):
     from seo_mcp.clients.cloudflare import CfClient
 
-    client = CfClient(token="testtoken")
+    client = CfClient(token="synthetic_cf_token")
     state = {"patched": False}
     calls = []
 
@@ -798,7 +798,7 @@ def _make_mr_client(before=None):
     merged config that was sent)."""
     from seo_mcp.clients.cloudflare import CfClient
 
-    client = CfClient(token="testtoken")
+    client = CfClient(token="synthetic_cf_token")
     state = {"config": dict(before if before is not None else _MR_BEFORE)}
     calls = []
 

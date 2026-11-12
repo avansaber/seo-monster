@@ -110,9 +110,15 @@ def internal_link_graph(arguments, config, clients) -> dict[str, Any]:
     start_url = arguments.get("start_url")
     if not start_url:
         return err(ErrorCode.INVALID_INPUT, _SERVICE, "start_url is required.", docs_url=DOCS_BASE + "technical")
-    parsed = urlparse(start_url)
-    if not parsed.scheme or not parsed.netloc:
-        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"start_url must be absolute, got {start_url!r}.")
+    try:
+        if not isinstance(start_url, str) or any(ord(c) <= 32 or ord(c) == 127 for c in start_url):
+            raise ValueError("Invalid URL")
+        parsed = urlparse(start_url)
+        if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username is not None
+                or parsed.port == 0 or "%" in parsed.hostname):
+            raise ValueError("Invalid authority")
+    except (ValueError, UnicodeError):
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "start_url must be absolute.")
     max_depth = min(int(arguments.get("max_depth") or 2), _MAX_DEPTH)
     max_pages = min(int(arguments.get("max_pages") or 50), _MAX_PAGES)
 
@@ -146,10 +152,11 @@ def internal_link_graph(arguments, config, clients) -> dict[str, Any]:
         for raw in parser.hrefs:
             if raw.startswith(("mailto:", "tel:", "javascript:", "#")):
                 continue
-            resolved = _normalize(urljoin(resp.final_url, raw))
-            if not resolved.startswith(("http://", "https://")):
-                continue
-            if not _same_host(resolved, start):
+            try:
+                resolved = _normalize(urljoin(resp.final_url, raw))
+                if not resolved.startswith(("http://", "https://")) or not _same_host(resolved, start):
+                    continue
+            except (ValueError, UnicodeError):
                 continue
             out_targets.add(resolved)
         page_record["out_degree"] = len(out_targets)

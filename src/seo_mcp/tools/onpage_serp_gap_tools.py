@@ -52,7 +52,7 @@ def _fetch_parsed(http: Any, url: str, *, public_only: bool = False):
     # the existing behaviour so local and staging audits still work.
     resp = http.fetch(url, public_only=True) if public_only else http.fetch(url)
     if not (200 <= resp.status < 300):
-        raise ApiError(ErrorCode.UPSTREAM_ERROR, f"Fetch of {url!r} returned HTTP {resp.status}.", details={"status": resp.status})
+        raise ApiError(ErrorCode.UPSTREAM_ERROR, f"Website fetch returned HTTP {resp.status}.", details={"status": resp.status})
     return resp, parse_content(resp.body_text)
 
 

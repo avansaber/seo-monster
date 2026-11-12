@@ -34,7 +34,7 @@ build-backend = "hatchling.build"
 packages = ["src/seomonster_workbench"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/docs/IMPLEMENTATION_REPORT.md"]
+exclude = ["/CHANGELOG.md", "/docs/IMPLEMENTATION_REPORT.md", "/docs/HOST_VALIDATION.md", "/docs/OPENAI_HOST_COMPATIBILITY.md", "/docs/ROADMAP.md"]
 include = ["/src", "/tests", "/schemas", "/evaluation", "/plugins", "/examples", "/scripts", "/docs", "/README.md", "/CHANGELOG.md", "/LICENSE", "/pyproject.toml"]
 
 [tool.pytest.ini_options]
