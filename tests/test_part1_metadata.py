@@ -23,6 +23,25 @@ def test_canonical_metadata_and_cursor_version_agree():
     assert DOCS_BASE == "https://github.com/avansaber/seo-monster/blob/main/README.md#"
 
 
+def test_serpbase_host_configuration_is_optional_and_secret():
+    manifest = json.loads((ROOT / "manifest.json").read_text())
+    registry = json.loads((ROOT / "server.json").read_text())
+    configs = manifest["user_config"]
+    env = manifest["server"]["mcp_config"]["env"]
+    for key, variable in (("serp_provider", "SEO_MCP_SERP_PROVIDER"), ("serpbase_api_key", "SERPBASE_API_KEY")):
+        assert configs[key]["required"] is False
+        assert "default" not in configs[key]
+        assert env[variable] == "${user_config." + key + "}"
+    assert configs["serpbase_api_key"]["sensitive"] is True
+    variables = {item["name"]: item for item in registry["packages"][0]["environmentVariables"]}
+    assert variables["SEO_MCP_SERP_PROVIDER"]["isRequired"] is False
+    assert variables["SEO_MCP_SERP_PROVIDER"]["isSecret"] is False
+    assert variables["SERPBASE_API_KEY"]["isRequired"] is False
+    assert variables["SERPBASE_API_KEY"]["isSecret"] is True
+    assert "default" not in variables["SEO_MCP_SERP_PROVIDER"]
+    assert "default" not in variables["SERPBASE_API_KEY"]
+
+
 def test_coordination_records_cannot_enter_engine_artifacts():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
     source_exclusions = project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"]

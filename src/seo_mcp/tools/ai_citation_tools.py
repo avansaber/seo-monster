@@ -34,6 +34,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
+from ..clients.serpbase import dataforseo_selected, selected_serp_client
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations
 
@@ -107,9 +108,17 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
     except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
         ai = None
     try:
-        dfs = clients.get("dataforseo")
+        requested_engines = arguments.get("engines")
+        if not dataforseo_selected(config) and requested_engines and "google_aio" not in requested_engines:
+            provider, dfs = "dataforseo", None
+        else:
+            provider, dfs = selected_serp_client(config, clients)
+    except ApiError as exc:
+        return exc.to_envelope(_SERVICE)
     except Exception:  # noqa: BLE001  # Unavailable optional engines preserve the existing auth gate.
-        dfs = None
+        if not dataforseo_selected(config):
+            return err(ErrorCode.UPSTREAM_ERROR, _SERVICE, "The selected SERP provider could not be initialized.")
+        provider, dfs = "dataforseo", None
 
     available: list[str] = list(ai.available_engines()) if ai is not None else []
     if dfs is not None:
@@ -131,10 +140,18 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
     if not engines:
         return err(ErrorCode.INVALID_INPUT, _SERVICE, f"None of the requested engines are available. Available: {available}.")
     samples = max(1, min(int(arguments.get("samples", _DEFAULT_SAMPLES)), _MAX_SAMPLES))
+    serpbase_limited = provider == "serpbase" and (len(prompts) != 1 or samples != 1)
+    provider_meta = None
 
     def _run(engine: str, prompt: str) -> dict[str, Any]:
+        nonlocal provider_meta
         if engine == "google_aio":
+            if serpbase_limited:
+                raise ApiError(ErrorCode.INVALID_INPUT, "SerpBase requires one prompt and one sample.")
             serp = dfs.serp(prompt)
+            provider_meta = serp.get("provider_meta")
+            if provider == "serpbase" and isinstance(provider_meta, dict) and provider_meta.get("overview_truncated") is True:
+                raise ApiError(ErrorCode.UPSTREAM_ERROR, "SerpBase returned a truncated AI Overview.", details={**provider_meta, "observation": "truncated"})
             cits = serp.get("ai_overview_citations") or []
             # F7: detect brands/competitors in the AIO ANSWER BODY (plus citation
             # titles), not citation domains alone -- the body is where named
@@ -148,6 +165,9 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
             if "ai_overview_present" not in serp and (text or cits):
                 presence = True
             if type(presence) is not bool:
+                if provider == "serpbase":
+                    details = provider_meta if isinstance(provider_meta, dict) else {}
+                    raise ApiError(ErrorCode.UPSTREAM_ERROR, "AI Overview presence was not observed.", details={**details, "observation": "not_observed"})
                 raise ApiError(ErrorCode.UPSTREAM_ERROR, "AI Overview presence is unavailable for this response.")
             return {"answer_text": text, "citations": cits, "ai_overview_present": presence}
         return ai.query(engine, prompt)
@@ -168,13 +188,24 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
         # google_aio only: separates "no AI Overview on the SERP" from "an AI
         # Overview that omits the brand"; both otherwise read as visibility 0.
         aio_presence = {"shown": 0, "not_shown": 0, "failed": 0}
+        if engine == "google_aio" and provider == "serpbase":
+            aio_presence["not_observed"] = 0
+            aio_presence["truncated"] = 0
         for prompt in prompts:
             domsets: list[set[str]] = []
             for _ in range(samples):
+                if engine == "google_aio" and serpbase_limited:
+                    continue
                 query_count += 1
                 try:
                     r = _run(engine, prompt)
-                except ApiError:
+                except ApiError as exc:
+                    if engine == "google_aio" and provider == "serpbase" and isinstance(exc.details, dict):
+                        provider_meta = {"provider": provider, **exc.details}
+                        observation = exc.details.get("observation")
+                        if observation in ("not_observed", "truncated"):
+                            aio_presence[observation] += 1
+                            continue
                     failed += 1
                     aio_presence["failed"] += 1
                     continue
@@ -215,6 +246,10 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
         }
         if engine == "google_aio":
             engine_row["ai_overview_presence"] = aio_presence
+            if provider == "serpbase":
+                engine_row["provider_meta"] = provider_meta
+                if serpbase_limited:
+                    engine_row["unavailable_reason"] = "SerpBase requires one prompt and one sample."
         by_engine.append(engine_row)
         total_brand += e_brand
         total_n += e_n
@@ -251,7 +286,10 @@ def ai_citation_track(arguments: Mapping[str, Any], config: Any, clients: Mappin
             "ChatGPT API-vs-UI overlap ~24% brands / ~4% sources). This is a "
             "directional proxy, labeled per engine."),
             ("Google AI Overviews has no API; google_aio uses DataForSEO SERP "
-            "scraping, which is ToS-contested and may be fragile."),
+            "scraping, which is ToS-contested and may be fragile."
+            if provider == "dataforseo" else
+            "Google AI Overviews has no API; google_aio uses SerpBase search results. "
+            "Third-party search results may be incomplete or unavailable."),
             ("LLM answers are non-deterministic; a single run is uninformative. "
             "Trust the sampled visibility + CI + volatility, never a point 'rank'. "
             "Freeze the prompt + competitor set across cycles and date each run."),

@@ -51,11 +51,26 @@
         "CF_API_TOKEN": "${user_config.cf_api_token}",
         "CF_ZONE": "${user_config.cf_zone}",
         "SEO_MCP_INDEXNOW_KEY": "${user_config.indexnow_key}",
-        "SEO_MCP_INDEXNOW_KEY_LOCATION": "${user_config.indexnow_key_location}"
+        "SEO_MCP_INDEXNOW_KEY_LOCATION": "${user_config.indexnow_key_location}",
+        "SEO_MCP_SERP_PROVIDER": "${user_config.serp_provider}",
+        "SERPBASE_API_KEY": "${user_config.serpbase_api_key}"
       }
     }
   },
   "user_config": {
+    "serp_provider": {
+      "type": "string",
+      "title": "SERP Provider (optional)",
+      "description": "Set to serpbase to use SerpBase for supported SERP and AI Overview workflows. DataForSEO remains the default when not set.",
+      "required": false
+    },
+    "serpbase_api_key": {
+      "type": "string",
+      "title": "SerpBase API Key (optional)",
+      "description": "API key for the optional SerpBase provider. A key alone does not select the provider.",
+      "required": false,
+      "sensitive": true
+    },
     "google_oauth_client": {
       "type": "file",
       "title": "Google OAuth Client Secrets JSON",

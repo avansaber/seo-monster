@@ -88,6 +88,20 @@
           "isSecret": false
         },
         {
+          "name": "SEO_MCP_SERP_PROVIDER",
+          "description": "Optional SERP provider selection. Set to serpbase to use SerpBase; DataForSEO remains the default when unset.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "SERPBASE_API_KEY",
+          "description": "API key for the optional SerpBase provider. A key alone does not select the provider.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
           "name": "DATAFORSEO_LOGIN",
           "description": "DataForSEO Basic-auth login. Optional (v0.9). Unlocks SERP/PAA/related, keyword volume+difficulty+intent, competitor keyword-gap, and Google AI Overview citations for keyword_universe / serp_adjacency_expand / onpage_serp_gap auto-fetch / ai_citation_track.",
           "isRequired": false,

@@ -232,7 +232,7 @@ def test_unsanctioned_modules_do_not_import_common_http_transports():
 
     root = Path(seo_mcp.__file__).parent
     allowlist = {f"clients/{name}.py" for name in (
-        "http", "crux", "openpagerank", "ai_engines", "cloudflare", "dataforseo", "indexnow", "psi"
+        "http", "crux", "openpagerank", "ai_engines", "cloudflare", "dataforseo", "indexnow", "psi", "serpbase"
     )}
     forbidden_imports = ("urllib.request", "urllib.robotparser", "requests", "httpx", "http.client", "socket", "urllib3", "aiohttp")
     for path in root.rglob("*.py"):

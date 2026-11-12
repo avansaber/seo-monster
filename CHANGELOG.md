@@ -11,6 +11,14 @@ external testing pass on that version.
 
 ## Unreleased
 
+### Upgrade
+
+- The optional SerpBase integration requires an explicit provider selection and API key. Provider queries can consume credits and may be retained under the provider policy.
+
+### Added
+
+- Added optional SerpBase support for SERP adjacency and Google AI Overview workflows, with explicit result limitations and provider cost metadata.
+
 ### Security
 
 - Website fetches require public addresses on each hop. Private and local staging targets are refused, and the `public_only` argument cannot disable this policy. Sitemap decompression is limited to 50 MiB.

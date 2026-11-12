@@ -87,6 +87,26 @@ verification URLs. Providers receive the arguments and credentials needed for
 the selected request; optional paid calls can incur provider charges. These
 calls do not add maintainer telemetry.
 
+SerpBase is an optional paid SERP source. Set `SEO_MCP_SERP_PROVIDER=serpbase`
+and `SERPBASE_API_KEY`, or use `[serp] provider` and `[serpbase] api_key` in
+the config file. A key alone does not select it. Set
+`SEO_MCP_SERP_PROVIDER=dataforseo` to select DataForSEO explicitly; it is also
+the default when no provider is selected. Each process allows one SerpBase
+request before restart; this is not a shared or durable budget. The
+provider receives the query, language, country and device and may retain query
+logs. Its [privacy policy](https://serpbase.dev/privacy) does not offer customer-configurable
+zero retention, a per-request logging opt-out or self-service query-log deletion.
+Review its current terms, privacy policy and credit pricing before use.
+SerpBase supports desktop and other locales; this integration currently requests
+US English and the mobile layout. The provider client
+connects directly and does not use environment proxies. Check provider terms
+before storing or exporting its results as Workbench evidence.
+The Google AI Overview leg requires one prompt and one sample; SERP adjacency
+requires one seed. The default AI sample count exceeds this limit, so specify
+one sample for the SerpBase leg. Missing provider modules are unavailable.
+Responses without the documented query and page metadata, or with a mismatched
+query, are rejected even if the provider reports a charge.
+
 Website checks accept publicly routable targets only. Private, loopback and
 local staging targets are refused, including redirects and linked pages. Networks
 that require the well-known NAT64 prefix `64:ff9b::/96` are not supported by
@@ -835,6 +855,7 @@ wins. The config file is normally written for you by `seo-monster setup` (with
 | `SEO_MCP_ALLOW_DESTRUCTIVE`      | all     | `true` enables cache-purge tools. Default off.   |
 | `SEO_MCP_CONFIG`                 | all     | Path to the TOML config file.                    |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | DataForSEO | Optional (v0.9): SERP/PAA, keyword volume/difficulty/intent, competitor gap, Google AIO. |
+| `SEO_MCP_SERP_PROVIDER` and `SERPBASE_API_KEY` | SerpBase | Optional paid SERP source when explicitly selected as `serpbase`. |
 | `OPENPAGERANK_API_KEY`           | Open PageRank | Optional (v0.9): free competitor domain authority. |
 | `PERPLEXITY_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | AI engines | Optional (v0.9): engines for `ai_citation_track` (any subset). |
 | `GOOGLE_ADS_DEVELOPER_TOKEN` / `GOOGLE_ADS_CUSTOMER_ID` | Google Ads | Optional (v0.9): volume alt to DataForSEO (needs adwords-scope consent). |

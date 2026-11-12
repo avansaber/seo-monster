@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +67,8 @@ class Config:
     gemini_api_key: str | None
     allow_destructive: bool
     source_path: str | None  # the config file actually read, or None
+    serp_provider: str | None = None
+    serpbase_api_key: str | None = field(default=None, repr=False)
 
 
 def _truthy(value: Any) -> bool:
@@ -143,6 +145,8 @@ def load_config(
     cf_file = file_data.get("cloudflare", {})
     indexnow_file = file_data.get("indexnow", {})
     dataforseo_file = file_data.get("dataforseo", {})
+    serp_file = file_data.get("serp", {})
+    serpbase_file = file_data.get("serpbase", {})
     openpagerank_file = file_data.get("openpagerank", {})
     google_ads_file = file_data.get("google_ads", {})
     ai_engines_file = file_data.get("ai_engines", {})
@@ -151,6 +155,12 @@ def load_config(
     def pick(env_key: str, file_value: Any) -> str | None:
         """Env wins; fall back to the file value."""
         env_value = _clean(env.get(env_key))
+        optional_host_templates = {
+            "SEO_MCP_SERP_PROVIDER": "${user_config.serp_provider}",
+            "SERPBASE_API_KEY": "${user_config.serpbase_api_key}",
+        }
+        if env_key in optional_host_templates and env_value == optional_host_templates[env_key]:
+            env_value = None
         if env_value is not None:
             return env_value
         return _clean(file_value)
@@ -202,6 +212,8 @@ def load_config(
         gemini_api_key=pick("GEMINI_API_KEY", ai_engines_file.get("gemini")),
         allow_destructive=allow_destructive,
         source_path=source_path,
+        serp_provider=pick("SEO_MCP_SERP_PROVIDER", serp_file.get("provider")),
+        serpbase_api_key=pick("SERPBASE_API_KEY", serpbase_file.get("api_key")),
     )
 
 

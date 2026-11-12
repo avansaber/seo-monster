@@ -256,6 +256,12 @@ def handle(
                 else None
             ),
         },
+        "serpbase": {
+            "configured": bool(getattr(config, "serpbase_api_key", None)),
+            "selected": (getattr(config, "serp_provider", None) or "").lower() == "serpbase",
+            "reachable": None,
+            "reason": "Configuration does not establish reachability; no SerpBase probe is performed.",
+        },
         "openpagerank": {
             "configured": bool(getattr(config, "openpagerank_key", None)),
             "auth_method": "api_key" if getattr(config, "openpagerank_key", None) else None,

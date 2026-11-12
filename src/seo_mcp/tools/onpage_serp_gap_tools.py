@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
+from ..clients.serpbase import dataforseo_selected, selected_serp_client
 from ..errors import DOCS_BASE, ErrorCode, err, ok
 from ._helpers import annotations, require_client
 from ._html import content_entities, content_terms, is_chrome_heading, parse_content
@@ -111,8 +112,13 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
                 docs_url=DOCS_BASE + "technical",
             )
         try:
-            dfs = clients.get("dataforseo")
+            provider, dfs = selected_serp_client(config, clients)
+        except ApiError as exc:
+            return exc.to_envelope(_SERVICE)
         except Exception:  # noqa: BLE001  # Optional evidence failures preserve partial results.
+            if not dataforseo_selected(config):
+                return err(ErrorCode.UPSTREAM_ERROR, _SERVICE, "The selected SERP provider could not be initialized.")
+            provider = "dataforseo"
             dfs = None
         if dfs is None:
             return err(
@@ -125,11 +131,13 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
         try:
             serp = dfs.serp(str(query))
         except ApiError as exc:
-            return exc.to_envelope("dataforseo")
+            return exc.to_envelope(provider)
+        if provider == "serpbase" and serp.get("organic") is None:
+            return err(ErrorCode.UPSTREAM_ERROR, _SERVICE, "SerpBase did not observe an organic results module.", details=serp.get("provider_meta"))
         tgt_domain = _domain(target_url)
         competitor_urls = [o["url"] for o in serp.get("organic", [])
                            if isinstance(o.get("url"), str) and _domain(o["url"]) and _domain(o["url"]) != tgt_domain]
-        source = "dataforseo_serp"
+        source = f"{provider}_serp"
         organic_domains = [o.get("domain") or _domain(o.get("url") or "") for o in serp.get("organic", [])]
         ugc_risk = any(any(u in (d or "") for u in _UGC_DOMAINS) for d in organic_domains)
         aio_presence = serp.get("ai_overview_present")
@@ -140,10 +148,15 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
             "organic_count": len(serp.get("organic", [])),
             "zero_click_risk": True if ugc_risk or aio_presence is True else (False if aio_presence is False else None),
         }
+        if provider == "serpbase":
+            serp_composition["provider_meta"] = serp.get("provider_meta")
 
     competitor_urls = competitor_urls[: int(arguments.get("max_competitors", 5))]
     if not competitor_urls:
-        return ok(_empty(target_url, source, "No competitor URLs to compare against."))
+        result = _empty(target_url, source, "No competitor URLs to compare against.")
+        if source == "serpbase_serp":
+            result["serp_composition"] = serp_composition
+        return ok(result)
 
     # parse competitors
     analyzed: list[dict[str, Any]] = []
@@ -151,7 +164,7 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
     comp_domains: list[str] = []
     for url in competitor_urls[:_MAX_COMPETITORS]:
         try:
-            resp, p = _fetch_parsed(http, url, public_only=source == "dataforseo_serp")
+            resp, p = _fetch_parsed(http, url, public_only=source in ("dataforseo_serp", "serpbase_serp"))
         except ApiError as exc:
             analyzed.append({"url": url, "error": exc.message})
             continue
@@ -161,7 +174,10 @@ def onpage_serp_gap(arguments: Mapping[str, Any], config: Any, clients: Mapping[
                          "h2_h3": sum(1 for h in p.headings if h["level"] in (2, 3)), "schema_types": p.jsonld_types()})
 
     if not comp_parsed:
-        return ok(_empty(target_url, source, "Could not fetch any competitor pages."))
+        result = _empty(target_url, source, "Could not fetch any competitor pages.")
+        if source == "serpbase_serp":
+            result["serp_composition"] = serp_composition
+        return ok(result)
 
     target_terms = content_terms(target.text)
     target_headings_terms = {t for h in target.headings for t in content_terms(h["text"])}
