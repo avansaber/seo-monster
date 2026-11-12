@@ -27,7 +27,7 @@ def test_write_config_toml_roundtrips_and_drops_empties(tmp_path):
     write_config_toml(
         path,
         {
-            "cloudflare": {"api_token": "cfat_abc", "zone": "example.com"},
+            "cloudflare": {"api_token": 'synthetic-test-token-one', "zone": "example.com"},
             "psi": {"api_key": ""},          # empty value dropped
             "indexnow": {},                  # empty table omitted
             "gsc": {"default_site": "sc-domain:example.com"},
@@ -35,7 +35,7 @@ def test_write_config_toml_roundtrips_and_drops_empties(tmp_path):
     )
     # Reads back through the real loader (env empty so the file wins).
     cfg = load_config(env={}, config_path=str(path))
-    assert cfg.cf_api_token == "cfat_abc"
+    assert cfg.cf_api_token == 'synthetic-test-token-one'
     assert cfg.cf_zone == "example.com"
     assert cfg.gsc_default_site == "sc-domain:example.com"
     assert cfg.psi_api_key is None  # empty was dropped, not written as ""
@@ -107,17 +107,17 @@ def setup_env(tmp_path, monkeypatch):
 def test_setup_main_happy_path_writes_config(setup_env, capsys):
     prompt, secret = _prompts(
         text={"zone": "example.com", "GSC property": "sc-domain:example.com", "GA4 property": "properties/123"},
-        secret={"Cloudflare API token": "cfat_new", "PSI API key": "psikey", "IndexNow key": "idxkey"},
+        secret={"Cloudflare API token": 'synthetic-test-token-two', "PSI API key": 'synthetic-test-token-three', "IndexNow key": 'synthetic-test-token-four'},
     )
     rc = cli.setup_main(prompt=prompt, secret_prompt=secret)
     assert rc == 0
     assert "Wrote" in capsys.readouterr().out
 
     cfg = load_config(env={}, config_path=str(setup_env))
-    assert cfg.cf_api_token == "cfat_new"
+    assert cfg.cf_api_token == 'synthetic-test-token-two'
     assert cfg.cf_zone == "example.com"
-    assert cfg.psi_api_key == "psikey"
-    assert cfg.indexnow_key == "idxkey"
+    assert cfg.psi_api_key == 'synthetic-test-token-three'
+    assert cfg.indexnow_key == 'synthetic-test-token-four'
     assert cfg.gsc_default_site == "sc-domain:example.com"
     assert cfg.ga4_property_id == "properties/123"
 
@@ -128,7 +128,7 @@ def test_setup_main_rejected_cf_token_not_saved(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "validate_cloudflare", lambda token: ("rejected", "invalid token"))
     monkeypatch.setattr(cli, "validate_indexnow", lambda key, loc: ("skipped", "stub"))
 
-    prompt, secret = _prompts(text={"zone": "example.com"}, secret={"Cloudflare API token": "cfat_bad"})
+    prompt, secret = _prompts(text={"zone": "example.com"}, secret={"Cloudflare API token": 'synthetic-test-token-five'})
     rc = cli.setup_main(prompt=prompt, secret_prompt=secret)
     assert rc == 0
 
@@ -140,7 +140,7 @@ def test_setup_main_rejected_cf_token_not_saved(tmp_path, monkeypatch, capsys):
 
 def test_setup_main_rerun_keeps_existing_when_blank(tmp_path, monkeypatch):
     cfg_path = tmp_path / "config.toml"
-    write_config_toml(cfg_path, {"cloudflare": {"api_token": "cfat_keep", "zone": "old.com"}})
+    write_config_toml(cfg_path, {"cloudflare": {"api_token": 'synthetic-test-token-six', "zone": "example.test"}})
     monkeypatch.setattr(cli, "resolve_config_path", lambda *a, **k: cfg_path)
 
     validated: dict[str, bool] = {}
@@ -153,17 +153,17 @@ def test_setup_main_rerun_keeps_existing_when_blank(tmp_path, monkeypatch):
     assert rc == 0
 
     cfg = load_config(env={}, config_path=str(cfg_path))
-    assert cfg.cf_api_token == "cfat_keep"  # not wiped
-    assert cfg.cf_zone == "old.com"
+    assert cfg.cf_api_token == 'synthetic-test-token-six'  # not wiped
+    assert cfg.cf_zone == "example.test"
     assert "called" not in validated  # unchanged token -> no re-validation
 
 
 def test_setup_written_file_is_still_overridden_by_env(setup_env, monkeypatch):
-    prompt, secret = _prompts(text={}, secret={"Cloudflare API token": "cfat_file"})
+    prompt, secret = _prompts(text={}, secret={"Cloudflare API token": 'synthetic-test-token-seven'})
     cli.setup_main(prompt=prompt, secret_prompt=secret)
     # Env var must still win over the file the setup wrote (precedence preserved).
-    cfg = load_config(env={"CF_API_TOKEN": "cfat_env_wins"}, config_path=str(setup_env))
-    assert cfg.cf_api_token == "cfat_env_wins"
+    cfg = load_config(env={"CF_API_TOKEN": 'synthetic-test-token-eight'}, config_path=str(setup_env))
+    assert cfg.cf_api_token == 'synthetic-test-token-eight'
 
 
 def test_setup_main_eof_exits_cleanly(tmp_path, monkeypatch, capsys):
@@ -210,32 +210,85 @@ def test_validate_cloudflare_upstream_error_stays_unreachable(monkeypatch):
     assert status == "unreachable"
 
 
-def test_validate_indexnow_sends_branded_user_agent(monkeypatch):
-    # Regression for FEEDBACK §12c.ii: the default Python-urllib UA is 403'd by
-    # Cloudflare's Browser Integrity Check, so the key-file fetch must send the
-    # project's branded UA.
-    import urllib.request
+def test_validate_indexnow_uses_branded_client(monkeypatch):
+    from seo_mcp.clients.http import HttpClient, HttpResponse
 
     captured: dict[str, str] = {}
 
-    class _Resp:
-        def __enter__(self):
-            return self
+    def fake_fetch(self, url, **kwargs):
+        captured["ua"] = self._user_agent
+        return HttpResponse(200, {}, b"mykey", url)
 
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return b"mykey"
-
-    def fake_urlopen(req, timeout=None):
-        captured["ua"] = req.get_header("User-agent")
-        return _Resp()
-
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(HttpClient, "fetch", fake_fetch)
     status, _ = cli.validate_indexnow("mykey", "https://example.com/mykey.txt")
     assert status == "ok"
     assert captured["ua"] and captured["ua"].startswith("SEOMonster/")
+
+
+def test_validate_indexnow_refuses_private_target_without_leaking_url(monkeypatch):
+    from seo_mcp.clients.http import HttpClient
+
+    monkeypatch.setattr("seo_mcp.clients.http._resolve_host", lambda *args: {"127.0.0.1"})
+    monkeypatch.setattr(HttpClient, "_http_request_public", lambda *args, **kwargs: pytest.fail("connection attempted"))
+    status, message = cli.validate_indexnow("synthetic-secret", "http://example.test/synthetic-secret?token=canary-9821")
+    assert status == "unreachable"
+    assert "synthetic-secret" not in message and "canary-9821" not in message
+
+
+def test_validate_indexnow_sends_user_agent_to_pinned_connection(monkeypatch):
+    captured = {}
+
+    class Response:
+        status = 200
+        sent = False
+
+        def __init__(self):
+            self.headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, size):
+            if self.sent:
+                return b""
+            self.sent = True
+            return b"synthetic-key"
+
+    class Connection:
+        def __init__(self, target, timeout):
+            pass
+
+        def request(self, method, path, headers):
+            captured.update(headers)
+
+        def getresponse(self):
+            return Response()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("seo_mcp.clients.http._resolve_host", lambda *args: {"8.8.8.8"})
+    monkeypatch.setattr("seo_mcp.clients.http._PublicConnection", Connection)
+    status, _ = cli.validate_indexnow("synthetic-key", "https://example.test/key.txt")
+    assert status == "ok"
+    assert captured["User-Agent"].startswith("SEOMonster/")
+
+
+def test_validate_indexnow_does_not_print_untrusted_error(monkeypatch):
+    from seo_mcp.clients.errors import ApiError
+    from seo_mcp.clients.http import HttpClient
+    from seo_mcp.errors import ErrorCode
+
+    def fail(*args, **kwargs):
+        raise ApiError(ErrorCode.UPSTREAM_ERROR, "canary-9821\x1b[31m")
+
+    monkeypatch.setattr(HttpClient, "fetch", fail)
+    status, message = cli.validate_indexnow("synthetic-key", "https://example.test/key.txt")
+    assert status == "unreachable"
+    assert message == "Public website fetch failed."
 
 
 def test_server_main_dispatches_setup_to_cli(monkeypatch):

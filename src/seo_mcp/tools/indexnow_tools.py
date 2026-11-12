@@ -55,23 +55,23 @@ def _verify_key_file(clients, config, host: str | None) -> dict[str, Any] | None
         return err(
             ErrorCode.INVALID_INPUT,
             _SERVICE,
-            f"The IndexNow key file at {loc} {detail}. Search engines verify "
+            f"The IndexNow key file {detail}. Search engines verify "
             "ownership by fetching it, so they will reject this submission even "
             "though api.indexnow.org reports success. Submission blocked.",
             remediation=_REMEDIATION,
             docs_url=DOCS_BASE + "indexnow",
-            details={"key_location": loc, "preflight_status": status},
+            details={"key_location": "[redacted]", "preflight_status": status},
         )
     matched = key.strip() == body.strip() or key.strip() in [ln.strip() for ln in body.splitlines()]
     if not matched:
         return err(
             ErrorCode.INVALID_INPUT,
             _SERVICE,
-            f"The IndexNow key file at {loc} does not contain your key "
+            "The IndexNow key file does not contain your key "
             "(SEO_MCP_INDEXNOW_KEY). The engines will reject the submission. Blocked.",
             remediation=_REMEDIATION,
             docs_url=DOCS_BASE + "indexnow",
-            details={"key_location": loc},
+            details={"key_location": "[redacted]"},
         )
     return None
 

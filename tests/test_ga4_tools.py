@@ -118,8 +118,8 @@ def test_run_report_start_date_wins_over_days(make_config, make_ga4_client, ga4_
 
 def test_run_report_bare_property_id_is_normalized(make_config, make_ga4_client, ga4_response):
     client = make_ga4_client(ga4_response(["date"], ["sessions"], []))
-    ga4_tools.ga4_run_report({"property_id": "987654"}, make_config(), {"ga4": client})
-    assert client._analytics.requests[0].property == "properties/987654"
+    ga4_tools.ga4_run_report({"property_id": "000000"}, make_config(), {"ga4": client})
+    assert client._analytics.requests[0].property == "properties/000000"
 
 
 def test_run_report_builds_dimension_filter_and_order(make_config, make_ga4_client, ga4_response):

@@ -4,7 +4,7 @@ Five v0.3.0 tools fetch arbitrary public URLs: ``inspect_meta``,
 ``check_canonical``, ``mixed_content_check``, ``redirect_chain_audit``,
 ``robots_txt_validate``, ``sitemap_validate``, ``sitemap_health``. Rather
 than each tool wiring its own ``urllib`` boilerplate, they all share this
-client. Tests monkeypatch the single ``_http_request_raw`` seam.
+client. Tests can replace the pinned transport and DNS resolution seams.
 
 Design decisions:
 
@@ -18,22 +18,24 @@ Design decisions:
   loop as ``UPSTREAM_ERROR`` so the tool layer can describe it.
 - We send a clearly-identified User-Agent. Crawlers that hide their identity
   are widely blocked, and SEO tools should announce themselves.
-- ``public_only=True`` is for URLs a third party chose (SERP results): every
-  hop must resolve only to public addresses, so a provider result or a
-  competitor redirect cannot reach loopback, private, link-local or cloud
+- Every URL and redirect hop must resolve only to public addresses, so a
+  website, provider result or redirect cannot reach loopback, private, link-local or cloud
   metadata hosts. Connections use validated numeric addresses without a second
   lookup, preserving the original Host header, TLS hostname checks and SNI.
-  This path refuses proxies, credential headers and methods other than GET/HEAD.
+  Fetches refuse proxies, credential headers and methods other than GET/HEAD.
+  Private and local audits are unsupported. NAT64/DNS64-only access using
+  the well-known 64:ff9b::/96 prefix is also unsupported.
 """
 
 from __future__ import annotations
 
 import http.client
 import ipaddress
+import re
 import socket
 import ssl
+import string
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -50,6 +52,49 @@ _USER_AGENT = f"SEOMonster/{__version__} (+https://www.avansaber.com/seomonster/
 _DEFAULT_TIMEOUT = 20
 _DEFAULT_MAX_BYTES = 10 * 1024 * 1024
 _DEFAULT_MAX_REDIRECTS = 10
+
+
+def safe_public_fetch_error(exc: ApiError) -> str:
+    """Return only known, fixed public-fetch messages to another interface."""
+    allowed = {
+        "Public fetches require a direct connection without proxies.",
+        "Public fetches support only GET and HEAD.",
+        "Public fetches do not accept credentials or connection-header overrides.",
+        "Refusing an invalid public HTTP URL.",
+        "Could not resolve the public HTTP host.",
+        "Refusing a host with non-public addresses.",
+        "Public HTTP connection or response failed.",
+        "Public fetch contains invalid URL or header characters.",
+        "HTTP response contains an invalid redirect URL.",
+        "Redirect loop detected.",
+    }
+    return exc.message if exc.message in allowed else "Public website fetch failed."
+
+
+def _require_direct_connection() -> None:
+    """Refuse configured proxies before resolving a website target."""
+    proxies = urllib.request.getproxies()
+    if any(proxies.get(key) for key in ("http", "https", "all", "socks")):
+        raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches require a direct connection without proxies.")
+
+
+def _validate_request(method: str, extra_headers: dict[str, str] | None) -> None:
+    if method not in ("GET", "HEAD"):
+        raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches support only GET and HEAD.")
+    forbidden = {
+        "host", "authorization", "proxy-authorization", "cookie", "content-length", "transfer-encoding",
+        "connection", "upgrade", "expect", "te", "keep-alive", "proxy-connection", "user-agent", "accept",
+        "accept-encoding",
+    }
+    if extra_headers and any(isinstance(key, str) and key.lower() in forbidden for key in extra_headers):
+        raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches do not accept credentials or connection-header overrides.")
+    if extra_headers and any(
+        not isinstance(key, str) or re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", key) is None
+        or not isinstance(value, str)
+        or any((ord(ch) < 32 and ch != "\t") or ord(ch) == 127 or ord(ch) > 255 for ch in value)
+        for key, value in extra_headers.items()
+    ):
+        raise ApiError(ErrorCode.INVALID_INPUT, "Public fetch contains invalid URL or header characters.")
 
 
 @dataclass(frozen=True)
@@ -109,6 +154,14 @@ class RedirectHop:
     elapsed_ms: int
 
 
+def _safe_chain_details(chain: list[RedirectHop]) -> dict[str, Any]:
+    """Keep hop order and status without exposing URL parts from a page."""
+    return {
+        "chain": [f"{urllib.parse.urlsplit(hop.url).scheme}://[redacted]" for hop in chain],
+        "statuses": [hop.status for hop in chain],
+    }
+
+
 @dataclass
 class HttpResponse:
     """Result of a single HTTP request (or a followed redirect chain).
@@ -153,10 +206,15 @@ class HttpClient:
         max_redirects: int = _DEFAULT_MAX_REDIRECTS,
         max_bytes: int = _DEFAULT_MAX_BYTES,
         extra_headers: dict[str, str] | None = None,
-        public_only: bool = False,
+        public_only: bool = True,
     ) -> HttpResponse:
         """Fetch a URL. Follow redirects manually so the caller can inspect
-        every hop. Raise ``ApiError`` for unrecoverable failures."""
+        every hop. Raise ``ApiError`` for unrecoverable failures.
+
+        The retained ``public_only`` argument cannot disable the public policy.
+        """
+        _validate_request(method, extra_headers)
+        _require_direct_connection()
         chain: list[RedirectHop] = []
         current = url
         seen: set[str] = set()
@@ -164,27 +222,31 @@ class HttpClient:
             if current in seen:
                 raise ApiError(
                     ErrorCode.UPSTREAM_ERROR,
-                    f"Redirect loop detected at {current!r}.",
-                    details={"chain": [hop.url for hop in chain]},
+                    "Redirect loop detected.",
+                    details=_safe_chain_details(chain),
                 )
             seen.add(current)
-            target = _require_public_url(current) if public_only else None
-            t0 = time.monotonic()
-            if target is not None:
+            try:
+                target = _require_public_url(current)
+                t0 = time.monotonic()
                 status, headers, body = self._http_request_public(
                     method, current, max_bytes=max_bytes, extra_headers=extra_headers, target=target
                 )
-            else:
-                status, headers, body = self._http_request_raw(
-                    method, current, max_bytes=max_bytes, extra_headers=extra_headers
-                )
+            except ApiError as exc:
+                if chain:
+                    raise ApiError(exc.code, safe_public_fetch_error(exc), details=_safe_chain_details(chain)) from exc
+                raise
             elapsed = int((time.monotonic() - t0) * 1000)
-            if follow_redirects and 300 <= status < 400 and "location" in headers:
+            if follow_redirects and status in (301, 302, 303, 307, 308) and "location" in headers:
                 location = headers["location"]
                 try:
                     resolved = urllib.parse.urljoin(current, location)
                 except (ValueError, UnicodeError) as exc:
-                    raise ApiError(ErrorCode.UPSTREAM_ERROR, "HTTP response contains an invalid redirect URL.") from exc
+                    raise ApiError(
+                        ErrorCode.UPSTREAM_ERROR,
+                        "HTTP response contains an invalid redirect URL.",
+                        details=_safe_chain_details(chain),
+                    ) from exc
                 chain.append(RedirectHop(url=current, status=status, location=resolved, elapsed_ms=elapsed))
                 current = resolved
                 continue
@@ -197,8 +259,8 @@ class HttpClient:
             )
         raise ApiError(
             ErrorCode.UPSTREAM_ERROR,
-            f"Exceeded max_redirects={max_redirects} starting at {url!r}.",
-            details={"chain": [hop.url for hop in chain]},
+            f"Exceeded max_redirects={max_redirects}.",
+            details=_safe_chain_details(chain),
         )
 
     def _http_request_public(
@@ -211,19 +273,17 @@ class HttpClient:
         target: _PublicTarget,
     ) -> tuple[int, dict[str, str], bytes]:
         """Read one provider-selected URL with a pinned direct connection."""
-        if method not in ("GET", "HEAD"):
-            raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches support only GET and HEAD.")
-        if any(urllib.request.getproxies().get(key) for key in ("http", "https", "all")):
-            raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches require a direct connection without HTTP proxies.")
-        forbidden = {"host", "authorization", "proxy-authorization", "cookie", "content-length", "transfer-encoding", "connection"}
-        if extra_headers and any(key.lower() in forbidden for key in extra_headers):
-            raise ApiError(ErrorCode.INVALID_INPUT, "Public fetches do not accept credentials or connection-header overrides.")
+        _validate_request(method, extra_headers)
+        _require_direct_connection()
         headers = {"User-Agent": self._user_agent, "Accept": "*/*"}
         headers.update(extra_headers or {})
         connection = _PublicConnection(target, self._timeout)
         try:
             parts = urllib.parse.urlsplit(url)
-            path = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
+            path = urllib.parse.quote(parts.path or "/", safe=string.punctuation)
+            query = urllib.parse.quote(parts.query, safe=string.punctuation)
+            if query:
+                path += "?" + query
             connection.request(method, path, headers=headers)
             with connection.getresponse() as response:
                 return self._read_response(response, max_bytes)
@@ -233,56 +293,6 @@ class HttpClient:
             raise ApiError(ErrorCode.INVALID_INPUT, "Public fetch contains invalid URL or header characters.") from exc
         finally:
             connection.close()
-
-    def _http_request_raw(
-        self,
-        method: str,
-        url: str,
-        *,
-        max_bytes: int,
-        extra_headers: dict[str, str] | None,
-    ) -> tuple[int, dict[str, str], bytes]:
-        """Perform one HTTP call without redirect following. Returns
-        ``(status, headers_lowercase_keys, body_bytes)``. This is the single
-        seam tests monkeypatch.
-
-        Status codes >= 400 still return normally here; the caller decides
-        whether a 404 is fatal (most tools) or expected (sitemap_health).
-        """
-        try:
-            parsed = urllib.parse.urlsplit(url)
-            if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.port == 0:
-                raise ValueError("Invalid HTTP URL")
-            request = urllib.request.Request(url, method=method)
-        except (ValueError, UnicodeError) as exc:
-            raise ApiError(ErrorCode.INVALID_INPUT, "URL must be a valid HTTP or HTTPS URL.") from exc
-        request.add_header("User-Agent", self._user_agent)
-        request.add_header("Accept", "*/*")
-        if extra_headers:
-            for k, v in extra_headers.items():
-                request.add_header(k, v)
-        # We need our own no-follow opener; the default opener handles 3xx.
-        opener = urllib.request.build_opener(_NoRedirectHandler())
-        try:
-            with opener.open(request, timeout=self._timeout) as resp:
-                return self._read_response(resp, max_bytes)
-        except urllib.error.HTTPError as exc:
-            # 3xx without a Location, or any 4xx/5xx, lands here. We still
-            # want the headers + body so the caller can reason about them.
-            if 300 <= exc.code < 400:
-                # No location header; treat as terminal.
-                return self._read_response(exc, max_bytes)
-            return self._read_response(exc, max_bytes)
-        except urllib.error.URLError as exc:
-            raise ApiError(
-                ErrorCode.UPSTREAM_ERROR,
-                f"HTTP request to {url!r} failed: {exc.reason}",
-            ) from exc
-        except TimeoutError as exc:
-            raise ApiError(
-                ErrorCode.UPSTREAM_ERROR,
-                f"HTTP request to {url!r} timed out after {self._timeout}s.",
-            ) from exc
 
     @staticmethod
     def _read_response(resp: Any, max_bytes: int) -> tuple[int, dict[str, str], bytes]:
@@ -311,12 +321,19 @@ def _is_public_ip(address: str) -> bool:
         return False
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
-    if isinstance(ip, ipaddress.IPv4Address) and ip in ipaddress.ip_network("192.0.0.0/24"):
+    if isinstance(ip, ipaddress.IPv4Address) and (
+        ip in ipaddress.ip_network("192.0.0.0/24") or ip == ipaddress.ip_address("168.63.129.16")
+    ):
         return False
     # Transition routes can embed private IPv4 destinations even when an
     # older Python address table labels the IPv6 value as global.
     if isinstance(ip, ipaddress.IPv6Address) and (
-        ip.sixtofour is not None or ip.teredo is not None or ip in ipaddress.ip_network("64:ff9b::/96")
+        ip.sixtofour is not None
+        or ip.teredo is not None
+        or ip in ipaddress.ip_network("64:ff9b::/96")
+        or ip in ipaddress.ip_network("64:ff9b:1::/48")
+        or ip in ipaddress.ip_network("::/96")
+        or ip.is_site_local
     ):
         return False
     return ip.is_global and not ip.is_multicast and not ip.is_reserved
@@ -327,10 +344,11 @@ def _require_public_url(url: str) -> _PublicTarget:
     try:
         if not isinstance(url, str) or any(ord(c) <= 32 or ord(c) == 127 for c in url):
             raise ValueError("Invalid URL characters")
+        url.encode("utf-8")
         parts = urllib.parse.urlsplit(url)
         port = parts.port
         host = parts.hostname
-        if parts.scheme not in ("http", "https") or not host or parts.username is not None or port == 0 or "%" in host:
+        if parts.scheme not in ("http", "https") or not host or parts.username is not None or port == 0 or "%" in host or host.endswith(".."):
             raise ValueError("Invalid URL authority")
         host = host.encode("idna").decode("ascii")
     except (ValueError, UnicodeError) as exc:
@@ -343,14 +361,11 @@ def _require_public_url(url: str) -> _PublicTarget:
         raise ApiError(ErrorCode.UPSTREAM_ERROR, "Could not resolve the public HTTP host.") from exc
     if not addresses or not all(_is_public_ip(a) for a in addresses):
         raise ApiError(ErrorCode.INVALID_INPUT, "Refusing a host with non-public addresses.")
-    return _PublicTarget(host, port, secure, tuple(sorted(addresses)))
-
-
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Disables urllib's automatic redirect handling so we can see every hop."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
-        return None
+    # DNS retains the absolute name; HTTP Host and TLS use the certificate name.
+    connection_host = host.removesuffix(".")
+    if not connection_host:
+        raise ApiError(ErrorCode.INVALID_INPUT, "Refusing an invalid public HTTP URL.")
+    return _PublicTarget(connection_host, port, secure, tuple(sorted(addresses)))
 
 
 def build_http_client() -> HttpClient:

@@ -10,6 +10,7 @@ import json
 import socket
 import ssl
 import urllib.error
+import urllib.request
 from typing import Any, Self
 
 import pytest
@@ -152,6 +153,7 @@ def test_map_http_status_without_secrets_keeps_the_body():
 
 def _client_with(monkeypatch, responses: dict[str, tuple[int, dict[str, str], bytes]], dns: dict[str, set[str]]):
     calls: list[str] = []
+    monkeypatch.setattr(urllib.request, "getproxies", dict)
 
     def raw(self, method, url, *, max_bytes, extra_headers):
         calls.append(url)
@@ -162,7 +164,6 @@ def _client_with(monkeypatch, responses: dict[str, tuple[int, dict[str, str], by
             raise socket.gaierror("no such host")
         return dns[host]
 
-    monkeypatch.setattr(HttpClient, "_http_request_raw", raw)
     def public_raw(self, method, url, *, max_bytes, extra_headers, target):
         assert target.addresses and all(httpmod._is_public_ip(address) for address in target.addresses)
         return raw(self, method, url, max_bytes=max_bytes, extra_headers=extra_headers)
@@ -226,12 +227,12 @@ def test_public_only_allows_public_hosts_and_reports_unresolvable(monkeypatch):
     assert calls == [url]
 
 
-def test_default_fetch_does_not_resolve(monkeypatch):
+def test_default_fetch_refuses_private_address(monkeypatch):
     url = "http://127.0.0.1:8000/"
-    client, calls = _client_with(monkeypatch, {url: (200, {}, b"ok")}, {})
-    monkeypatch.setattr(httpmod, "_resolve_host", lambda *_: pytest.fail("default fetch must not resolve"))
-    assert client.fetch(url).status == 200
-    assert calls == [url]
+    client, calls = _client_with(monkeypatch, {url: (200, {}, b"ok")}, {"127.0.0.1": {"127.0.0.1"}})
+    with pytest.raises(ApiError):
+        client.fetch(url)
+    assert calls == []
 
 
 class _FakeSerp:
@@ -250,7 +251,7 @@ def test_onpage_serp_gap_does_not_fetch_private_serp_results(monkeypatch, make_c
     client, calls = _client_with(
         monkeypatch,
         {target: page, public: page},
-        {"competitor.example": {"8.8.8.8"}, "127.0.0.1": {"127.0.0.1"}, "169.254.169.254": {"169.254.169.254"}},
+        {"example.com": {"8.8.8.8"}, "competitor.example": {"8.8.8.8"}, "127.0.0.1": {"127.0.0.1"}, "169.254.169.254": {"169.254.169.254"}},
     )
     serp = {"organic": [
         {"url": "http://169.254.169.254/latest/meta-data/", "domain": "169.254.169.254"},
@@ -512,6 +513,35 @@ def test_review_actual_connection_uses_only_the_validated_dns_answer(offline_soc
     assert b"Host: public.example\r\n" in b"".join(offline_sockets["sent"])
     if scheme == "https":
         assert offline_sockets["tls"] == [("public.example", True, ssl.CERT_REQUIRED)]
+
+
+def test_trailing_dot_uses_certificate_name_for_sni_and_host(offline_sockets):
+    assert HttpClient().fetch("https://public.example./path").status == 200
+    assert offline_sockets["dns"] == ["public.example."]
+    assert offline_sockets["tls"] == [("public.example", True, ssl.CERT_REQUIRED)]
+    assert b"Host: public.example\r\n" in b"".join(offline_sockets["sent"])
+
+
+def test_unicode_path_and_query_are_encoded_without_double_encoding(offline_sockets):
+    assert HttpClient().fetch("https://public.example/caf\u00e9/%20?q=\u00e9&x=%2F").status == 200
+    assert b"GET /caf%C3%A9/%20?q=%C3%A9&x=%2F HTTP/1.1\r\n" in b"".join(offline_sockets["sent"])
+
+
+def test_request_target_retains_ascii_query_and_double_slash(offline_sockets):
+    assert HttpClient().fetch("https://public.example//a?key[]=1#fragment").status == 200
+    assert b"GET //a?key[]=1 HTTP/1.1\r\n" in b"".join(offline_sockets["sent"])
+
+
+def test_invalid_method_and_headers_do_not_resolve_dns(offline_sockets):
+    for method, headers in [
+        ("POST", None), ("GET", {"Authorization": "synthetic"}),
+        ("GET", {"X-Test": "value\r\nInjected: yes"}), ("GET", {"X-Test": "\u20ac"}),
+        ("GET", {"user-agent": "override"}), ("GET", {"Upgrade": "websocket"}),
+    ]:
+        with pytest.raises(ApiError):
+            HttpClient().fetch("https://public.example/", method=method, extra_headers=headers)
+    assert offline_sockets["dns"] == []
+    assert offline_sockets["connects"] == []
 
 
 def test_review_redirect_pins_each_new_host(offline_sockets):

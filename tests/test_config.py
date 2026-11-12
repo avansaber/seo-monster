@@ -32,7 +32,7 @@ def test_env_only_resolution():
         "SEO_MCP_GOOGLE_TOKEN": "/c/token.json",
         "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:example.com",
         "SEO_MCP_GA4_PROPERTY_ID": "properties/123",
-        "PSI_API_KEY": "AIzaKEY",
+        "PSI_API_KEY": "synthetic_psi_key_env",
         "CF_API_TOKEN": "cftoken",
         "CF_ZONE": "example.com",
     }
@@ -41,7 +41,7 @@ def test_env_only_resolution():
     assert cfg.google.token == "/c/token.json"
     assert cfg.gsc_default_site == "sc-domain:example.com"
     assert cfg.ga4_property_id == "properties/123"
-    assert cfg.psi_api_key == "AIzaKEY"
+    assert cfg.psi_api_key == "synthetic_psi_key_env"
     assert cfg.cf_api_token == "cftoken"
     assert cfg.cf_zone == "example.com"
 
@@ -55,18 +55,18 @@ def test_file_fallback_when_env_absent(tmp_path):
         token = "/file/token.json"
 
         [gsc]
-        default_site = "sc-domain:fromfile.com"
+        default_site = "sc-domain:synthetic-site-a.example"
         data_state = "final"
 
         [ga4]
         property_id = "properties/999"
 
         [psi]
-        api_key = "filekey"
+        api_key = "synthetic_psi_key"
 
         [cloudflare]
-        api_token = "filetoken"
-        zone = "fromfile.com"
+        api_token = "synthetic_cf_token_toml"
+        zone = "synthetic-site-a.example"
 
         [server]
         allow_destructive = true
@@ -74,12 +74,12 @@ def test_file_fallback_when_env_absent(tmp_path):
     )
     cfg = load_config(env={}, config_path=path)
     assert cfg.google.oauth_client == "/file/client.json"
-    assert cfg.gsc_default_site == "sc-domain:fromfile.com"
+    assert cfg.gsc_default_site == "sc-domain:synthetic-site-a.example"
     assert cfg.gsc_data_state == "final"
     assert cfg.ga4_property_id == "properties/999"
-    assert cfg.psi_api_key == "filekey"
-    assert cfg.cf_api_token == "filetoken"
-    assert cfg.cf_zone == "fromfile.com"
+    assert cfg.psi_api_key == "synthetic_psi_key"
+    assert cfg.cf_api_token == "synthetic_cf_token_toml"
+    assert cfg.cf_zone == "synthetic-site-a.example"
     assert cfg.allow_destructive is True
     assert cfg.source_path == path
 
@@ -89,19 +89,19 @@ def test_env_wins_over_file(tmp_path):
         tmp_path,
         """
         [gsc]
-        default_site = "sc-domain:fromfile.com"
+        default_site = "sc-domain:synthetic-site-a.example"
 
         [cloudflare]
-        api_token = "filetoken"
+        api_token = "synthetic_cf_token_toml"
         """,
     )
     env = {
-        "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:fromenv.com",
-        "CF_API_TOKEN": "envtoken",
+        "SEO_MCP_GSC_DEFAULT_SITE": "sc-domain:synthetic-site-b.example",
+        "CF_API_TOKEN": "synthetic_cf_token_env",
     }
     cfg = load_config(env=env, config_path=path)
-    assert cfg.gsc_default_site == "sc-domain:fromenv.com"
-    assert cfg.cf_api_token == "envtoken"
+    assert cfg.gsc_default_site == "sc-domain:synthetic-site-b.example"
+    assert cfg.cf_api_token == "synthetic_cf_token_env"
 
 
 def test_service_account_standard_env_fallback():
@@ -145,11 +145,11 @@ def test_env_blank_value_does_not_override_file(tmp_path):
         tmp_path,
         """
         [gsc]
-        default_site = "sc-domain:fromfile.com"
+        default_site = "sc-domain:synthetic-site-a.example"
         """,
     )
     cfg = load_config(env={"SEO_MCP_GSC_DEFAULT_SITE": "   "}, config_path=path)
-    assert cfg.gsc_default_site == "sc-domain:fromfile.com"
+    assert cfg.gsc_default_site == "sc-domain:synthetic-site-a.example"
 
 
 def test_path_fields_expand_tilde_and_env_vars(monkeypatch):
@@ -182,6 +182,6 @@ def test_path_fields_pass_through_when_already_absolute():
 def test_malformed_toml_falls_back_to_env(tmp_path):
     path = tmp_path / "bad.toml"
     path.write_text("this is = = not valid toml [[[")
-    cfg = load_config(env={"CF_API_TOKEN": "envtoken"}, config_path=str(path))
-    assert cfg.cf_api_token == "envtoken"
+    cfg = load_config(env={"CF_API_TOKEN": "synthetic_cf_token_env"}, config_path=str(path))
+    assert cfg.cf_api_token == "synthetic_cf_token_env"
     assert cfg.source_path is None

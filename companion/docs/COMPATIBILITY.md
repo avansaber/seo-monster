@@ -12,7 +12,7 @@ The MCP surface targets SDK 2 only. The CLI and persisted saved-result, project,
 
 Known provider failures use `is_error=True` while retaining the complete JSON error envelope. Capture checks that this flag agrees with `ok`, preserves failures as unavailable evidence and records unknown cost as null. Transport failures have separate adapter error codes. Invalid registry, schema or content shapes are rejected; they never become confident zero observations. Registry pagination uses typed SDK 2 parameters with bounded pages and repeated-cursor detection.
 
-The companion's 17 local tools return typed structured envelopes and matching text content. Ten tools read local records and seven create local records; none approves or executes an external change. Loopback HTTP and stdio exercise the same fixture workflow. Protocol tests do not establish native-host installation, authentication, skill selection or directory acceptance. Those remain separately qualified in `OPENAI_HOST_COMPATIBILITY.md`.
+The companion's 17 local tools return typed structured envelopes and matching text content. Ten tools read local records and seven create local records; none approves or executes an external change. Loopback HTTP and stdio exercise the same fixture workflow. Protocol tests do not establish native-host installation, authentication, skill selection or directory acceptance. Those require separate qualification.
 
 A changed engine contract requires semantic review, full engine/companion tests, an actual protocol handshake and a labelled contract snapshot. SDK field aliases must be serialized explicitly; updating a digest alone does not establish compatibility.
 

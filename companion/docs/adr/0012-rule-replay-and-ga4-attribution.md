@@ -32,7 +32,7 @@ Implement only a read-only replay preview in this increment. Keep the installed 
 
 The result reports current and stored versions, canonical digests, added/removed/changed identifiers for evidence, findings, and recommendations, plus decisions, plans, and experiments that depend on affected analytical records. Preview never inserts, updates, deletes, approves, or executes. There is no apply command. Expose it through the CLI and one accurately read-only fixed-project MCP tool because the host passes only a snapshot identifier, not a provenance-sensitive bulk payload.
 
-Independent Web-growth review found two omissions in the first implementation. Dependency reporting covered recommendation records but not ownership assignments, conflicts, decisions, and plans that cite replayed evidence. It now traverses those direct evidence and downstream decision links. The CLI also opened and migrated a nonexistent database before rejecting a missing snapshot; `replay-preview` now requires an existing database file before constructing the store. Both behaviors have dedicated regressions.
+Dependency reporting traverses direct evidence and downstream decision links, including ownership assignments, conflicts, decisions, and plans that cite replayed evidence. The `replay-preview` command requires an existing database file before constructing the store. Both behaviors have dedicated regressions.
 
 GA4 property-to-site binding remains deferred until its entity, supersession, portability, backup, row-host, and rule-migration contracts are designed together. Property ID alone remains explicitly documented as insufficient evidence; the workbench does not infer a site from it.
 

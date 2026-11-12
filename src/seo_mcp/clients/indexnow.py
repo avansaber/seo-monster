@@ -85,14 +85,13 @@ class IndexNowClient:
         if host is None:
             raise ApiError(
                 ErrorCode.INVALID_INPUT,
-                f"Could not derive host from URL: {urls[0]!r}",
+                "Could not derive a host from the submitted URL.",
             )
         for u in urls[1:]:
             if _host_of(u) != host:
                 raise ApiError(
                     ErrorCode.INVALID_INPUT,
-                    "IndexNow requires all URLs in a batch to share the same host. "
-                    f"Mixed hosts found: {host} vs {_host_of(u)}.",
+                    "IndexNow requires all URLs in a batch to share the same host.",
                 )
         body: dict[str, Any] = {
             "host": host,
@@ -117,21 +116,23 @@ class IndexNowClient:
                 # (though urlopen would raise HTTPError for >=400 anyway).
                 return {"accepted": True, "status": status}
         except urllib.error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="replace")
-            raise self._map_error(exc.code, body_text) from exc
+            exc.close()
+            raise self._map_error(exc.code, "") from exc
         except urllib.error.URLError as exc:
             raise ApiError(
                 ErrorCode.UPSTREAM_ERROR,
-                f"IndexNow request failed: {exc.reason}",
+                "IndexNow request failed.",
             ) from exc
 
     @staticmethod
     def _map_error(status: int, body: str) -> ApiError:
+        # The upstream body can reflect request credentials and submitted URLs.
+        del body
         if status == 400:
             return ApiError(
                 ErrorCode.INVALID_INPUT,
                 "IndexNow rejected the request as malformed (HTTP 400).",
-                details={"status": 400, "body": body[:500]},
+                details={"status": 400, "body": "[redacted]"},
             )
         if status == 403:
             return ApiError(
@@ -142,25 +143,25 @@ class IndexNowClient:
                     "the key string as the file body, then retry. Or pass an "
                     "explicit keyLocation when submitting."
                 ),
-                details={"status": 403, "body": body[:500]},
+                details={"status": 403, "body": "[redacted]"},
             )
         if status == 422:
             return ApiError(
                 ErrorCode.INVALID_INPUT,
                 "IndexNow says the URL list contains URLs that do not match the host.",
-                details={"status": 422, "body": body[:500]},
+                details={"status": 422, "body": "[redacted]"},
             )
         if status == 429:
             return ApiError(
                 ErrorCode.RATE_LIMITED,
                 "IndexNow rate limit hit (HTTP 429).",
                 remediation="Wait before submitting again; the spec rate-limits per host.",
-                details={"status": 429, "body": body[:500]},
+                details={"status": 429, "body": "[redacted]"},
             )
         return ApiError(
             ErrorCode.UPSTREAM_ERROR,
             f"IndexNow returned HTTP {status}.",
-            details={"status": status, "body": body[:500]},
+            details={"status": status, "body": "[redacted]"},
         )
 
     def probe(self) -> bool:

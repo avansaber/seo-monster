@@ -40,7 +40,7 @@ flowchart LR
     Web["Hosted ChatGPT"] -.->|"deferred: authenticated hosted boundary"| Facade
 ```
 
-The plugin package and local facade are implemented; a hosted deployment is not. The MCP facade only reads or records local workbench data and never forwards arbitrary tool calls. Local record writes are labeled as writes. See `OPENAI_HOST_COMPATIBILITY.md` and ADR 0009 for host-specific evidence and remaining gates.
+The plugin package and local facade are implemented; a hosted deployment is not. The MCP facade only reads or records local workbench data and never forwards arbitrary tool calls. Local record writes are labeled as writes. See ADR 0009 for host compatibility details.
 
 ## Boundaries
 

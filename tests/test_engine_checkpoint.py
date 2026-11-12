@@ -227,4 +227,4 @@ def test_status_and_preflight_keep_optional_provider_failure_boundaries():
     assert _probe({"gsc": FailedProvider()}, "gsc", True) is False
     assert preflight_get(Unavailable(), "https://example.invalid/") is None
     result = preflight_get({"http": FailedProvider()}, "https://example.invalid/")
-    assert result == (None, "", "synthetic fetch failure")
+    assert result == (None, "", "preflight fetch failed")

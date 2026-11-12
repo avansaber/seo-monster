@@ -92,7 +92,7 @@ def test_simulation_later_backdated_approval_does_not_rewrite_frozen_history(tmp
     "mutation",
     [
         lambda value: value["source"].update(reference="/Users/example/private/receipt.json"),
-        lambda value: value["source"].update(authorization="Bearer unsafe-fixture-token"),
+        lambda value: value["source"].update(authorization="Bearer synthetic-example-token"),
         lambda value: value.update(verification_state="executed"),
         lambda value: value["operations"][0].update(external_write=True),
     ],

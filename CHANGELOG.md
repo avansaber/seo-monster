@@ -9,6 +9,17 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
+## Unreleased
+
+### Security
+
+- Website fetches require public addresses on each hop. Private and local staging targets are refused, and the `public_only` argument cannot disable this policy. Sitemap decompression is limited to 50 MiB.
+- Redirects follow HTTP 301, 302, 303, 307 and 308. Redirect audit loops, limits and refused hops return errors with hop schemes and statuses and redacted URL values. Successful results may still include page URLs.
+- Website fetches use direct connections and refuse proxies reported by Python's standard proxy discovery. Proxy auto-configuration and other system policies may not be detected. NAT64 using the well-known or local-use prefixes, 6to4 and Teredo are unsupported. Validate website checks on the intended network before upgrading.
+- IndexNow setup key checks use the public website fetch policy, including the direct connection requirement. Key-file locations are redacted from IndexNow preflight errors. Website fetches accept only GET and HEAD and reject credential or connection-header overrides.
+- IndexNow provider errors redact response bodies and transport details that could contain request credentials.
+- Website-fetch failure details redact URL fields that can contain secrets; successful analysis results retain URLs.
+
 ## [0.10.1] - 2026-11-06
 
 ### Upgrade
@@ -693,7 +704,7 @@ tool outputs beyond two additive notes (52 tools / 13 prompts).
   documenting that PageSpeed Insights field (CrUX) data is being deprecated in
   the PSI API and pointing to `crux_snapshot` / `crux_history` as the durable
   source of field Core Web Vitals. `field_data_available` already degrades
-  honestly to `false` when PSI returns no `loadingExperience` (PLAN Part 6b A2).
+  honestly to `false` when PSI returns no `loadingExperience`.
 - Prompt-taxonomy coherence: `technical_seo_audit` (one page, deep) and
   `structured_data_audit` (the Rich Results lane) descriptions now name their
   axis and cross-reference the other audit prompts, so the four audit-ish
@@ -780,13 +791,12 @@ Documentation + polish patch. No new tools or prompts (52 tools / 13 prompts).
 - `ga4_site_search` treats rows whose `searchTerm` is empty or "(not set)" as
   no-data and emits a configuration-specific note (search events firing without
   the term parameter captured), instead of reporting `has_site_search_data:
-  true` on empty terms (FEEDBACK Round 11 §15e.1).
+  true` on empty terms.
 
 ### Docs
 
 - Documented the `crux_snapshot` response shape: `overall_category` for the
-  rolled-up rating; `p75_ms` for time metrics and `p75` for the unitless CLS
-  (FEEDBACK Round 11 §15e.2).
+  rolled-up rating; `p75_ms` for time metrics and `p75` for the unitless CLS.
 
 ## [0.7.1] - 2026-05-31
 
@@ -909,7 +919,7 @@ unchanged.
 
 - Error-envelope `docs_url` links pointed at `seomonster.avansaber.com#<anchor>`,
   but the live site has none of those anchor targets, so every remediation link
-  landed at the page top (FEEDBACK Round-5 §10c.iv). `docs_url` now points at
+  landed at the page top. `docs_url` now points at
   the GitHub README, which carries an explicit `<a name>` anchor for each value.
   **(validate)** Trigger any `INVALID_INPUT` (e.g. `psi_analyze` with no `url`):
   the `docs_url` resolves to the matching README section.
@@ -951,14 +961,10 @@ unchanged.
   `coverage_state_counts` populate and `audited_count == len(urls)`
   with empty `failed`.
 
-- **`.mcpbignore` was missing `.private/` (Round 6 §11b.ii).** Local
-  `npx @anthropic-ai/mcpb pack` runs against the working tree, which
-  has access to `.private/cursor-submission/*` (gitignored but
-  present). The shipped v0.5.0 `.mcpb` on GitHub was clean because CI
-  checks out from git (never sees `.private/`), but a developer's
-  local pack would have leaked 7 files including draft submission
-  bodies and the email template. **Fix:** `.private/` added to
-  `.mcpbignore`, alongside the existing `marketing/` entry.
+- **`.mcpbignore` was missing `.private/`.** Local MCPB builds use
+  the working tree, including ignored files. The shipped v0.5.0
+  bundle was built from a clean Git checkout. **Fix:** `.private/`
+  was added to `.mcpbignore`, alongside the existing `marketing/` entry.
   **(validate)** Run `npx @anthropic-ai/mcpb pack` against the
   working tree at this commit; verify the produced bundle contains
   no `.private/`, `marketing/`, or `*.md` planning paths.

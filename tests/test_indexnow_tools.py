@@ -4,6 +4,10 @@ inject canned responses or raise ApiError."""
 
 from __future__ import annotations
 
+import io
+import urllib.error
+import urllib.request
+
 import pytest
 
 from seo_mcp.clients.errors import ApiError
@@ -30,6 +34,38 @@ class _FakeHttp:
             body_bytes=self._body.encode("utf-8"),
             final_url=url,
         )
+
+
+@pytest.mark.parametrize("status", [400, 403, 422, 429, 500])
+def test_provider_error_body_does_not_echo_credentials(status):
+    error = IndexNowClient._map_error(status, "synthetic-secret canary-9821")
+    envelope = str(error.to_envelope("indexnow"))
+    assert "synthetic-secret" not in envelope and "canary-9821" not in envelope
+    assert error.details["status"] == status
+
+
+def test_provider_transport_error_does_not_echo_credentials(monkeypatch):
+    def fail(*args, **kwargs):
+        raise urllib.error.URLError("synthetic-secret canary-9821")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fail)
+    with pytest.raises(ApiError) as error:
+        IndexNowClient("synthetic-secret").submit("https://example.test/page")
+    envelope = str(error.value.to_envelope("indexnow"))
+    assert "synthetic-secret" not in envelope and "canary-9821" not in envelope
+
+
+def test_provider_http_error_closes_body_without_exposing_it(monkeypatch):
+    body = io.BytesIO(b"synthetic-secret canary-9821")
+
+    def fail(*args, **kwargs):
+        raise urllib.error.HTTPError("https://example.test/", 403, "denied", {}, body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fail)
+    with pytest.raises(ApiError) as error:
+        IndexNowClient("synthetic-secret").submit("https://example.test/page")
+    assert body.closed
+    assert "synthetic-secret" not in str(error.value.to_envelope("indexnow"))
 
 
 class _FakeHttpUnreachable:
@@ -233,6 +269,8 @@ def test_submit_blocks_when_key_file_unreachable(make_config):
     assert result["error"]["code"] == "INVALID_INPUT"
     assert http.calls == [_LOC]
     assert client._calls == []  # never forwarded to IndexNow
+    assert _KEY not in str(result)
+    assert _LOC not in str(result)
 
 
 def test_submit_blocks_when_key_file_body_mismatch(make_config):
@@ -243,6 +281,7 @@ def test_submit_blocks_when_key_file_body_mismatch(make_config):
     )
     assert result["error"]["code"] == "INVALID_INPUT"
     assert "does not contain your key" in result["error"]["message"]
+    assert _LOC not in str(result) and _KEY not in str(result)
     assert client._calls == []
 
 
@@ -254,6 +293,7 @@ def test_submit_blocks_when_key_file_404(make_config):
     )
     assert result["error"]["code"] == "INVALID_INPUT"
     assert result["error"]["details"]["preflight_status"] == 404
+    assert _LOC not in str(result) and _KEY not in str(result)
     assert client._calls == []
 
 

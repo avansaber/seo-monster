@@ -63,7 +63,7 @@ companion/.lint-venv/bin/python -m pip install -e "companion[dev]"
 companion/.lint-venv/bin/ruff check --isolated companion/src companion/tests companion/scripts
 ```
 
-Install the matching engine in a separate integration environment when running engine contract tests. See [compatibility](docs/COMPATIBILITY.md) for the protocol boundary and [host validation](docs/HOST_VALIDATION.md) for qualification scope.
+Install the matching engine in a separate integration environment when running engine contract tests. See [compatibility](docs/COMPATIBILITY.md) for the protocol boundary and qualification scope.
 
 ## Manual workflow
 
@@ -149,9 +149,9 @@ Optional localhost-only Streamable HTTP uses the same tools. Set `SM_WORKBENCH_H
 sm-workbench-mcp --db workbench.db --project docs --transport streamable-http --port 8766
 ```
 
-Clients must send a matching Bearer token to `http://127.0.0.1:8766/mcp`. Browser Origin requests are denied. This is a single-owner development transport, **not a production or multi-user ChatGPT endpoint**. OAuth, public HTTPS/tunnel registration, desktop plugin installation and hosted ChatGPT tests remain separate gates requiring approval.
+Clients must send a matching Bearer token to `http://127.0.0.1:8766/mcp`. Browser Origin requests are denied. This is a single-owner development transport, **not a production or multi-user ChatGPT endpoint**. OAuth, public HTTPS or tunnel registration, desktop plugin installation and hosted ChatGPT use require separate qualification.
 
-Codex CLI 0.147.0 has completed an actual synthetic local MCP workflow from the independently built 0.6.0 wheel, including successful structured results from all fourteen required tools and a persisted no-execution check. Automated tests cover stdio/HTTP parity, auth, project scope, safe errors and forbidden writes. See the host plan for the narrower established claims and pending gates.
+Codex CLI 0.147.0 has completed an actual synthetic local MCP workflow from the independently built 0.6.0 wheel, including successful structured results from all fourteen required tools and a persisted no-execution check. Automated tests cover stdio/HTTP parity, auth, project scope, safe errors and forbidden writes.
 
 To explicitly opt into an authenticated Codex smoke test (model inference uses your account; SEO inputs stay synthetic):
 
@@ -166,7 +166,7 @@ SEO_MCP_CONFIG=companion/evaluation/empty.toml sm-workbench-capture \
   --tool system_status --arguments arguments.json --output status-capture.json
 ```
 
-Run this example from the repository root with `{}` in `arguments.json`; it uses the empty fixture configuration and performs no probes. The capture command forwards `SEO_MCP_CONFIG`, not the entire host credential environment. Real `system_status` results can include private configuration paths and are then refused by the portable privacy guard; they are not silently rewritten. Use local engine diagnostics for private status inspection. GSC and GA4 read captures require an operator-approved live provider setup and can consume provider quota; they were not used in this session.
+Run this example from the repository root with `{}` in `arguments.json`; it uses the empty fixture configuration and performs no probes. The capture command forwards `SEO_MCP_CONFIG`, not the entire host credential environment. Real `system_status` results can include private configuration paths and are then refused by the portable privacy guard; they are not silently rewritten. Use local engine diagnostics for private status inspection. GSC and GA4 read captures require an operator-approved live provider setup and can consume provider quota.
 
 ## Documentation map
 
@@ -175,11 +175,8 @@ Run this example from the repository root with `{}` in `arguments.json`; it uses
 - [`docs/PRODUCT_BRIEF.md`](docs/PRODUCT_BRIEF.md): primary user, job, wedge, non-goals, and success measures
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): component diagram and domain flow
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md): independent release and migration strategy
-- [`docs/OPENAI_HOST_COMPATIBILITY.md`](docs/OPENAI_HOST_COMPATIBILITY.md): ChatGPT/Codex transport, packaging, testing, and release gates
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md): local and future multi-user risks
-- [`docs/ROADMAP.md`](docs/ROADMAP.md): build, defer, and reject decisions
 - [`docs/PORTABLE_FORMAT.md`](docs/PORTABLE_FORMAT.md): import/export semantics
-- [`docs/IMPLEMENTATION_REPORT.md`](docs/IMPLEMENTATION_REPORT.md): shipped slice, commands, results, and limitations
 - [`docs/adr`](docs/adr): architecture decisions
 
 ## License and reuse

@@ -165,7 +165,7 @@ def test_linkgraph_skips_mailto_and_anchors(make_config):
     home = "https://example.com/"
     other = "https://example.com/x"
     http = FakeHttpClient({
-        home: _page(home, ["mailto:a@b.com", "#section", "tel:+1234", "javascript:void(0)", other]),
+        home: _page(home, ["mailto:synthetic@example.invalid", "#section", "tel:+1234", "javascript:void(0)", other]),
         other: _page(other, []),
     })
     result = linkgraph_tools.internal_link_graph({"start_url": home, "max_depth": 1}, make_config(), _clients(http))

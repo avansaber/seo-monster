@@ -95,9 +95,15 @@ def robots_txt_validate(arguments, config, clients) -> dict[str, Any]:
     site_url = arguments.get("site_url")
     if not site_url:
         return err(ErrorCode.INVALID_INPUT, _SERVICE, "site_url is required.", docs_url=DOCS_BASE + "technical")
-    parsed = urlparse(site_url)
-    if not parsed.scheme or not parsed.netloc:
-        return err(ErrorCode.INVALID_INPUT, _SERVICE, f"site_url must be absolute, got {site_url!r}.")
+    try:
+        if not isinstance(site_url, str) or any(ord(c) <= 32 or ord(c) == 127 for c in site_url):
+            raise ValueError("Invalid URL")
+        parsed = urlparse(site_url)
+        if (parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username is not None
+                or parsed.port == 0 or "%" in parsed.hostname):
+            raise ValueError("Invalid authority")
+    except (ValueError, UnicodeError):
+        return err(ErrorCode.INVALID_INPUT, _SERVICE, "site_url must be absolute.")
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
     try:
         resp = client.fetch(robots_url)
@@ -118,7 +124,7 @@ def robots_txt_validate(arguments, config, clients) -> dict[str, Any]:
             ErrorCode.UPSTREAM_ERROR,
             _SERVICE,
             f"robots.txt fetch returned HTTP {resp.status}.",
-            details={"status": resp.status, "robots_url": robots_url},
+            details={"status": resp.status, "robots_url": "[redacted]"},
         )
     normal_text = resp.body_text
     # Cache-bust: the edge may serve a STALE cached robots.txt while the live

@@ -8,8 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import pytest
+
 from seo_mcp.clients.errors import ApiError
-from seo_mcp.clients.http import HttpResponse, RedirectHop
+from seo_mcp.clients.http import HttpClient, HttpResponse, RedirectHop
 from seo_mcp.errors import ErrorCode
 from seo_mcp.tools import redirect_tools, robots_tools
 
@@ -107,6 +109,34 @@ def test_redirect_chain_audit_surfaces_loop_error(make_config):
     assert result["ok"] is False
     assert result["error"]["code"] == ErrorCode.UPSTREAM_ERROR
     assert "loop" in result["error"]["message"].lower()
+
+
+@pytest.mark.parametrize("scenario", ["loop", "limit", "denied"])
+def test_redirect_audit_error_retains_redacted_hop_diagnostics(monkeypatch, scenario):
+    def resolve(host, port):
+        return {"127.0.0.1"} if host == "blocked.test" else {"8.8.8.8"}
+
+    calls = []
+
+    def redirect(self, method, url, **kwargs):
+        calls.append(url)
+        location = {
+            "loop": "https://example.test/secret-path?key=canary-9821",
+            "limit": f"https://example.test/{len(calls)}?key=canary-9821",
+            "denied": "http://blocked.test/secret-path?key=canary-9821",
+        }[scenario]
+        return 302, {"location": location}, b""
+
+    monkeypatch.setattr("seo_mcp.clients.http._resolve_host", resolve)
+    monkeypatch.setattr(HttpClient, "_http_request_public", redirect)
+    result = redirect_tools.redirect_chain_audit(
+        {"url": "https://example.test/secret-path?key=canary-9821", "max_redirects": 1}, None, {"http": HttpClient()}
+    )
+    assert result["ok"] is False
+    assert result["error"]["details"]["statuses"]
+    assert "canary-9821" not in str(result)
+    assert "secret-path" not in str(result)
+    assert "example.test" not in str(result)
 
 
 # --- robots_txt_validate ---------------------------------------------------

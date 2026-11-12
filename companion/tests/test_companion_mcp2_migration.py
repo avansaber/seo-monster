@@ -156,7 +156,7 @@ def test_http_guard_rejects_untrusted_host_before_app(tmp_path):
     called = []
     async def app(*_):
         called.append(True)
-    token = "offline-fixture-token-32-characters-only"
+    token = "synthetic_workbench_token_0123456789abcdef"
     guard = LocalHTTPGuard(app, token)
     async def check():
         sent = []

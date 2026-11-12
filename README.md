@@ -87,6 +87,16 @@ verification URLs. Providers receive the arguments and credentials needed for
 the selected request; optional paid calls can incur provider charges. These
 calls do not add maintainer telemetry.
 
+Website checks accept publicly routable targets only. Private, loopback and
+local staging targets are refused, including redirects and linked pages. Networks
+that require the well-known NAT64 prefix `64:ff9b::/96` are not supported by
+these checks. Website fetches use direct connections and refuse HTTP, HTTPS,
+all-protocol or SOCKS proxies reported by Python's standard proxy discovery.
+Proxy auto-configuration and other system policies may not be detected. A
+configured proxy is refused even when a bypass list includes the target.
+SEO analysis results can include complete supplied or discovered page URLs,
+including paths and query strings. Avoid secrets in URLs shared with these tools.
+
 The engine does not keep a query/result history. The separately installed local
 Workbench stores user-owned evidence and decision records in SQLite and creates
 exports only when requested. Your MCP host controls its own transcripts and
