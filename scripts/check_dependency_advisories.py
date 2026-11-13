@@ -4,6 +4,10 @@ The evaluation is offline and deterministic: the same snapshot, inventory, proje
 metadata and --now give byte-identical output. Fetching current advisory data is a
 separate, read-only step whose response is saved as a snapshot before evaluation.
 
+An advisory may list several disjoint affected ranges, one record per release line, each with its own first-patched
+version. Overlapping ranges, a first-patched version inside a sibling range, or sibling ranges with different
+severities refuse, and a checker that predates this support refuses such a snapshot instead of mis-evaluating it.
+
 Clearance fails closed. An unavailable, stale, future-dated, malformed or internally
 inconsistent snapshot refuses. So does an inventory that is empty, contradictory,
 malformed or not covered by the snapshot's exact-version queries. A missing
@@ -165,16 +169,31 @@ def load_snapshot(data: object, now: datetime.datetime, max_age: datetime.timede
             raise Refusal("inconsistent-first-patched")
         record = {"id": ident, "package": normalise(item.get("package")), "severity": item["severity"],
                   "affected": item["affected"], "clauses": clauses, "first_patched": patched}
-        key = (ident, record["package"])
+        # An advisory may list several disjoint affected ranges, one per release line, each with its own
+        # first-patched version. Each range is its own record; a repeat of the same range must be identical.
+        key = (ident, record["package"], clauses)
         if key in advisories and any(advisories[key][f] != record[f] for f in ("severity", "affected", "first_patched")):
             raise Refusal("conflicting-advisory-records")
         advisories[key] = record
+    siblings: dict[tuple[str, str], list[dict]] = {}
+    for record in advisories.values():
+        siblings.setdefault((record["id"], record["package"]), []).append(record)
+    for group in siblings.values():
+        if len({r["severity"] for r in group}) > 1:
+            raise Refusal("conflicting-advisory-records")  # one advisory, one severity, whatever its ranges
+        for index, first in enumerate(group):
+            for second in group[index + 1:]:
+                if not empty_range(first["clauses"] + second["clauses"]):
+                    raise Refusal("overlapping-advisory-ranges")  # ambiguous first-patched version
+            patched = first["first_patched"]
+            if patched is not None and any(in_range(version(patched, "invalid-first-patched"), other["clauses"]) for other in group):
+                raise Refusal("inconsistent-first-patched")  # a fix inside another line's affected range
 
     queries: dict[tuple[str, Version], frozenset[str]] = {}
     raw = data.get("queries")
     if not isinstance(raw, list) or not raw:
         raise Refusal("invalid-queries")
-    known = {ident for ident, _ in advisories}
+    known = {ident for ident, _, _ in advisories}
     for item in raw:
         if not isinstance(item, dict) or not isinstance(item.get("advisories"), list) or not all(
                 isinstance(i, str) and ADVISORY_ID.fullmatch(i) for i in item["advisories"]):
@@ -185,7 +204,7 @@ def load_snapshot(data: object, now: datetime.datetime, max_age: datetime.timede
             raise Refusal("unknown-query-advisory")
         if key in queries and queries[key] != ids:
             raise Refusal("conflicting-query-results")
-        expected = {a["id"] for (_, package), a in advisories.items() if package == key[0] and in_range(key[1], a["clauses"])}
+        expected = {a["id"] for a in advisories.values() if a["package"] == key[0] and in_range(key[1], a["clauses"])}
         if ids != expected:
             raise Refusal("query-range-disagreement")  # every mode refuses a snapshot whose two views differ
         queries[key] = ids
@@ -248,8 +267,7 @@ def installed_inventory() -> dict:
 
 
 def matches_for(snapshot: dict, name: str, value: Version) -> list[dict]:
-    return [a for (_, package), a in snapshot["advisories"].items()
-            if package == name and in_range(value, a["clauses"])]
+    return [a for a in snapshot["advisories"].values() if a["package"] == name and in_range(value, a["clauses"])]
 
 
 def verdict(matches: list[dict], reasons: list[str]) -> str:
@@ -348,7 +366,7 @@ def evaluate_floors(snapshot: dict, requirements: list[Requirement], lock: dict,
     for requirement in requirements:
         declared.setdefault(normalise(requirement.name), []).append(requirement)
     gaps = []
-    for (ident, package), advisory in sorted(snapshot["advisories"].items()):
+    for (ident, package, _), advisory in sorted(snapshot["advisories"].items(), key=lambda kv: (kv[0][0], kv[0][1], kv[1]["affected"])):
         if package not in reachable:
             continue
         if not any(floor_excludes(r, advisory["clauses"]) for r in declared.get(package, [])):

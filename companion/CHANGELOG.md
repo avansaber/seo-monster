@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The `mcp` extra requires pydantic 2.14.2 or later, outside the affected ranges of four published maintainer advisories. Existing environments replace older copies on reinstall. The CLI still installs without dependencies.
 - Optional extras require dependency versions outside the affected ranges of published GitHub advisories: the `mcp` extra raises anyio, cryptography, PyJWT, python-multipart and Starlette, and the `test` and `dev` extras raise anyio and certifi. Existing environments replace older copies on reinstall. The CLI still installs without dependencies.
 - MCP capture and local serving require Python SDK 2.3 or later within major version 2. The CLI keeps its dependency-free installation.
 - Provider-error envelopes remain inspectable as unavailable evidence, with the original error and unknown cost preserved. Typed pagination, error-flag consistency and text/structured-content checks protect capture provenance.

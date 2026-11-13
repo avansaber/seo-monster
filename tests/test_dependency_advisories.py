@@ -25,6 +25,10 @@ FIXTURES = ROOT / "tests" / "fixtures" / "dependency_advisories"
 SNAPSHOT = FIXTURES / "snapshot-2026-11-06.json"
 OLD_LOCK = FIXTURES / "inventory-0.10.0-lock.json"
 REPLAY_NOW = "2026-11-06T19:00:00Z"
+# The current lock is replayed against the later snapshot, which keeps every record above and
+# queries the versions locked after 0.11.0 (see test_dependency_advisories_grpc_pydantic.py).
+CURRENT_SNAPSHOT = FIXTURES / "snapshot-2026-11-13.json"
+CURRENT_NOW = json.loads(CURRENT_SNAPSHOT.read_text())["retrieved_at"]
 
 spec = importlib.util.spec_from_file_location("check_dependency_advisories", SCRIPT)
 advisories = importlib.util.module_from_spec(spec)
@@ -77,7 +81,7 @@ def test_snapshot_replay_finds_every_known_range_in_the_0_10_0_lock():
 
 
 def test_locked_versions_match_no_known_advisory_range():
-    status, out, _ = cli("inventory", "--snapshot", str(SNAPSHOT), "--lock", str(ROOT / "uv.lock"), "--now", REPLAY_NOW)
+    status, out, _ = cli("inventory", "--snapshot", str(CURRENT_SNAPSHOT), "--lock", str(ROOT / "uv.lock"), "--now", CURRENT_NOW)
     assert (status, out["verdict"], out["reasons"], out["matches"]) == (0, "clear", [], [])
 
 
@@ -309,6 +313,34 @@ def test_duplicate_advisory_record_cannot_downgrade_severity(tmp_path):
     assert replay(tmp_path, data, env(("anyio", "4.14.2")))["verdict"] == "clear"
 
 
+def sibling(first_patched, affected, severity="medium", ident="GHSA-2222-3333-4444"):
+    return {"id": ident, "package": "anyio", "severity": severity, "affected": affected, "first_patched": first_patched,
+            "url": f"https://github.com/advisories/{ident}"}
+
+
+def test_one_advisory_may_list_disjoint_ranges_with_their_own_first_patched_versions(tmp_path):
+    data = snapshot_data()
+    data["advisories"] += [sibling("1.0", "< 1.0"), sibling("2.1", ">= 2.0, < 2.1"), sibling("3.1", "= 3.0")]
+    # Queried versions of the project's anyio all sit above these ranges, so every query still agrees.
+    assert replay(tmp_path, data, env(("anyio", "4.14.2")))["verdict"] == "clear"
+    loaded = advisories.load_snapshot(data, advisories.parse_time(REPLAY_NOW, "t"), advisories.datetime.timedelta(hours=24))
+    assert sum(1 for (ident, _, _) in loaded["advisories"] if ident == "GHSA-2222-3333-4444") == 3
+
+
+@pytest.mark.parametrize("records,reason", [
+    ([sibling(None, "< 1.0"), sibling(None, ">= 0.5, < 0.9")], "overlapping-advisory-ranges"),
+    ([sibling(None, ">= 1.0, < 2.0"), sibling(None, "= 1.5")], "overlapping-advisory-ranges"),
+    ([sibling("2.0", ">= 1.0, < 2.0"), sibling("3.0", ">= 2.0, < 3.0")], "inconsistent-first-patched"),
+    ([sibling("1.0", "< 1.0"), sibling("2.0", ">= 1.5, < 2.0", severity="high")], "conflicting-advisory-records"),
+    ([sibling("1.0", "< 1.0"), sibling("1.0", "<1.0")], "conflicting-advisory-records"),  # same range, different spelling
+])
+def test_inconsistent_sibling_ranges_of_one_advisory_refuse(tmp_path, records, reason):
+    data = snapshot_data()
+    data["advisories"] += records
+    out = replay(tmp_path, data, env(("anyio", "4.14.2")))
+    assert (out["verdict"], out["reasons"]) == ("refused", [reason])
+
+
 @pytest.mark.parametrize("member", [{"id": "GHSA-2222-3333-4444"}, ["GHSA-2222-3333-4444"], 7, None])
 def test_non_string_query_member_refuses_without_traceback(tmp_path, member):
     data = snapshot_data()
@@ -442,13 +474,13 @@ def test_local_lock_source_is_exempt_only_for_the_lock_root_project(tmp_path, so
 
 def test_lock_root_comes_from_the_project_beside_the_lock(tmp_path):
     (tmp_path / "uv.lock").write_text((ROOT / "uv.lock").read_text())
-    status, out, _ = cli("inventory", "--snapshot", str(SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", REPLAY_NOW)
+    status, out, _ = cli("inventory", "--snapshot", str(CURRENT_SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", CURRENT_NOW)
     assert (status, out["reasons"]) == (1, ["unavailable-input:lock-project"])
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'someone-else'\n")
-    status, out, _ = cli("inventory", "--snapshot", str(SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", REPLAY_NOW)
+    status, out, _ = cli("inventory", "--snapshot", str(CURRENT_SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", CURRENT_NOW)
     assert (status, out["reasons"]) == (1, ["unverifiable-lock-source"])
     (tmp_path / "pyproject.toml").write_text((ROOT / "pyproject.toml").read_text())
-    status, out, _ = cli("inventory", "--snapshot", str(SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", REPLAY_NOW)
+    status, out, _ = cli("inventory", "--snapshot", str(CURRENT_SNAPSHOT), "--lock", str(tmp_path / "uv.lock"), "--now", CURRENT_NOW)
     assert status == 0 and out["inputs"]["lock-project"] == hashlib.sha256((ROOT / "pyproject.toml").read_bytes()).hexdigest()
 
 
