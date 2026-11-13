@@ -9,6 +9,29 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
+## [0.11.1] - 2026-11-13
+
+### Upgrade
+
+- Upgrading an existing environment to 0.11.1, for example with `pip install --upgrade seo-monster`, replaces older copies of grpcio and pydantic, because the package now declares them as minimum versions. The Claude Desktop `.mcpb` bundle installs the same versions from its updated lockfile.
+- Tools, prompts, configuration and result envelopes are unchanged. Python 3.11 or later and MCP Python SDK 2.3 or later, below version 3, remain required.
+
+### Security
+
+- The lockfile and the published package metadata now require grpcio and pydantic versions outside the affected ranges of six published maintainer security advisories against the 0.11.0 lock. These advisories were not listed by OSV or GitHub's global advisory database when checked, so dependency alerts did not report them. This entry does not assess whether any advisory was reachable through SEOMonster; the Google Analytics Data API client does use gRPC, and GHSA-2xm2-c8xx-p9vh concerns grpcio's bundled root certificate store.
+
+  | Package | 0.11.0 lock | 0.11.1 lock | 0.11.1 minimum | Advisories |
+  |---|---|---|---|---|
+  | grpcio | 1.80.0 | 1.85.1 | 1.85.1 | GHSA-2xm2-c8xx-p9vh, GHSA-7jmm-cgrp-9cvh |
+  | pydantic | 2.13.4 | 2.14.3 | 2.14.2 | GHSA-3r8g-cqwr-jr29, GHSA-955g-x97g-8mcp, GHSA-gj4f-r7mf-jjxh, GHSA-qpmf-fgh3-ff25 |
+
+- GHSA-v2cv-hgj4-927q (gRPC xDS routing and RBAC) names no package, so the advisory snapshot does not record it; its patched release is the same 1.85.1 minimum.
+- Three packages moved only because the new releases require them: pydantic-core 2.46.4 to 2.50.4, typing-extensions 4.15.0 to 4.16.0 and typing-inspection 0.4.2 to 0.4.5. No other locked dependency changed. The optional Workbench source package applies the pydantic minimum in its `mcp` extra; its CLI still installs without dependencies.
+
+### Development
+
+- `tests/fixtures/dependency_advisories/snapshot-2026-11-13.json` extends the 2026-11-06 snapshot with the six maintainer advisories and recomputes every exact-version query. It records every published range of both grpcio advisories, one record per release line. `scripts/check_dependency_advisories.py` now accepts an advisory with several disjoint affected ranges and refuses overlapping ranges, a first-patched version inside a sibling range, and sibling ranges with different severities; an earlier checker refuses such a snapshot rather than mis-evaluating it. New regressions replay the published 0.11.0 lock against the snapshot, test vulnerable and patched grpcio versions on every listed line, check declared minimums, and prove that the vulnerable 0.11.0 versions cannot satisfy the new requirements.
+
 ## [0.11.0] - 2026-11-13
 
 ### Upgrade
