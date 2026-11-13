@@ -9,7 +9,7 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
-## Unreleased
+## [0.11.0] - 2026-11-13
 
 ### Upgrade
 

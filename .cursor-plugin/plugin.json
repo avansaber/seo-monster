@@ -1,7 +1,7 @@
 {
   "name": "seomonster",
   "displayName": "SEOMonster",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "description": "User-credential-driven MCP server for SEO workflows over Google Search Console, GA4, PageSpeed Insights, Cloudflare, IndexNow, Chrome UX Report, and a stdlib HTTP client for technical-SEO checks.",
   "author": {
     "name": "AvanSaber Inc.",
