@@ -34,8 +34,14 @@ from urllib.parse import urldefrag, urljoin, urlparse
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import annotations, missing_site_error, require_client, resolve_site
-from ._html import content_terms
+from ._helpers import (
+    annotations,
+    bounded_group,
+    missing_site_error,
+    require_client,
+    resolve_site,
+)
+from ._html import content_terms, segmentation_required
 
 _SERVICE = "technical"
 _HTTP_REMEDIATION = "No setup needed; the HTTP client is built in."
@@ -184,6 +190,7 @@ def _crawl(client: Any, start_url: str, max_pages: int) -> dict[str, dict[str, A
         rec.update({
             "in_degree": prior_in,
             "terms": content_terms(parser.text),
+            "segmentation_required": segmentation_required(parser.text),
             "out": out,
             "anchors": [(t, a) for (h, a) in parser.links for t in [_norm(urljoin(resp.final_url, h))] if a],
             "fetched": True,
@@ -281,7 +288,14 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
 
     # 3. Build recommendations.
     recs: list[dict[str, Any]] = []
+    targets_unavailable: list[dict[str, Any]] = []
+    unscored_pairs = 0  # supported target x partial source without a scorable match
     for tgt in targets:
+        if segmentation_required(tgt["query"]):
+            # Unsegmented query terms cannot be matched: unavailable, not irrelevant.
+            targets_unavailable.append({"target_url": tgt["page_raw"], "target_query": tgt["query"],
+                                        "target_position": tgt["position"], "target_impressions": tgt["impressions"]})
+            continue
         qterms = content_terms(tgt["query"])
         if not qterms:
             continue
@@ -293,15 +307,20 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
             if tgt["page"] in rec.get("out", set()):
                 continue  # already links the target
             matched = qterms & rec.get("terms", set())
+            partial = rec.get("segmentation_required", False)
             if not matched:
+                if partial:
+                    unscored_pairs += 1
                 continue
             relevance = len(matched) / len(qterms)
             if relevance < relevance_floor:
+                if partial:
+                    unscored_pairs += 1
                 continue
             authority = rec.get("in_degree", 0)
             score = round(_W_RELEVANCE * relevance + _W_AUTHORITY * (authority / max_authority), 4)
             anchor_type = "exact_match" if relevance >= 1.0 else "partial_match"
-            recs.append({
+            rec_out = {
                 "source_url": src_url,
                 "target_url": tgt["page_raw"],
                 "target_query": tgt["query"],
@@ -314,7 +333,11 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
                 "source_in_degree": authority,
                 "matched_terms": sorted(matched),
                 "score": score,
-            })
+            }
+            if partial:
+                # Words inside unsegmented runs on this page were not matched.
+                rec_out["source_coverage"] = "partial"
+            recs.append(rec_out)
 
     recs.sort(key=lambda r: r["score"], reverse=True)
     # per-source cap (over-linking guard) then global limit.
@@ -329,7 +352,7 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
         if len(capped) >= limit:
             break
 
-    return ok({
+    payload: dict[str, Any] = {
         "site_url": site,
         "start_url": start_url,
         "pages_crawled": len(fetched),
@@ -354,7 +377,23 @@ def internal_link_recommend(arguments: Mapping[str, Any], config: Any, clients: 
             "Never use nofollow on internal links (sculpting has been dead since "
             "2009)."),
         ],
-    })
+    }
+    # Sorted: crawl order follows set iteration and is not stable between processes.
+    partial_sources = sorted(url for url, rec in fetched.items() if rec.get("segmentation_required"))
+    if targets_unavailable or partial_sources:
+        payload["lexical_coverage"] = {
+            "status": "partial",
+            "reason": "segmentation_required",
+            "targets_unavailable": bounded_group(targets_unavailable),
+            "sources_partial": bounded_group(partial_sources),
+            "unscored_pairs": unscored_pairs,
+        }
+        payload["caveats"].append(
+            "Lexical relevance cannot segment text that requires word segmentation (for example CJK, Thai, Tibetan, "
+            "Lao, Khmer or Myanmar): those targets are not "
+            "scored, and pages with such text give partial matches (see lexical_coverage)."
+        )
+    return ok(payload)
 
 
 def _empty(site, start_url, pmin, pmax, imin, floor, reason) -> dict[str, Any]:

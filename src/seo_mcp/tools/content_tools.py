@@ -34,8 +34,14 @@ from urllib.parse import urlparse
 
 from ..clients.errors import ApiError
 from ..errors import ok
-from ._helpers import annotations, missing_site_error, require_client, resolve_site
-from ._html import content_terms
+from ._helpers import (
+    annotations,
+    bounded_group,
+    missing_site_error,
+    require_client,
+    resolve_site,
+)
+from ._html import content_terms, segmentation_required
 from ._scoring import TIER_A, banded_score
 
 _SERVICE = "gsc"
@@ -286,11 +292,14 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
     # in a non-trivial position (<= 40), so a candidate sharing tokens with proven
     # winners is more winnable.
     prox_index: dict[str, set[str]] = {}
+    proximity_unsupported: dict[str, float] = {}  # proximity queries lexical matching cannot segment
     for r in current_rows:
         q = _query_of(r)
         pos = r.get("position", 0.0) or 0.0
         if not q or pos <= 0 or pos > 40:
             continue
+        if segmentation_required(q):
+            proximity_unsupported[q] = proximity_unsupported.get(q, 0.0) + (r.get("impressions", 0) or 0)
         for tok in content_terms(q):
             prox_index.setdefault(tok, set()).add(q)
 
@@ -371,6 +380,7 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
     max_demand = max((c["demand"] for c in raw), default=0.0) or 1.0
 
     candidates: list[dict[str, Any]] = []
+    unavailable_queries: list[str] = []
     for c in raw:
         upside_norm = c["upside"] / max_upside
         demand_norm = c["demand"] / max_demand
@@ -391,12 +401,23 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
             siblings |= prox_index.get(tok, set())
         siblings.discard(c["query"])
         topical_proximity = min(1.0, len(siblings) / 3.0)
+        unsupported = segmentation_required(c["query"])
+        win_components = {"striking_distance": c["striking"]}
+        if not unsupported:
+            win_components["topical_proximity"] = topical_proximity
         winnability = banded_score(
-            {"striking_distance": c["striking"], "topical_proximity": topical_proximity},
+            win_components,
             {"striking_distance": 0.5, "topical_proximity": 0.5},
             evidence_tier=TIER_A,
             caveats=["GSC-personalization only; SERP weak-spot + click-value (zero-click/AIO) axis lands in Wave 3."],
         )
+        if unsupported:
+            # Unsegmented text has no measurable proximity: omitted, not zero.
+            winnability["unavailable_components"] = ["topical_proximity"]
+            winnability["caveats"].append("Topical proximity is unavailable: the query needs word segmentation.")
+            unavailable_queries.append(c["query"])
+        elif proximity_unsupported:
+            winnability["coverage"] = "partial"
         candidates.append(
             {
                 "topic": c["query"],
@@ -426,36 +447,50 @@ def content_opportunities(arguments: Mapping[str, Any], config: Any, clients: Ma
     candidates.sort(key=lambda c: c["score"], reverse=True)
     top = candidates[:count]
 
-    return ok(
-        {
-            "site_url": site,
-            "days": days,
-            "window": {"current": [cur_start, cur_end], "prior": [prior_start, prior_end]},
-            "candidate_count": len(top),
-            "total_in_band": len(candidates),
-            "candidates": top,
-            "ctr_curve_calibrated": {str(b): round(v, 4) for b, v in sorted(curve.items())},
-            "weights": {
-                "ctr_gap": _W_CTR_GAP,
-                "striking_distance": _W_STRIKING,
-                "demand": _W_DEMAND,
-                "momentum": _W_MOMENTUM,
+    payload: dict[str, Any] = {
+        "site_url": site,
+        "days": days,
+        "window": {"current": [cur_start, cur_end], "prior": [prior_start, prior_end]},
+        "candidate_count": len(top),
+        "total_in_band": len(candidates),
+        "candidates": top,
+        "ctr_curve_calibrated": {str(b): round(v, 4) for b, v in sorted(curve.items())},
+        "weights": {
+            "ctr_gap": _W_CTR_GAP,
+            "striking_distance": _W_STRIKING,
+            "demand": _W_DEMAND,
+            "momentum": _W_MOMENTUM,
+        },
+        "filters_applied": {
+            "impressions_min": impressions_min,
+            "position_ceiling": _POSITION_CEILING,
+            "ga4_value_weighted": ga4_value_status == GA4_VALUE_APPLIED,
+            "ga4_value_status": ga4_value_status,
+        },
+        "notes": [
+            ("Scored from your own Search Console data; ranks by expected "
+            "return on effort, not by guaranteed position."),
+            ("The expected-CTR curve is self-calibrated from your buckets "
+            "with at least 5 queries; a reference curve fills sparse buckets."),
+            _GA4_VALUE_NOTE[ga4_value_status],
+        ],
+    }
+    if unavailable_queries or proximity_unsupported:
+        payload["lexical_coverage"] = {
+            "status": "partial",
+            "reason": "segmentation_required",
+            "queries_unavailable": bounded_group(unavailable_queries),
+            "proximity_queries_unsupported": {
+                **bounded_group(list(proximity_unsupported)),
+                "impressions": int(sum(proximity_unsupported.values())),
             },
-            "filters_applied": {
-                "impressions_min": impressions_min,
-                "position_ceiling": _POSITION_CEILING,
-                "ga4_value_weighted": ga4_value_status == GA4_VALUE_APPLIED,
-                "ga4_value_status": ga4_value_status,
-            },
-            "notes": [
-                ("Scored from your own Search Console data; ranks by expected "
-                "return on effort, not by guaranteed position."),
-                ("The expected-CTR curve is self-calibrated from your buckets "
-                "with at least 5 queries; a reference curve fills sparse buckets."),
-                _GA4_VALUE_NOTE[ga4_value_status],
-            ],
         }
-    )
+        payload["notes"].append(
+            "Topical proximity cannot segment text that requires word segmentation (for example CJK, Thai, Tibetan, "
+            "Lao, Khmer or Myanmar): those queries omit it, "
+            "and other queries' proximity is partial when such ranking queries exist (see lexical_coverage)."
+        )
+    return ok(payload)
 
 
 TOOLS = [TOOL_CONTENT_OPPORTUNITIES]

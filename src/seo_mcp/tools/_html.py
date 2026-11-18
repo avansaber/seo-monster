@@ -60,6 +60,15 @@ def _needs_segmentation(text: str) -> bool:
     )
 
 
+def segmentation_required(text: str) -> bool:
+    """True when lexical tokens cannot represent the words of ``text``.
+
+    The same scripts make ``text_measurement.word_count_reliable`` false. Tools
+    that match lexical terms use this to report such text as unavailable or
+    partial instead of treating its unmatched words as evidence."""
+    return _needs_segmentation(text)
+
+
 class ContentParser(HTMLParser):
     """One-pass body+structure extractor."""
 

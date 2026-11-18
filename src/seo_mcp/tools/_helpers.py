@@ -123,6 +123,14 @@ def resolve_site(arguments: Mapping[str, Any], config: Config) -> str | None:
     return config.gsc_default_site
 
 
+COVERAGE_ITEMS_LIMIT = 20
+
+
+def bounded_group(items: list[Any]) -> dict[str, Any]:
+    """Exact total count plus at most ``COVERAGE_ITEMS_LIMIT`` items, in input order."""
+    return {"count": len(items), "items": list(items[:COVERAGE_ITEMS_LIMIT])}
+
+
 def missing_site_error() -> dict[str, Any]:
     return err(
         ErrorCode.INVALID_INPUT,
