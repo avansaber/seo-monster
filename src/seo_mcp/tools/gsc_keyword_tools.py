@@ -29,8 +29,14 @@ from typing import Any
 
 from ..clients.errors import ApiError
 from ..errors import DOCS_BASE, ErrorCode, err, ok
-from ._helpers import annotations, missing_site_error, require_client, resolve_site
-from ._html import content_terms
+from ._helpers import (
+    annotations,
+    bounded_group,
+    missing_site_error,
+    require_client,
+    resolve_site,
+)
+from ._html import content_terms, segmentation_required
 from ._scoring import band_for
 
 _SERVICE = "gsc"
@@ -122,6 +128,7 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
     owned: dict[str, float] = {}          # normalized owned query -> impressions
     inverted: dict[str, set[str]] = {}    # content token -> set(owned query)
     total_visible_impr = 0.0
+    unsupported_owned: dict[str, float] = {}  # owned queries lexical matching cannot segment
     for r in rows:
         keys = r.get("keys") or [""]
         q = _norm(keys[0] if keys else "")
@@ -130,6 +137,8 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
         impr = float(r.get("impressions", 0) or 0)
         owned[q] = owned.get(q, 0.0) + impr
         total_visible_impr += impr
+        if segmentation_required(q):
+            unsupported_owned[q] = unsupported_owned.get(q, 0.0) + impr
         for tok in content_terms(q):
             inverted.setdefault(tok, set()).add(q)
 
@@ -158,24 +167,42 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
             "sibling_impressions": int(sibling_impr),
             "sibling_query_count": len(sib_queries),
             "_ctoks": bool(ctoks),
+            "_unsupported": segmentation_required(cand),
         })
 
-    max_sib = max((r["sibling_impressions"] for r in raw_results), default=0) or 1
+    # Normalise over candidates whose sibling strength is measurable.
+    max_sib = max((r["sibling_impressions"] for r in raw_results if not r["_unsupported"]), default=0) or 1
 
     results: list[dict[str, Any]] = []
     for r in raw_results:
-        sib_norm = r["sibling_impressions"] / max_sib
-        results.append({
-            "term": r["term"],
-            "footprint": r["footprint"],
-            "footprint_impressions": r["footprint_impressions"],
-            "confidence": {
+        if r["_unsupported"]:
+            # Unsegmented text has no measurable siblings: unavailable, not zero.
+            confidence = {
+                "band": None,
+                "sibling_impressions": None,
+                "sibling_query_count": None,
+                "autocomplete_present": None,
+                "external_volume": None,
+                "status": "unavailable",
+                "reason": "segmentation_required",
+            }
+        else:
+            sib_norm = r["sibling_impressions"] / max_sib
+            confidence = {
                 "band": band_for(sib_norm) if r["_ctoks"] else "low",
                 "sibling_impressions": r["sibling_impressions"],
                 "sibling_query_count": r["sibling_query_count"],
                 "autocomplete_present": None,   # Wave 3 (needs SERP client)
                 "external_volume": None,        # Wave 3 (needs DataForSEO)
-            },
+            }
+            if unsupported_owned:
+                # Owned queries that cannot be segmented were not matched.
+                confidence["coverage"] = "partial"
+        results.append({
+            "term": r["term"],
+            "footprint": r["footprint"],
+            "footprint_impressions": r["footprint_impressions"],
+            "confidence": confidence,
         })
 
     # net_new = no ACTUAL visible footprint: footprint "none", plus "thin" terms
@@ -185,9 +212,24 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
     # impressions stays out -- you already have some footprint there.
     net_new = [r for r in results if r["footprint"] == "none" or (r["footprint"] == "thin" and r["footprint_impressions"] == 0)]
     # surface the strongest net-new first
-    net_new.sort(key=lambda r: r["confidence"]["sibling_impressions"], reverse=True)
+    net_new.sort(key=lambda r: (r["confidence"]["sibling_impressions"] is None, -(r["confidence"]["sibling_impressions"] or 0)))
 
-    return ok({
+    unavailable_terms = [r["term"] for r in raw_results if r["_unsupported"]]
+    caveats = [
+        ("'none' = no VISIBLE footprint. GSC anonymizes queries with low "
+        "volume (~75% of impressions hidden), so a 'net-new' term may "
+        "already get hidden impressions. Treat net-new as scored hypotheses."),
+        ("Confidence is sibling-strength only (free, owned-data). "
+        "autocomplete_present and external_volume are null until the SERP / "
+        "DataForSEO clients ship (Wave 3)."),
+        ("A wider `days` window surfaces more footprint; this is read against "
+        "your own property, not external volume."),
+        ("footprint: covered = exact match with impressions; thin = exact match "
+        "below impressions_min OR a substring overlap with an owned query; none "
+        "= no overlap. net_new = 'none' + 'thin' terms with zero footprint "
+        "impressions (substring coincidence only), ranked by sibling strength."),
+    ]
+    payload: dict[str, Any] = {
         "site_url": site,
         "window": {"start": start, "end": end, "days": days},
         "owned_query_count": len(owned),
@@ -197,21 +239,22 @@ def gsc_keyword_expand(arguments: Mapping[str, Any], config: Any, clients: Mappi
         "candidates": results,
         "net_new": net_new,
         "filters_applied": {"impressions_min": impressions_min},
-        "caveats": [
-            ("'none' = no VISIBLE footprint. GSC anonymizes queries with low "
-            "volume (~75% of impressions hidden), so a 'net-new' term may "
-            "already get hidden impressions. Treat net-new as scored hypotheses."),
-            ("Confidence is sibling-strength only (free, owned-data). "
-            "autocomplete_present and external_volume are null until the SERP / "
-            "DataForSEO clients ship (Wave 3)."),
-            ("A wider `days` window surfaces more footprint; this is read against "
-            "your own property, not external volume."),
-            ("footprint: covered = exact match with impressions; thin = exact match "
-            "below impressions_min OR a substring overlap with an owned query; none "
-            "= no overlap. net_new = 'none' + 'thin' terms with zero footprint "
-            "impressions (substring coincidence only), ranked by sibling strength."),
-        ],
-    })
+        "caveats": caveats,
+    }
+    if unavailable_terms or unsupported_owned:
+        payload["lexical_coverage"] = {
+            "status": "partial",
+            "reason": "segmentation_required",
+            "candidates_unavailable": bounded_group(unavailable_terms),
+            "owned_queries_unsupported": {**bounded_group(list(unsupported_owned)), "impressions": int(sum(unsupported_owned.values()))},
+        }
+        caveats.append(
+            "Sibling matching cannot segment text that requires word segmentation (for example CJK, Thai, Tibetan, "
+            "Lao, Khmer or Myanmar): those candidates have no "
+            "confidence, and other candidates' sibling strength is partial when such owned queries exist "
+            "(see lexical_coverage)."
+        )
+    return ok(payload)
 
 
 TOOLS = [TOOL]

@@ -9,6 +9,23 @@ Each release section lists what a validation pass should cover. Items
 marked with **(validate)** are the explicit acceptance checks for an
 external testing pass on that version.
 
+## [0.11.2] - 2026-11-17
+
+### Upgrade
+
+- Tools, prompts, configuration, input schemas and dependencies are unchanged. Results of `gsc_keyword_expand`, `content_opportunities` and `internal_link_recommend` change only when the existing text-measurement check identifies text that requires word segmentation (for example CJK, Thai, Tibetan, Lao, Khmer or Myanmar). Inputs without such text retain their output.
+
+### Fixed
+
+- These three tools no longer treat lexical matching of text that requires segmentation as complete evidence. Affected candidates, queries and link targets report sibling confidence, topical proximity or relevance as unavailable instead of a score. Supported results from owned queries or crawled pages that contain such text are kept and marked as partial coverage, and link pairs that could not be scored on such pages are counted.
+- Measured Search Console data and `content_opportunities` priority scores stay unchanged. In `gsc_keyword_expand`, sibling-confidence normalisation excludes unsupported candidates, so the relative bands of supported candidates can change when an input mixes both. In `internal_link_recommend`, target queries that require segmentation are listed instead of scored, so recommendations that came only from such a query no longer appear.
+- A `lexical_coverage` object lists the affected candidates, queries, targets and pages with exact totals and at most 20 items per list.
+- **(validate)** With a property that has Japanese or Thai queries, confirm that affected `gsc_keyword_expand` candidates show `confidence.status: "unavailable"` and that the `lexical_coverage` totals match the owned queries.
+
+### Development
+
+- `tests/test_segmentation_coverage.py` covers unsupported candidates and queries, partial owned-query and page corpora, mixed inputs, bounded lists, crawl-order independence and unchanged English and Cyrillic results.
+
 ## [0.11.1] - 2026-11-13
 
 ### Upgrade
